@@ -43,10 +43,14 @@ def measure(image, foreground, tolerance):
     if len(parts) < 3:
         raise ValueError("Need two separate brackets and visible icon ink")
     tallest = max(bottom - top + 1 for _, top, _, bottom in parts)
-    brackets = sorted((part for part in parts if part[3] - part[1] + 1 >= tallest * .85))
-    if len(brackets) != 2:
-        raise ValueError("Cannot identify exactly two brackets; use a tighter crop or color")
-    left, right = brackets
+    # Tall arrows can be as high as brackets; brackets are the two outer pieces.
+    ordered = sorted(parts)
+    left, right = ordered[0], ordered[-1]
+    brackets = [left, right]
+    if any(part[3] - part[1] + 1 < tallest * .85 for part in brackets) or \
+            abs((left[3] - left[1]) - (right[3] - right[1])) > 1 or \
+            abs((left[2] - left[0]) - (right[2] - right[0])) > 1:
+        raise ValueError("Cannot identify two matching outer brackets; use a tighter crop or color")
     glyph = [part for part in parts if part not in brackets]
     if any(part[0] <= left[2] or part[2] >= right[0] for part in glyph):
         raise ValueError("Icon ink touches a bracket or crop contains unrelated content")
