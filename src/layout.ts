@@ -5,6 +5,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
 import type { Preferences } from "./preferences.js";
+import type { TranscriptTimestamps } from "./timestamps.js";
 
 type NativeTui = TUI & { layoutRoot?: Container; setLayoutRoot(component: Component | undefined): void };
 const MIN_CHAT = 24;
@@ -24,12 +25,14 @@ export class TranscriptLayout {
   private fallback = false;
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
+  private restoreDocument = (): void => {};
 
   constructor(
     readonly preferences: Preferences,
     private readonly theme: () => Theme,
     private readonly warn: (message: string) => void,
     private readonly save: () => void,
+    private readonly timestamps: TranscriptTimestamps,
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true): Component {
@@ -65,9 +68,10 @@ export class TranscriptLayout {
     }
     const [transcript, dock] = root.children;
     const scroll = transcript as ScrollView;
-    const document = (scroll as ScrollView & { children: Component[] }).children?.[0] as Container;
+    const owner = scroll as unknown as { child?: Component; children: Component[] };
+    const document = owner.children?.[0] as Container;
     if (transcript.constructor.name !== "ScrollView" || dock.constructor.name !== "VStack" ||
-        document?.constructor.name !== "Container" || document.children.length !== 3 ||
+        document?.constructor.name !== "Container" || owner.child !== document || document.children.length !== 3 ||
         !Array.isArray((document.children[2] as Container)?.children)) {
       this.rejectedRoots.add(root);
       this.warn("Transcript split is unavailable: Pi's history document is not supported.");
@@ -76,8 +80,18 @@ export class TranscriptLayout {
     this.host = host;
     this.original = root;
     this.failed = false;
-    const activityDocument = new NativeDocument(document, "activity");
-    const chatDocument = new NativeDocument(document, "chat");
+    // Auto scrollbars overlay one native content column; keep clocks outside it.
+    const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
+    const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter);
+    const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter);
+    const combinedDocument = new NativeDocument(document, "combined", this.timestamps, this.theme, timestampGutter);
+    // Keep the native combined ScrollView, including its selection and scroll state.
+    owner.child = combinedDocument;
+    owner.children[0] = combinedDocument;
+    this.restoreDocument = () => {
+      if (owner.child === combinedDocument) owner.child = document;
+      if (owner.children[0] === combinedDocument) owner.children[0] = document;
+    };
     const scrollOptions = {
       follow: "end" as const,
       overscroll: "contain" as const,
@@ -94,15 +108,17 @@ export class TranscriptLayout {
         this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= 2 :
           width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1;
       this.fallback = this.preferences.mode === "split" && !fits;
-      if (this.preferences.mode !== "split" || !fits || this.failed) return false;
-      this.activity?.setScrollbar(scroll.scrollbar);
-      this.chat?.setScrollbar(scroll.scrollbar);
+      if (this.failed) return false;
       try {
         activityDocument.check();
         chatDocument.check();
+        if (this.preferences.mode !== "split" || !fits) return false;
+        this.activity?.setScrollbar(scroll.scrollbar);
+        this.chat?.setScrollbar(scroll.scrollbar);
         return true;
       } catch (error) {
         this.failed = true;
+        this.restoreDocument();
         queueMicrotask(() => this.warn("Transcript split disabled: " + (error as Error).message));
         return false;
       }
@@ -270,6 +286,8 @@ export class TranscriptLayout {
 
   /** Release owned views and restore the original tree only if still mounted. */
   dispose(): void {
+    this.restoreDocument();
+    this.restoreDocument = () => {};
     const host = this.host;
     this.activity?.setScrollbar("hidden");
     this.chat?.setScrollbar("hidden");

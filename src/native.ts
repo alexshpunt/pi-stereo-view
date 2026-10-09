@@ -1,4 +1,6 @@
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Container, type Component } from "@earendil-works/pi-tui";
+import { TimestampedMessage, type TranscriptTimestamps } from "./timestamps.js";
 
 export type Pane = "activity" | "chat";
 interface NativeAssistant extends Container {
@@ -41,8 +43,15 @@ function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
  */
 export class NativeDocument extends Container {
   private readonly views = new WeakMap<NativeAssistant, Container>();
+  private readonly stamped = new WeakMap<Component, TimestampedMessage>();
 
-  constructor(private readonly source: Container, private readonly pane: Pane) {
+  constructor(
+    private readonly source: Container,
+    private readonly pane: Pane | "combined",
+    private readonly timestamps: TranscriptTimestamps,
+    private readonly theme: () => Theme,
+    private readonly timestampGutter: () => number,
+  ) {
     super();
   }
 
@@ -50,14 +59,16 @@ export class NativeDocument extends Container {
     const chat = this.source.children[2] as Container;
     if (!Array.isArray(chat?.children)) throw new Error("Pi's history document is not supported");
     for (const component of chat.children) {
+      this.timestamps.check(component);
       const native = assistant(component);
-      if (native) assistantParts(native, this.pane);
+      if (native) assistantParts(native, this.pane === "combined" ? "activity" : this.pane);
     }
   }
 
   override render(width: number): string[] {
     const chat = this.source.children[2] as Container;
-    const result: Component[] = this.pane === "activity" ? this.source.children.slice(0, 2) : [];
+    this.timestamps.prepare(chat.children);
+    const result: Component[] = this.pane !== "chat" ? this.source.children.slice(0, 2) : [];
     let spacing: Component[] = [];
     let previous: Pane = "activity";
     for (const component of chat.children) {
@@ -68,7 +79,7 @@ export class NativeDocument extends Container {
       }
       const native = assistant(component);
       let routed: Component | undefined;
-      if (native) {
+      if (native && this.pane !== "combined") {
         const parts = assistantParts(native, this.pane);
         if (parts.length) {
           let view = this.views.get(native);
@@ -83,13 +94,24 @@ export class NativeDocument extends Container {
         }
       } else {
         const target = name === "UserMessageComponent" || name === "Image" ? "chat" : "activity";
-        if (target === this.pane) routed = component;
+        if (target === this.pane || this.pane === "combined") routed = component;
         previous = target;
       }
-      if (routed) result.push(...spacing, routed);
+      if (routed) {
+        // Empty native assistant shells do not need a detached timestamp row.
+        if (native && native.contentContainer.children.length === 0) result.push(...spacing, routed);
+        else {
+          let stamped = this.stamped.get(routed);
+          if (!stamped) {
+            stamped = new TimestampedMessage(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter);
+            this.stamped.set(routed, stamped);
+          }
+          result.push(...spacing, stamped);
+        }
+      }
       spacing = [];
     }
-    if (previous === this.pane) result.push(...spacing);
+    if (previous === this.pane || this.pane === "combined") result.push(...spacing);
     this.children = result;
     return super.render(width);
   }

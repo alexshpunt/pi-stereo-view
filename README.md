@@ -44,6 +44,14 @@ Each panel supports native mouse scrolling, selection, and copy. Conversation co
 
 Mode, layout, panel order, both sizes, and the expanded panel are saved in `transcript.json` in Pi's agent directory. Existing width and side settings are kept on upgrade. Too little space temporarily shows combined history without losing the requested arrangement. Regular mode keeps native combined history. Unknown fullscreen layouts are left untouched with a warning.
 
+## Message times
+
+Fullscreen history shows a dim, right-aligned local `HH:mm:ss` row above each message. Assistant text and thinking share their original message time. Native content and tool renderers stay unchanged.
+
+New tool blocks show the time observed when execution starts. That time is saved as display-only session metadata and stays fixed through partial output, completion, and restart. Old tools without that metadata show `~HH:mm:ss`, using the owning assistant message time. An unavailable or invalid time is shown as `--:--:--`, never the current time.
+
+The rows work in split, expanded, and combined fullscreen history. They do not decorate regular scrollback, the input dock, startup headers, or widgets. Tool-start metadata does not enter the model's conversation.
+
 ## Development
 
 ```sh
@@ -55,5 +63,6 @@ The tests launch real Pi with scripted responses, custom tool renderers, native 
 - [Linear project](https://linear.app/alexshpunt/project/pi-agent-transcript-777603f978bf)
 - [Scope and acceptance: LPT-688](https://linear.app/alexshpunt/issue/LPT-688/separate-conversation-and-agent-activity-in-pi-history)
 - [Layout controls: LPT-691](https://linear.app/alexshpunt/issue/LPT-691/control-transcript-panels-with-buttons-and-two-layouts)
+- [Message times: LPT-693](https://linear.app/alexshpunt/issue/LPT-693/show-message-and-tool-start-timestamps-in-transcript-history)
 
 The Linear task owns the scope and acceptance checks.
