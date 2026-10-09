@@ -41,7 +41,9 @@ Click the history toolbar to switch layouts, swap panels, or return to combined 
 The toolbar stays visible in combined mode. Expansion hides the other history panel; the native input dock stays full width. Run `/transcript help` for the icon legend.
 
 Drag the double-line divider (`═` or `║`) to change conversation height or width. Restore keeps the split arrangement and sizes.
-In Rows, the saved Conversation height is a maximum. Both panels use only the space their content needs, up to the available screen height. When history fills up, Activity shrinks first while Conversation keeps its requested limit. Expanded panels also fit their content. Long histories scroll without pushing the input off screen.
+In Rows, Conversation starts with automatic height. It grows with its content up to half the history area, excluding the toolbar, input and footer. After that it scrolls to new messages without growing. Dragging, a height shortcut or `/transcript height <rows>` saves a manual maximum instead. Use **Conversation height: auto** in `≡` or `/transcript height auto` to restore automatic height. Old saved numeric heights stay manual unless you switch them to auto.
+
+Both panels use only the space their content needs. When history fills up, Activity shrinks first while Conversation keeps its limit. Expanded panels fit their content up to the available screen height. Long histories scroll without pushing the input off screen.
 
 New settings start in Rows with Conversation above Activity. In Columns, Conversation starts on the left. Saved arrangements are not reset, including first-version column settings.
 
@@ -53,7 +55,7 @@ New settings start in Rows with Conversation above Activity. In Columns, Convers
 | Choose layout | `/transcript layout columns` or `/transcript layout rows` | Toolbar |
 | Expand / restore a panel | `/transcript zoom chat` or `/transcript zoom activity` | Panel header |
 | Conversation width | `/transcript width 40` | Ctrl+Alt+Left / Right in columns |
-| Conversation height | `/transcript height 12` | Ctrl+Alt+Left / Right in rows |
+| Conversation height | `/transcript height 12` or `/transcript height auto` | Ctrl+Alt+Left / Right in rows |
 | Scroll a panel | `/transcript scroll chat -10` or `/transcript scroll activity -10` | Native fullscreen scrolling |
 
 Each panel supports native mouse scrolling, selection, and copy. Conversation contains user messages and all ordinary assistant text. Thinking, tools, notices, and other native entries remain in Activity.
