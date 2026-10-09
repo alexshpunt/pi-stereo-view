@@ -10,6 +10,7 @@ type NativeTui = TUI & { layoutRoot?: Container; setLayoutRoot(component: Compon
 const MIN_CHAT = 24;
 const MIN_ACTIVITY = 40;
 const MIN_ROWS = 4;
+const BUTTON_WIDTH = 5;
 
 /** Own only guarded fullscreen history controls; never replace the input dock. */
 export class TranscriptLayout {
@@ -31,9 +32,9 @@ export class TranscriptLayout {
     private readonly save: () => void,
   ) {}
 
-  private button(label: () => string, action: () => void, enabled = (): boolean => true): Component {
+  private button(icon: () => string, action: () => void, enabled = (): boolean => true): Component {
     return new MouseRegion({
-      render: width => new Text(this.theme().fg(enabled() ? "accent" : "dim", label()), 0, 0).render(width),
+      render: width => new Text(this.theme().fg(enabled() ? "accent" : "dim", "[ " + icon() + " ]"), 0, 0).render(width),
       invalidate() {},
     }, event => {
       if (event.button !== "left") return;
@@ -108,17 +109,17 @@ export class TranscriptLayout {
     };
     const toolbar = new HStack([
       { component: this.button(
-        () => this.preferences.mode === "combined" || this.fallback || this.failed ? "[◫]" : "[▣]",
+        () => this.preferences.mode === "combined" || this.fallback || this.failed ? "◫" : "▣",
         () => this.toggle(), () => !this.fallback && !this.failed,
-      ), basis: 3, shrink: 0 },
+      ), basis: BUTTON_WIDTH, shrink: 0 },
       { component: this.button(
-        () => this.preferences.layout === "columns" ? "[▤]" : "[▥]",
+        () => this.preferences.layout === "columns" ? "▤" : "▥",
         () => this.setLayout(this.preferences.layout === "columns" ? "rows" : "columns"), () => !this.failed,
-      ), basis: 3, shrink: 0 },
+      ), basis: BUTTON_WIDTH, shrink: 0 },
       { component: this.button(
-        () => this.preferences.layout === "columns" ? "[⇄]" : "[⇅]", () => this.swap(),
+        () => this.preferences.layout === "columns" ? "⇄" : "⇅", () => this.swap(),
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
-      ), basis: 3, shrink: 0 },
+      ), basis: BUTTON_WIDTH, shrink: 0 },
     ], { gap: 1 });
     const pane = (title: string, target: Pane, view: ScrollView): Component => new VStack([
       { component: new HStack([
@@ -127,9 +128,9 @@ export class TranscriptLayout {
           invalidate() {},
         }, basis: 0, grow: 1, minSize: 1 },
         { component: this.button(
-          () => this.preferences.zoom === target ? "[↙]" : "[⛶]",
+          () => this.preferences.zoom === target ? "↙" : "⛶",
           () => this.maximize(target),
-        ), basis: 3, shrink: 0 },
+        ), basis: BUTTON_WIDTH, shrink: 0 },
       ], { gap: 1 }), basis: 1 },
       { component: view, basis: 0, grow: 1, minSize: 1 },
     ]);

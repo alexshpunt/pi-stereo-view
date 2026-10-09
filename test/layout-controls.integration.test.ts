@@ -2,12 +2,12 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { assistantMessage, getToolExecution, PiIntegrationTest, text, toolCall } from "pi-coding-agent-test";
 import { afterEach, beforeAll, expect, test } from "vitest";
-import { stripTerminalSequences } from "@earendil-works/pi-tui";
+import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 
 const directories: string[] = [];
 const clean = (lines: string[]): string => lines.map(stripTerminalSequences).join("\n");
 const headerRow = (lines: string[], title: string): number => lines.findIndex(line =>
-  stripTerminalSequences(line).includes(title) && /\[(⛶|↙)\]/.test(stripTerminalSequences(line)));
+  stripTerminalSequences(line).includes(title) && /\[ (⛶|↙) \]/.test(stripTerminalSequences(line)));
 
 beforeAll(async () => { await mkdir(path.resolve("tmp"), { recursive: true }); });
 afterEach(async () => {
@@ -82,7 +82,7 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   expect(clean(frames.chat)).toContain("USER MARKER");
   expect(clean(frames.chat)).toContain("ANSWER MARKER");
   expect(clean(frames.chat)).not.toContain("NATIVE CALL MARKER");
-  expect(clean(frames.combined)).toContain("[◫]");
+  expect(clean(frames.combined)).toContain("[ ◫ ]");
   expect(headerRow(frames.combined, "Conversation")).toBe(-1);
   expect(clean(frames.combined)).toContain("NATIVE RESULT MARKER");
   expect(clean(frames.combined)).toContain("ANSWER MARKER");
@@ -90,10 +90,19 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
     expect(stripTerminalSequences(frames[key][1]).indexOf("║")).toBe(75);
   }
   expect(headerRow(frames.shortRows, "Activity")).toBe(-1);
-  expect(clean(frames.shortRows)).toContain("[◫]");
+  expect(clean(frames.shortRows)).toContain("[ ◫ ]");
   expect(headerRow(frames.tallRows, "Activity")).toBe(1);
   expect(headerRow(frames.tallRows, "Conversation")).toBeGreaterThan(1);
   for (const frame of Object.values(frames)) {
+    const headerRows = new Set([0, headerRow(frame, "Activity"), headerRow(frame, "Conversation")]);
+    for (const row of headerRows) {
+      if (row < 0) continue;
+      const buttons = stripTerminalSequences(frame[row]).match(/\[[^\]]*\]/gu) ?? [];
+      for (const button of buttons) {
+        expect(button).toMatch(/^\[ . \]$/u);
+        expect(visibleWidth(button)).toBe(5);
+      }
+    }
     expect(frame.slice(-5).some(line => line.includes("║"))).toBe(false);
     expect(frame.slice(-5).some(line => stripTerminalSequences(line).includes("─".repeat(120)))).toBe(true);
   }
@@ -104,8 +113,8 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   const restored: string[] = JSON.parse(await readFile(path.join(cwd, "native-snapshot.json"), "utf8"));
   expect(headerRow(restored, "Conversation")).toBe(1);
   expect(headerRow(restored, "Activity")).toBe(-1);
-  expect(clean(restored)).toContain("[↙]");
-  expect(clean(restored)).toContain("[▥]");
+  expect(clean(restored)).toContain("[ ↙ ]");
+  expect(clean(restored)).toContain("[ ▥ ]");
 });
 
 test("keeps the mouse return control after restarting in saved combined mode", async () => {
@@ -127,7 +136,7 @@ test("keeps the mouse return control after restarting in saved combined mode", a
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, mode: "combined" });
   await run("restore-combined-buttons");
   const frames: { before: string[]; after: string[] } = JSON.parse(await readFile(path.join(cwd, "button-toggle.json"), "utf8"));
-  expect(clean(frames.before)).toContain("[◫]");
+  expect(clean(frames.before)).toContain("[ ◫ ]");
   expect(headerRow(frames.before, "Conversation")).toBe(-1);
   expect(clean(frames.before)).toContain("USER MARKER");
   expect(clean(frames.before)).toContain("ANSWER MARKER");
