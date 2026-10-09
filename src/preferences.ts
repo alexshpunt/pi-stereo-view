@@ -11,10 +11,11 @@ export interface Preferences {
   layout: "columns" | "rows";
   chatHeight: number;
   zoom: "activity" | "chat" | null;
+  showTimestamps: boolean;
 }
 
 export const defaults: Preferences = {
-  mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: 12, zoom: null,
+  mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: 12, zoom: null, showTimestamps: true,
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -32,16 +33,17 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const layout = record.layout === undefined ? "columns" : record.layout;
   const chatHeight = record.chatHeight === undefined ? defaults.chatHeight : record.chatHeight;
   const zoom = record.zoom === undefined ? defaults.zoom : record.zoom;
+  const showTimestamps = record.showTimestamps === undefined ? defaults.showTimestamps : record.showTimestamps;
   if ((record.mode !== "split" && record.mode !== "combined") ||
       (record.side !== "left" && record.side !== "right") ||
       typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
       record.chatWidth < 24 || record.chatWidth > 240 ||
       (layout !== "columns" && layout !== "rows") ||
       typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240 ||
-      (zoom !== null && zoom !== "activity" && zoom !== "chat")) {
+      (zoom !== null && zoom !== "activity" && zoom !== "chat") || typeof showTimestamps !== "boolean") {
     throw new Error("Invalid transcript preferences");
   }
-  return { mode: record.mode, side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom };
+  return { mode: record.mode, side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom, showTimestamps };
 }
 
 /** Atomically save only the display settings, never session messages. */

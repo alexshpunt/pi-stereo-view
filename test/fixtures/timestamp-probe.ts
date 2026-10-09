@@ -82,6 +82,13 @@ export default function timestampProbe(pi: ExtensionAPI): void {
       for (const view of views()) view.scrollTo(0);
       frames[name] = await capture();
     };
+    if (process.env.TIMESTAMP_ENABLE_TIMES === "1") {
+      frames.hidden = await capture();
+      await click("[ ≡ ]");
+      await click("Show timestamps");
+      tui.handleTerminalInput("\x1b");
+      frames.enabled = await capture();
+    }
     if (process.env.TIMESTAMP_BAD_METADATA === "1") {
       await capture();
       const user = containers().find(component => component.constructor.name === "UserMessageComponent");

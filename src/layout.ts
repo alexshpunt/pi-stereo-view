@@ -1,7 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
-  Container, HStack, isViewportTUI, MouseRegion, ScrollView, Text, VStack,
-  type Component, type TUI,
+  Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, VStack,
+  type Color, type Component, type TUI,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
 import type { Preferences } from "./preferences.js";
@@ -33,11 +33,14 @@ export class TranscriptLayout {
     private readonly warn: (message: string) => void,
     private readonly save: () => void,
     private readonly timestamps: TranscriptTimestamps,
+    private readonly openSettings: () => void,
   ) {}
 
-  private button(icon: () => string, action: () => void, enabled = (): boolean => true): Component {
+  private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
     return new MouseRegion({
-      render: width => new Text(this.theme().fg(enabled() ? "accent" : "dim", "[ " + icon() + " ]"), 0, 0).render(width),
+      render: width => new Text(this.theme().style("[ " + icon() + " ]", {
+        fg: enabled() ? "accent" : "dim", bg: background?.(),
+      }), 0, 0).render(width),
       invalidate() {},
     }, event => {
       if (event.button !== "left") return;
@@ -82,9 +85,10 @@ export class TranscriptLayout {
     this.failed = false;
     // Auto scrollbars overlay one native content column; keep clocks outside it.
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
-    const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter);
-    const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter);
-    const combinedDocument = new NativeDocument(document, "combined", this.timestamps, this.theme, timestampGutter);
+    const showTimestamps = (): boolean => this.preferences.showTimestamps;
+    const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps);
+    const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps);
+    const combinedDocument = new NativeDocument(document, "combined", this.timestamps, this.theme, timestampGutter, showTimestamps);
     // Keep the native combined ScrollView, including its selection and scroll state.
     owner.child = combinedDocument;
     owner.children[0] = combinedDocument;
@@ -104,8 +108,8 @@ export class TranscriptLayout {
     let historyHeight = 0;
     const shown = ({ width, height }: { width: number; height: number }): boolean => {
       historyHeight = Math.max(0, height - dock.render(width).length - 1);
-      const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= 2 :
-        this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= 2 :
+      const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= MIN_ROWS :
+        this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= MIN_ROWS :
           width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1;
       this.fallback = this.preferences.mode === "split" && !fits;
       if (this.failed) return false;
@@ -136,20 +140,46 @@ export class TranscriptLayout {
         () => this.preferences.layout === "columns" ? "↔" : "↕", () => this.swap(),
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
       ), basis: BUTTON_WIDTH, shrink: 0 },
+      { component: this.button(() => "≡", this.openSettings), basis: BUTTON_WIDTH, shrink: 0 },
     ], { gap: 1 });
-    const pane = (title: string, target: Pane, view: ScrollView): Component => new VStack([
-      { component: new HStack([
+    const pane = (title: string, target: Pane, view: ScrollView): Component => {
+      const hue = target === "chat" ? rgbColor(104, 158, 115) : rgbColor(107, 152, 190);
+      const palette = () => {
+        const theme = this.theme();
+        return {
+          fill: mixColors(theme.colors.customMessageBg, hue, 0.15, "srgb"),
+          text: mixColors(theme.colors.text, hue, 0.25),
+          border: mixColors(theme.colors.border, hue, 0.3),
+        };
+      };
+      const line: Component = {
+        render: width => [this.theme().style("─".repeat(width), { fg: palette().border })],
+        invalidate() {},
+      };
+      const label = new HStack([
         { component: {
-          render: width => new Text(this.theme().fg("muted", " " + title), 0, 0).render(width),
+          render: width => new Text(this.theme().style((" " + title).padEnd(width), {
+            fg: palette().text, bg: palette().fill,
+          }), 0, 0).render(width),
           invalidate() {},
         }, basis: 0, grow: 1, minSize: 1 },
         { component: this.button(
           () => this.preferences.zoom === target ? "↙" : "↗",
-          () => this.maximize(target),
+          () => this.maximize(target), () => true, () => palette().fill,
         ), basis: BUTTON_WIDTH, shrink: 0 },
-      ], { gap: 1 }), basis: 1 },
-      { component: view, basis: 0, grow: 1, minSize: 1 },
-    ]);
+      ]);
+      const header = new VStack([
+        { component: line, basis: 1, shrink: 0, visible: () =>
+          this.preferences.zoom !== null || this.preferences.layout === "columns" ||
+          (this.preferences.side === "left" ? target === "chat" : target === "activity") },
+        { component: label, basis: 1, shrink: 0 },
+        { component: line, basis: 1, shrink: 0 },
+      ]);
+      return new VStack([
+        { component: header, basis: "auto", shrink: 0 },
+        { component: view, basis: 0, grow: 1, minSize: 1 },
+      ]);
+    };
     const activityPane = pane("Activity", "activity", this.activity);
     const chatPane = pane("Conversation", "chat", this.chat);
     const divider = (axis: "columns" | "rows"): Component => new MouseRegion({
@@ -227,6 +257,12 @@ export class TranscriptLayout {
     this.rebuild();
     this.host?.requestRender();
     if (persist) this.save();
+  }
+
+  /** Show or hide clock rows without changing their recorded source times. */
+  setTimestamps(show: boolean): void {
+    this.preferences.showTimestamps = show;
+    this.changed();
   }
 
   /** Set the requested conversation width without discarding the stacked height. */

@@ -1,6 +1,6 @@
 import path from "node:path";
-import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Text, type TUI } from "@earendil-works/pi-tui";
+import { getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Box, Container, SettingsList, Text, type TUI } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
@@ -14,6 +14,45 @@ export default function transcript(pi: ExtensionAPI): void {
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
   const file = path.join(getAgentDir(), "transcript.json");
+
+  let settingsOpen = false;
+
+  const openSettings = async (ctx: ExtensionContext): Promise<void> => {
+    if (settingsOpen) return;
+    settingsOpen = true;
+    try {
+      await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
+        const list = new SettingsList([{
+          id: "timestamps", label: "Show timestamps",
+          description: "Hide clock rows without changing messages or recorded tool starts.",
+          currentValue: preferences.showTimestamps ? "on" : "off", values: ["on", "off"],
+        }], 3, getSettingsListTheme(), (_id, value) => {
+          layout?.setTimestamps(value === "on");
+          tui.requestRender();
+        }, () => done());
+        const content = new Container();
+        content.addChild({
+          render: () => [ctx.ui.theme.fg("accent", ctx.ui.theme.bold("Transcript settings")), ""],
+          invalidate() {},
+        });
+        content.addChild(list);
+        const box = new Box(1, 1, text => ctx.ui.theme.bg("customMessageBg", text));
+        box.addChild(content);
+        return {
+          render: (width: number) => box.render(width),
+          invalidate: () => box.invalidate(),
+          handleMouse: (event) => box.handleMouse(event),
+          handleInput: (data: string) => {
+            list.handleInput(data);
+            tui.requestRender();
+          },
+        };
+      }, { overlay: true, overlayOptions: { width: 60, margin: 1 } });
+    } finally {
+      settingsOpen = false;
+    }
+    await writes;
+  };
 
   const ensureLayout = (): void => {
     if (host) layout?.attach(host);
@@ -41,7 +80,8 @@ export default function transcript(pi: ExtensionAPI): void {
       host = tui;
       finish = done;
       layout = new TranscriptLayout(preferences, () => ctx.ui.theme,
-        message => ctx.ui.notify(message, "warning"), () => persist(ctx), timestamps!);
+        message => ctx.ui.notify(message, "warning"), () => persist(ctx), timestamps!,
+        () => { void openSettings(ctx).catch(error => ctx.ui.notify(String(error), "error")); });
       ensureLayout();
       return new Text("", 0, 0);
     }, {
@@ -82,7 +122,7 @@ export default function transcript(pi: ExtensionAPI): void {
     ensureLayout();
   };
   pi.registerCommand("transcript", {
-    description: "History: toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
+    description: "History: settings, toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
     handler: async (args, ctx) => {
       if (ctx.mode !== "tui" || !layout) {
         ctx.ui.notify("Transcript layout is available only in interactive Pi.", "warning");
@@ -90,8 +130,9 @@ export default function transcript(pi: ExtensionAPI): void {
       }
       const [action = "toggle", target, amount] = args.trim().split(/\s+/);
       if (action === "toggle" || action === "") toggle();
+      else if (action === "settings") await openSettings(ctx);
       else if (action === "help") {
-        ctx.ui.notify("Transcript icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("Transcript icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ≡ settings. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && /^\d+$/.test(target ?? "")) layout.setHeight(Number(target));
@@ -100,7 +141,7 @@ export default function transcript(pi: ExtensionAPI): void {
       else if (action === "scroll" && (target === "chat" || target === "activity") && /^-?\d+$/.test(amount ?? "")) {
         layout.scroll(target, Number(amount));
       } else {
-        ctx.ui.notify("Use /transcript [help|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows>|scroll <chat|activity> <lines>]", "warning");
+        ctx.ui.notify("Use /transcript [help|settings|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows>|scroll <chat|activity> <lines>]", "warning");
         return;
       }
       ensureLayout();
