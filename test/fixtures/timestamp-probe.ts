@@ -49,8 +49,11 @@ export default function timestampProbe(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "clock_probe", label: "Clock probe", description: "Exercise stable start time across partial output.",
     parameters: Type.Object({ tag: Type.Optional(Type.String()) }),
-    renderCall: args => new Text(String(args.tag ?? "CLOCK") + " CALL MARKER", 0, 0),
-    renderResult: result => new Text(result.content.filter(block => block.type === "text").map(block => block.text).join(""), 0, 0),
+    renderShell: process.env.TIMESTAMP_HIDE_TOOL === "1" ? "self" : "default",
+    renderCall: args => process.env.TIMESTAMP_HIDE_TOOL === "1" ? { render: () => [], invalidate() {} } :
+      new Text(String(args.tag ?? "CLOCK") + " CALL MARKER", 0, 0),
+    renderResult: result => process.env.TIMESTAMP_HIDE_TOOL === "1" ? { render: () => [], invalidate() {} } :
+      new Text(result.content.filter(block => block.type === "text").map(block => block.text).join(""), 0, 0),
     async execute(_id, _params, _signal, onUpdate) {
       frames.started = await capture();
       onUpdate?.({ content: [{ type: "text", text: "CLOCK PARTIAL MARKER" }], details: {} });
