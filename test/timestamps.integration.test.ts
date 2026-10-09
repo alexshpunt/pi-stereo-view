@@ -12,8 +12,9 @@ const utcTime = (timestamp: number): string => {
   return [date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()]
     .map(value => String(value).padStart(2, "0")).join(":");
 };
-const timeAbove = (lines: string[], marker: string): string => {
-  const row = lines.findIndex(line => line.includes(marker));
+const timeAbove = (lines: string[], marker: string, row = lines.findIndex(line => line.includes(marker))): string => {
+  const inline = row >= 0 ? lines[row].match(/(~?\d{2}:\d{2}:\d{2}|--:--:--)\s*[┃│]?$/)?.[1] : undefined;
+  if (inline) return inline;
   expect(row, "Native content must be visible: " + marker).toBeGreaterThanOrEqual(0);
   const previous = lines.slice(Math.max(0, row - 6), row).reverse()
     .map(line => line.replace(/[┃│]$/, ""))
@@ -166,7 +167,7 @@ const savedAssistant = (content: AssistantMessage["content"], timestamp: number)
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
 });
 const timesAbove = (lines: string[], marker: string): string[] => lines.flatMap((line, row) =>
-  line.includes(marker) ? [timeAbove(lines.slice(Math.max(0, row - 6), row + 1), marker)] : []);
+  line.includes(marker) ? [timeAbove(lines, marker, row)] : []);
 
 test("restores repeated messages, branch-local starts, legacy approximations and unknowns in every layout", async () => {
   const { cwd, agent } = await workspace();

@@ -177,7 +177,7 @@ export class TranscriptLayout {
       ]);
       return new VStack([
         { component: header, basis: "auto", shrink: 0 },
-        { component: view, basis: 0, grow: 1, minSize: 1 },
+        { component: view, basis: "auto", grow: 1, minSize: 1 },
       ]);
     };
     const activityPane = pane("Activity", "activity", this.activity);
@@ -221,7 +221,8 @@ export class TranscriptLayout {
         stack.clear();
         const minimum = axis === "columns" ? MIN_CHAT : MIN_ROWS;
         const chatEntry = {
-          component: chatPane, basis: axis === "columns" ? this.preferences.chatWidth : this.preferences.chatHeight,
+          component: chatPane, basis: axis === "columns" ? this.preferences.chatWidth : "auto" as const,
+          maxSize: axis === "rows" ? this.preferences.chatHeight : undefined,
           minSize: minimum, shrink: 1,
         };
         const activityEntry = {
@@ -243,10 +244,10 @@ export class TranscriptLayout {
         visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "rows" },
       { component: activityPane, basis: 0, grow: 1, minSize: 1,
         visible: viewport => shown(viewport) && this.preferences.zoom === "activity" },
-      { component: chatPane, basis: 0, grow: 1, minSize: 1,
+      { component: chatPane, basis: "auto", minSize: MIN_ROWS,
         visible: viewport => shown(viewport) && this.preferences.zoom === "chat" },
       { component: transcript, basis: 0, grow: 1, minSize: 1, visible: viewport => !shown(viewport) },
-      { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+      { component: dock, basis: "auto", shrink: 0, minSize: 1 },
     ]);
     this.mounted = mounted;
     host.setLayoutRoot(mounted);
