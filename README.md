@@ -4,14 +4,27 @@ Separate Pi history into conversation and agent activity without replacing nativ
 
 This is a private, fullscreen-first extension in development. It has not been released.
 
-## Try it
+## Personal installation
+
+Install for every Pi project through the local development registry:
+
+```sh
+pi-local-publish
+pi install npm:@alexshp/pi-agent-transcript
+```
+
+Set `tuiMode` to `fullscreen` in `~/.pi/agent/settings.json` and restart sessions that started in regular mode. This installs a private development build, not a public release. Publish and run `pi update npm:@alexshp/pi-agent-transcript` to load later changes.
+
+The checkout does not load a second source copy alongside the installed package.
+
+## Try source changes
 
 ```sh
 npm ci
-pi --tui-mode fullscreen -e ./src/index.ts
+pi -ne --tui-mode fullscreen -e ./src/index.ts
 ```
 
-The trusted checkout loads the extension and starts Pi in fullscreen through `.pi/settings.json`. Restart Pi if the current session started in regular mode. Run `/reload` after extension code changes.
+This isolated run loads source instead of installed extensions. Run `/reload` after source changes.
 
 ## Controls
 
