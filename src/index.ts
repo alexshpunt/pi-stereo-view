@@ -26,8 +26,13 @@ export default function transcript(pi: ExtensionAPI): void {
           id: "timestamps", label: "Show timestamps",
           description: "Hide clock rows without changing messages or recorded tool starts.",
           currentValue: preferences.showTimestamps ? "on" : "off", values: ["on", "off"],
-        }], 3, getSettingsListTheme(), (_id, value) => {
-          layout?.setTimestamps(value === "on");
+        }, {
+          id: "height", label: "Conversation height",
+          description: "Auto grows to half the history area. Drag sets a manual maximum.",
+          currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
+        }], 3, getSettingsListTheme(), (id, value) => {
+          if (id === "timestamps") layout?.setTimestamps(value === "on");
+          else if (id === "height") layout?.setAutomaticHeight(value === "auto");
           tui.requestRender();
         }, () => done());
         const content = new Container();
@@ -135,13 +140,14 @@ export default function transcript(pi: ExtensionAPI): void {
         ctx.ui.notify("Transcript icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ≡ settings. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
+      else if (action === "height" && target === "auto") layout.setHeight(null);
       else if (action === "height" && /^\d+$/.test(target ?? "")) layout.setHeight(Number(target));
       else if (action === "layout" && (target === "columns" || target === "rows")) layout.setLayout(target);
       else if (action === "zoom" && (target === "chat" || target === "activity")) layout.maximize(target);
       else if (action === "scroll" && (target === "chat" || target === "activity") && /^-?\d+$/.test(amount ?? "")) {
         layout.scroll(target, Number(amount));
       } else {
-        ctx.ui.notify("Use /transcript [help|settings|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows>|scroll <chat|activity> <lines>]", "warning");
+        ctx.ui.notify("Use /transcript [help|settings|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
         return;
       }
       ensureLayout();

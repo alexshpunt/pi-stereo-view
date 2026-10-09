@@ -31,6 +31,7 @@ export class TranscriptLayout {
   private drag?: { position: number; size: number };
   private failed = false;
   private fallback = false;
+  private automaticHeight = MIN_ROWS;
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
   private restoreDocument = (): void => {};
@@ -116,6 +117,7 @@ export class TranscriptLayout {
     let historyHeight = 0;
     const shown = ({ width, height }: { width: number; height: number }): boolean => {
       historyHeight = Math.max(0, height - dock.render(width).length - 1);
+      this.automaticHeight = Math.max(MIN_ROWS, Math.floor(historyHeight / 2));
       const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= MIN_ROWS :
         this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= MIN_ROWS :
           width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1;
@@ -129,7 +131,7 @@ export class TranscriptLayout {
         this.chat?.setScrollbar(scroll.scrollbar);
         // Keep short Conversation intact; shrink Activity first when history fills up.
         rows.limitConversation(chatPane, Math.max(MIN_ROWS,
-          Math.min(this.preferences.chatHeight, historyHeight - MIN_ROWS - 1)));
+          Math.min(this.preferences.chatHeight ?? this.automaticHeight, historyHeight - MIN_ROWS - 1)));
         return true;
       } catch (error) {
         this.failed = true;
@@ -205,7 +207,7 @@ export class TranscriptLayout {
         const before = this.preferences.side === "left";
         const size = axis === "columns" ?
           (before ? position : host.terminal.columns - position - 1) :
-          (before ? position - 1 : historyHeight - position);
+          this.currentHeight();
         this.drag = { position, size };
         return { capture: true };
       }
@@ -233,7 +235,7 @@ export class TranscriptLayout {
         const minimum = axis === "columns" ? MIN_CHAT : MIN_ROWS;
         const chatEntry = {
           component: chatPane, basis: axis === "columns" ? this.preferences.chatWidth : "auto" as const,
-          maxSize: axis === "rows" ? this.preferences.chatHeight : undefined,
+          maxSize: axis === "rows" ? this.preferences.chatHeight ?? undefined : undefined,
           minSize: minimum, shrink: axis === "columns" ? 1 : 0,
         };
         const activityEntry = {
@@ -284,16 +286,28 @@ export class TranscriptLayout {
     this.changed(persist);
   }
 
-  /** Set the requested stacked conversation height, including its header. */
-  setHeight(height: number, persist = true): void {
-    this.preferences.chatHeight = Math.max(MIN_ROWS, Math.min(240, Math.trunc(height)));
+  /** Set a manual maximum including the header, or null for automatic half-height. */
+  setHeight(height: number | null, persist = true): void {
+    this.preferences.chatHeight = height === null ? null : Math.max(MIN_ROWS, Math.min(240, Math.trunc(height)));
     this.changed(persist);
+  }
+
+  private currentHeight(): number {
+    if (this.preferences.layout === "rows" && !this.preferences.zoom && this.chat?.viewportHeight) {
+      return this.chat.viewportHeight + (this.preferences.side === "left" ? 3 : 2);
+    }
+    return this.preferences.chatHeight ?? this.automaticHeight;
+  }
+
+  /** Enable automatic height, or freeze the current rendered height as a manual limit. */
+  setAutomaticHeight(automatic: boolean): void {
+    this.setHeight(automatic ? null : this.currentHeight());
   }
 
   /** Resize the conversation along the selected split axis. */
   resize(direction: number): void {
     if (this.preferences.layout === "columns") this.setWidth(this.preferences.chatWidth + direction * 4);
-    else this.setHeight(this.preferences.chatHeight + direction);
+    else this.setHeight((this.preferences.chatHeight ?? this.currentHeight()) + direction);
   }
 
   /** Choose a split layout and return from combined or expanded history. */

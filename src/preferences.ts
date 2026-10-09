@@ -9,13 +9,14 @@ export interface Preferences {
   side: "left" | "right";
   chatWidth: number;
   layout: "columns" | "rows";
-  chatHeight: number;
+  /** Null grows to half the history area; a number is a manual maximum. */
+  chatHeight: number | null;
   zoom: "activity" | "chat" | null;
   showTimestamps: boolean;
 }
 
 export const defaults: Preferences = {
-  mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: 12, zoom: null, showTimestamps: true,
+  mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: null, zoom: null, showTimestamps: true,
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -39,7 +40,7 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
       record.chatWidth < 24 || record.chatWidth > 240 ||
       (layout !== "columns" && layout !== "rows") ||
-      typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240 ||
+      (chatHeight !== null && (typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240)) ||
       (zoom !== null && zoom !== "activity" && zoom !== "chat") || typeof showTimestamps !== "boolean") {
     throw new Error("Invalid transcript preferences");
   }
