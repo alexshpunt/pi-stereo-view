@@ -1,10 +1,40 @@
 # Pi Agent Transcript
 
-Separate the conversation from agent activity in Pi history, while keeping native rendering and the input dock.
+Separate Pi history into conversation and agent activity without replacing native rendering or changing the input dock.
 
-This project is in development. There is no working extension or installable release yet.
+This is a private, fullscreen-first extension in development. It has not been released.
+
+## Try it
+
+```sh
+npm ci
+pi --tui-mode fullscreen -e ./src/index.ts
+```
+
+The checkout also loads the extension through `.pi/settings.json` when the project is trusted. Run `/reload` after local changes.
+
+## Controls
+
+| Action | Command | Shortcut |
+| --- | --- | --- |
+| Split / combined history | `/transcript` | Ctrl+Alt+T |
+| Swap sides | `/transcript swap` | Ctrl+Alt+S |
+| Conversation width | `/transcript width 40` | Ctrl+Alt+Left / Right |
+| Scroll a panel | `/transcript scroll chat -10` or `/transcript scroll activity -10` | Native fullscreen scrolling |
+
+Drag the divider to change widths. Each panel supports native mouse scrolling, selection, and copy. The conversation panel contains user messages and all ordinary assistant text. Thinking, tools, notices, and other native entries remain in activity.
+
+Settings are saved in `transcript.json` in Pi's agent directory. Narrow terminals temporarily show combined history. Regular mode keeps native combined history. Unknown fullscreen layouts are left untouched with a warning.
+
+## Development
+
+```sh
+npm run check
+```
+
+The tests launch real Pi with scripted responses, custom tool renderers, native keyboard and mouse input, and isolated session files. Override `PI_COMMAND` to select another Pi executable.
 
 - [Linear project](https://linear.app/alexshpunt/project/pi-agent-transcript-777603f978bf)
-- [First-version task](https://linear.app/alexshpunt/issue/LPT-688/separate-conversation-and-agent-activity-in-pi-history)
+- [Scope and acceptance: LPT-688](https://linear.app/alexshpunt/issue/LPT-688/separate-conversation-and-agent-activity-in-pi-history)
 
 The Linear task owns the scope and acceptance checks.
