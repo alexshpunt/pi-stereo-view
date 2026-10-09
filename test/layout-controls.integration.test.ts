@@ -28,6 +28,7 @@ test("starts new settings side by side at 20/80 and retains that ratio on resize
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
   }).run("USER MARKER");
   const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "default-layouts.json"), "utf8"));
+  await writeFile(path.resolve("tmp/test-runs/default-columns/default-layouts.json"), JSON.stringify(frames));
   for (const [name, width] of [["columns", 200], ["wider", 400]] as const) {
     const header = stripTerminalSequences(frames[name][headerRow(frames[name], "Conversation")]);
     expect(header.indexOf("Conversation")).toBeLessThan(header.indexOf("Activity"));
@@ -39,7 +40,7 @@ test("starts new settings side by side at 20/80 and retains that ratio on resize
   expect(clean(frames.rows)).toContain("═".repeat(400));
   for (const name of ["manual", "resized"]) {
     const header = stripTerminalSequences(frames[name][headerRow(frames[name], "Conversation")]);
-    expect(header.indexOf("║")).toBe(83);
+    expect(header.indexOf("║"), name).toBe(83);
   }
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toMatchObject({
     chatWidth: 83, layout: "columns", chatHeight: null,

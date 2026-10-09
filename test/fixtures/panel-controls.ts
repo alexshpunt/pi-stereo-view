@@ -81,7 +81,9 @@ export default function panelControls(pi: ExtensionAPI): void {
       await click("[ ▤ ]");
       const rows = await capture();
       await click("[ ▥ ]");
-      const divider = stripTerminalSequences(wider[1]).indexOf("║");
+      const restoredColumns = await capture();
+      const divider = stripTerminalSequences(restoredColumns[1]).indexOf("║");
+      if (divider < 0) throw new Error("Missing current column divider after restoring columns");
       await mouse(0, divider, 2);
       await mouse(32, divider + 4, 2);
       await mouse(0, divider + 4, 2, "m");
