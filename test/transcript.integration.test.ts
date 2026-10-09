@@ -44,6 +44,7 @@ test("routes native text and tools into separate history panels without changing
   }));
   const result = await new PiIntegrationTest({
     testName: "native-split",
+    environment: { TRANSCRIPT_PROBE_CONTROLS: "1" },
     artifactsDir: path.resolve("tmp/test-runs"),
     cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"),
@@ -80,6 +81,12 @@ test("routes native text and tools into separate history panels without changing
   expect(chat).toContain("ANSWER MARKER");
   expect(chat).not.toContain("NATIVE CALL MARKER");
   expect(chat).not.toContain("THINKING MARKER");
+  const frames: string[][] = JSON.parse(await readFile(path.join(cwd, "control-frames.json"), "utf8"));
+  const initiallyExpanded = clean(frames[0]).includes("NATIVE RESULT MARKER expanded");
+  expect(clean(frames[8])).toContain("NATIVE RESULT MARKER " + (initiallyExpanded ? "collapsed" : "expanded"));
+  expect(clean(frames[9])).not.toContain("THINKING MARKER");
+  expect(clean(frames[10])).toContain("THINKING MARKER");
+  expect(result.providerRequests).toHaveLength(2);
 });
 
 test("drags, swaps, restores native combined history, and remembers settings on restart", async () => {
@@ -120,6 +127,55 @@ test("drags, swaps, restores native combined history, and remembers settings on 
   const dock = restored.slice(-5).map(line => clean([line]));
   expect(dock.filter(line => line.includes("│"))).toHaveLength(0);
   expect(dock.some(line => line.includes("─".repeat(120)))).toBe(true);
+});
+
+test("changes layout during streaming and restores the requested split after a live resize", async () => {
+  const cwd = await mkdtemp(path.resolve("tmp/dynamic-"));
+  directories.push(cwd);
+  const result = await new PiIntegrationTest({
+    testName: "streaming-controls-and-resize",
+    artifactsDir: path.resolve("tmp/test-runs"),
+    cwd,
+    piCommand: path.resolve("test/fixtures/pi-host.sh"),
+    isolateUserResources: true,
+    environment: { TRANSCRIPT_PROBE_DYNAMIC: "1" },
+    rawMode: false,
+    tuiSize: { cols: 120, rows: 35 },
+    extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/native-probe.ts")],
+    tools: [],
+    conversation: [assistantMessage([text("STREAM MARKER completed.", {
+      chunks: { kind: "fixed", size: 3 }, delayMs: 20,
+    })])],
+  }).run("USER MARKER");
+  const observed: {
+    streamingFrames: { idle: boolean; lines: string[] }[];
+    widthFrames: string[][];
+    modeFrames: { mode: string; lines: string[] }[];
+  } = JSON.parse(await readFile(path.join(cwd, "dynamic-observation.json"), "utf8"));
+  expect(observed.streamingFrames).toHaveLength(4);
+  expect(result.providerRequests).toHaveLength(1);
+  expect(observed.streamingFrames.every(frame => !frame.idle)).toBe(true);
+  expect(observed.streamingFrames.map(frame => clean(frame.lines).includes("Conversation")))
+    .toEqual([false, true, true, true]);
+  const streamed = clean(observed.streamingFrames[3].lines);
+  expect(streamed.indexOf("Conversation")).toBeLessThan(streamed.indexOf("Activity"));
+  expect(clean([observed.streamingFrames[3].lines[0]]).indexOf("│")).toBe(44);
+  const [wide, narrow, restored] = observed.widthFrames.map(clean);
+  expect(wide).toContain("Conversation");
+  expect(narrow).not.toContain("Conversation");
+  expect(narrow).toContain("USER MARKER");
+  expect(narrow).toContain("STREAM MARKER completed.");
+  expect(restored).toContain("Conversation");
+  expect(restored.match(/STREAM MARKER completed\./g)).toHaveLength(1);
+  expect(clean([observed.widthFrames[2][0]]).indexOf("│")).toBe(44);
+  expect(observed.widthFrames[2][0].indexOf("Conversation"))
+    .toBeLessThan(observed.widthFrames[2][0].indexOf("Activity"));
+  expect(observed.modeFrames.map(frame => frame.mode)).toEqual(["regular", "fullscreen"]);
+  expect(clean(observed.modeFrames[0].lines)).not.toContain("Conversation");
+  const remounted = clean(observed.modeFrames[1].lines);
+  expect(remounted.match(/Conversation/g)).toHaveLength(1);
+  expect(remounted.match(/STREAM MARKER completed\./g)).toHaveLength(1);
+  expect(clean([observed.modeFrames[1].lines[0]]).indexOf("│")).toBe(44);
 });
 
 test.each([[40, "fullscreen"], [120, "regular"]])("keeps native combined history at %i columns in %s mode", async (cols, mode) => {

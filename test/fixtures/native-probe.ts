@@ -15,6 +15,24 @@ type TestHost = TUI & {
 /** Drive native input and observe the actual loaded Pi tree, not a test renderer. */
 export default function nativeProbe(pi: ExtensionAPI): void {
   let tui: TestHost | undefined;
+  const streamingFrames: { idle: boolean; lines: string[] }[] = [];
+  let streamStep = 0;
+  let streamingCapture = Promise.resolve();
+  const capture = async (): Promise<string[]> => {
+    tui!.requestRender(true);
+    await setImmediate();
+    return tui!.getScreenLines?.() ?? tui!.render(tui!.terminal.columns);
+  };
+  pi.on("message_update", (event, ctx) => {
+    if (!tui || process.env.TRANSCRIPT_PROBE_DYNAMIC !== "1" ||
+        event.assistantMessageEvent.type !== "text_delta" || streamStep >= 4) return;
+    const keys = ["\x1b[116;7u", "\x1b[116;7u", "\x1b[115;7u", "\x1b[1;7C"];
+    const key = keys[streamStep++];
+    streamingCapture = streamingCapture.then(async () => {
+      tui!.handleTerminalInput(key);
+      streamingFrames.push({ idle: ctx.isIdle(), lines: await capture() });
+    });
+  });
   pi.registerToolRenderer((name, next) => name === "write" ? {
     renderCall: () => new Text("NATIVE CALL MARKER", 0, 0),
     renderResult: (_result, options) => new Text("NATIVE RESULT MARKER " + (options.expanded ? "expanded" : "collapsed"), 0, 0),
@@ -43,11 +61,35 @@ export default function nativeProbe(pi: ExtensionAPI): void {
   });
   pi.on("agent_before_settle", async (_event, ctx) => {
     if (!tui) return;
-    const capture = async (): Promise<string[]> => {
-      tui!.requestRender(true);
-      await setImmediate();
-      return tui!.getScreenLines?.() ?? tui!.render(tui!.terminal.columns);
-    };
+    await streamingCapture;
+    if (process.env.TRANSCRIPT_PROBE_DYNAMIC === "1") {
+      const columns = process.stdout.columns;
+      const widthFrames: string[][] = [await capture()];
+      try {
+        // ProcessTerminal reads this property and listens to the native resize event.
+        process.stdout.columns = 40;
+        process.stdout.emit("resize");
+        widthFrames.push(await capture());
+        process.stdout.columns = columns;
+        process.stdout.emit("resize");
+        widthFrames.push(await capture());
+      } finally {
+        process.stdout.columns = columns;
+        process.stdout.emit("resize");
+      }
+      const modeFrames: { mode: string; lines: string[] }[] = [];
+      for (let change = 0; change < 2; change++) {
+        for (const character of "/settings") tui.handleTerminalInput(character);
+        tui.handleTerminalInput("\r");
+        await setImmediate();
+        for (const character of "TUI mode") tui.handleTerminalInput(character);
+        tui.handleTerminalInput("\r");
+        tui.handleTerminalInput("\x1b");
+        tui.handleTerminalInput("\x1b[D");
+        modeFrames.push({ mode: tui.mode, lines: await capture() });
+      }
+      await writeFile(path.join(ctx.cwd, "dynamic-observation.json"), JSON.stringify({ streamingFrames, widthFrames, modeFrames }));
+    }
     const initial = await capture();
     await writeFile(path.join(ctx.cwd, "native-snapshot.json"), JSON.stringify(initial));
     const sessionFile = ctx.sessionManager.getSessionFile();
