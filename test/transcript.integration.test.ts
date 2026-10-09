@@ -3,9 +3,13 @@ import path from "node:path";
 import {
   assistantMessage, getToolExecution, PiIntegrationTest, text, toolCall,
 } from "pi-coding-agent-test";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeAll, expect, test } from "vitest";
 import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+
+beforeAll(async () => {
+  await mkdir(path.resolve("tmp"), { recursive: true });
+});
 
 const clean = (lines: string[]): string => lines.map(stripTerminalSequences).join("\n");
 
