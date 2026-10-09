@@ -145,7 +145,9 @@ test("keeps observed tool-start time stable through partial output and streamed 
 
 test("keeps the last clock digit visible when the native auto scrollbar overlays history", async () => {
   const { cwd, agent } = await workspace();
-  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({ mode: "combined" }));
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+    mode: "combined", side: "left", chatWidth: 40, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true,
+  }));
   await new PiIntegrationTest({
     testName: "timestamp-scrollbar", artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,

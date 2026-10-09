@@ -14,27 +14,36 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true })));
 });
 
-test("starts new settings in rows with conversation above activity", async () => {
-  const cwd = await mkdtemp(path.resolve("tmp/default-rows-"));
+test("starts new settings side by side at 20/80 and retains that ratio on resize", async () => {
+  const cwd = await mkdtemp(path.resolve("tmp/default-columns-"));
   const agent = await mkdtemp(path.resolve("tmp/default-agent-"));
   directories.push(cwd, agent);
   await new PiIntegrationTest({
-    testName: "default-rows", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+    testName: "default-columns", artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"),
     isolateUserResources: false,
     environment: { PI_CODING_AGENT_DIR: agent, TRANSCRIPT_BUTTON_DEFAULTS: "1" },
-    rawMode: false, tuiSize: { cols: 120, rows: 35 },
+    rawMode: false, tuiSize: { cols: 200, rows: 35 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/panel-controls.ts")],
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
   }).run("USER MARKER");
-  const frames: { rows: string[]; columns: string[] } = JSON.parse(await readFile(path.join(cwd, "default-layouts.json"), "utf8"));
+  const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "default-layouts.json"), "utf8"));
+  for (const [name, width] of [["columns", 200], ["wider", 400]] as const) {
+    const header = stripTerminalSequences(frames[name][headerRow(frames[name], "Conversation")]);
+    expect(header.indexOf("Conversation")).toBeLessThan(header.indexOf("Activity"));
+    expect(header.indexOf("║")).toBe(Math.floor((width - 1) * 0.2));
+    expect(clean(frames[name])).toContain("ANSWER MARKER");
+  }
   expect(headerRow(frames.rows, "Conversation")).toBe(2);
-  expect(headerRow(frames.rows, "Activity")).toBe(8);
-  expect(clean(frames.rows)).toContain("═".repeat(120));
-  const header = stripTerminalSequences(frames.columns[headerRow(frames.columns, "Conversation")]);
-  expect(header.indexOf("Conversation")).toBeLessThan(header.indexOf("Activity"));
-  expect(header.indexOf("║")).toBe(40);
-  expect(clean(frames.columns)).toContain("ANSWER MARKER");
+  expect(headerRow(frames.rows, "Activity")).toBeGreaterThan(2);
+  expect(clean(frames.rows)).toContain("═".repeat(400));
+  for (const name of ["manual", "resized"]) {
+    const header = stripTerminalSequences(frames[name][headerRow(frames[name], "Conversation")]);
+    expect(header.indexOf("║")).toBe(83);
+  }
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toMatchObject({
+    chatWidth: 83, layout: "columns", chatHeight: null,
+  });
 });
 
 test("uses mouse buttons and both dividers, then restores the expanded panel on restart", async () => {
