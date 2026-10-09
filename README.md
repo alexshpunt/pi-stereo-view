@@ -17,12 +17,18 @@ The trusted checkout loads the extension and starts Pi in fullscreen through `.p
 
 Click the history toolbar to switch layouts, swap panels, or return to combined history:
 
-- **Combined / Split** switches between one native history and two panels. The toolbar stays visible in combined mode.
-- **Rows / Cols** switches to top/bottom or left/right panels.
-- **Swap** exchanges left/right or top/bottom.
-- Each panel has **Expand / Restore**. Expansion fills only history; the native input dock stays full width.
+| Icon | Action |
+| --- | --- |
+| `▣` / `◫` | Combined history / return to split |
+| `▤` / `▥` | Switch to rows / columns |
+| `⇅` / `⇄` | Swap top/bottom or left/right |
+| `⛶` / `↙` | Expand / restore the panel |
 
-Drag the vertical divider to change conversation width, or the horizontal divider to change its height. Restore keeps the split arrangement and sizes.
+The toolbar stays visible in combined mode. Expansion fills only history; the native input dock stays full width. Run `/transcript help` for the icon legend.
+
+Drag the double-line divider (`═` or `║`) to change conversation height or width. Restore keeps the split arrangement and sizes.
+
+New settings start in Rows with Conversation above Activity. In Columns, Conversation starts on the left. Saved arrangements are not reset, including first-version column settings.
 
 | Action | Command | Shortcut |
 | --- | --- | --- |
