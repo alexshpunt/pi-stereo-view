@@ -71,7 +71,7 @@ export class NativeDocument extends Container {
     this.timestamps.prepare(chat.children);
     const result: Component[] = this.pane !== "chat" ? this.source.children.slice(0, 2) : [];
     let spacing: Component[] = [];
-    let previous: Pane = "activity";
+    let visibleBlock = false;
     for (const component of chat.children) {
       const name = nameOf(component);
       if (name === "Spacer") {
@@ -96,7 +96,6 @@ export class NativeDocument extends Container {
       } else {
         const target = name === "UserMessageComponent" || name === "Image" ? "chat" : "activity";
         if (target === this.pane || this.pane === "combined") routed = component;
-        previous = target;
       }
       if (routed) {
         // Empty native assistant shells do not need a detached timestamp row.
@@ -104,16 +103,19 @@ export class NativeDocument extends Container {
         else {
           let stamped = this.stamped.get(routed);
           if (!stamped) {
-            const Decorator = this.pane === "chat" && name !== "Image" ? CompactMessage : TimestampedMessage;
+            const Decorator = this.pane !== "combined" ? CompactMessage : TimestampedMessage;
             stamped = new Decorator(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
             this.stamped.set(routed, stamped);
           }
-          result.push(...(this.pane === "chat" ? [] : spacing), stamped);
+          if (stamped instanceof CompactMessage) {
+            visibleBlock = stamped.prepare(width, visibleBlock) || visibleBlock;
+            result.push(stamped);
+          } else result.push(...spacing, stamped);
         }
       }
       spacing = [];
     }
-    if (this.pane !== "chat" && (previous === this.pane || this.pane === "combined")) result.push(...spacing);
+    if (this.pane === "combined") result.push(...spacing);
     this.children = result;
     return super.render(width);
   }

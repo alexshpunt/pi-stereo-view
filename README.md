@@ -41,7 +41,7 @@ Click the history toolbar to switch layouts, swap panels, or return to combined 
 The toolbar stays visible in combined mode. Expansion hides the other history panel; the native input dock stays full width. Run `/transcript help` for the icon legend.
 
 Drag the double-line divider (`═` or `║`) to change conversation height or width. Restore keeps the split arrangement and sizes.
-In Rows, the saved Conversation height is a maximum: short conversations use only the space they need, and Activity gets the rest. Expanded Conversation also fits its content, up to the available screen height. Long conversations scroll without pushing the input off screen.
+In Rows, the saved Conversation height is a maximum. Both panels use only the space their content needs, up to the available screen height. When history fills up, Activity shrinks first while Conversation keeps its requested limit. Expanded panels also fit their content. Long histories scroll without pushing the input off screen.
 
 New settings start in Rows with Conversation above Activity. In Columns, Conversation starts on the left. Saved arrangements are not reset, including first-version column settings.
 
@@ -64,7 +64,7 @@ Mode, layout, panel order, both sizes, the expanded panel, and timestamp visibil
 
 ## Message times
 
-Conversation shows a dim local `HH:mm:ss` clock on the first line of each text message, aligned to the right. A small right gutter keeps text clear of the clock. Extra spacing around messages is removed; paragraph breaks inside messages stay intact. Activity and combined history keep their separate clock rows. Assistant text and thinking share their original message time. Native content and tool renderers stay unchanged.
+Conversation and Activity show a dim local `HH:mm:ss` clock on the first line of each text block, aligned to the right. A small right gutter keeps text clear of the clock. One blank row separates messages and tool calls; paragraph breaks and tool formatting inside blocks stay intact. Invisible tool blocks do not add spacing. Image blocks keep their native placement rows and use a separate clock row. Combined history keeps its existing clock rows. Assistant text and thinking share their original message time. Native content and tool renderers stay unchanged.
 
 New tool blocks show the time observed when execution starts. That time is saved as display-only session metadata and stays fixed through partial output, completion, and restart. Old tools without that metadata show `~HH:mm:ss`, using the owning assistant message time. An unavailable or invalid time is shown as `--:--:--`, never the current time.
 

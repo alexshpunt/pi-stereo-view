@@ -172,6 +172,8 @@ export class CompactMessage extends Container {
   private top = 0;
   private contentWidth = 0;
   private contentHeight = 0;
+  private leadingRows = 0;
+  private prepared?: { width: number; lines: string[] };
 
   constructor(private readonly component: Component, private readonly label: () => string,
     private readonly theme: () => Theme, private readonly gutter: () => number,
@@ -180,12 +182,31 @@ export class CompactMessage extends Container {
     this.addChild(component);
   }
 
+  /** Prepare one visible block and its separator once per document render. */
+  prepare(width: number, separate: boolean): boolean {
+    const lines = this.renderContent(width);
+    this.leadingRows = separate && lines.length > 0 ? 1 : 0;
+    this.prepared = { width, lines: this.leadingRows ? ["", ...lines] : lines };
+    return lines.length > 0;
+  }
+
   override render(width: number): string[] {
+    if (this.prepared?.width === width) return this.prepared.lines;
+    this.leadingRows = 0;
+    return this.renderContent(width);
+  }
+
+  private renderContent(width: number): string[] {
     const label = this.show() ? this.label() : "";
     const time = width > label.length + this.gutter() + 1 ? label : "";
     this.contentWidth = Math.max(1, width - (time ? time.length + 1 + this.gutter() : 0));
     const content = this.component.render(this.contentWidth);
     this.contentHeight = content.length;
+    // Image protocols need every placement row. Keep their native block intact.
+    if (content.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="))) {
+      this.top = time ? -1 : 0;
+      return time ? [this.theme().fg("dim", time.padStart(width - this.gutter())), ...content] : content;
+    }
     const blank = (line: string): boolean => stripTerminalSequences(line).trim().length === 0;
     this.top = 0;
     let end = content.length;
@@ -206,13 +227,14 @@ export class CompactMessage extends Container {
   }
 
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
-    if (event.x >= this.contentWidth) return undefined;
+    if (event.y < this.leadingRows || event.x >= this.contentWidth) return undefined;
     return super.handleMouse({
-      ...event, y: event.y + this.top, width: this.contentWidth, height: this.contentHeight,
+      ...event, y: event.y - this.leadingRows + this.top, width: this.contentWidth, height: this.contentHeight,
     });
   }
 
   override invalidate(): void {
+    this.prepared = undefined;
     this.component.invalidate();
   }
 }

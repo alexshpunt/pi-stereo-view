@@ -50,7 +50,8 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   const initial = clean(frames.initial);
   const clock = initial.findIndex(line => line.includes("USER MARKER") && /\d{2}:\d{2}:\d{2}\s*[┃│]?$/.test(line));
   expect(clock).toBe(header(frames.initial, "Conversation") + 2);
-  expect(initial[clock + 1]).toContain("ANSWER MARKER");
+  expect(initial[clock + 1].trim()).toBe("");
+  expect(initial[clock + 2]).toContain("ANSWER MARKER");
   expect(clean(frames.settings).join("\n")).toContain("Show timestamps");
   expect(clean(frames.commandMenu).join("\n")).toContain("Show timestamps");
   for (const frame of [frames.off, frames.offCombined, frames.savedOff]) {

@@ -13,6 +13,14 @@ const MIN_ACTIVITY = 40;
 const MIN_ROWS = 4;
 const BUTTON_WIDTH = 5;
 
+class TranscriptRows extends VStack {
+  /** Limit Conversation while leaving at least one Activity content row. */
+  limitConversation(component: Component, height: number): void {
+    const entry = this.entries.find(entry => entry.component === component);
+    if (entry) entry.maxSize = height;
+  }
+}
+
 /** Own only guarded fullscreen history controls; never replace the input dock. */
 export class TranscriptLayout {
   private host?: NativeTui;
@@ -119,6 +127,9 @@ export class TranscriptLayout {
         if (this.preferences.mode !== "split" || !fits) return false;
         this.activity?.setScrollbar(scroll.scrollbar);
         this.chat?.setScrollbar(scroll.scrollbar);
+        // Keep short Conversation intact; shrink Activity first when history fills up.
+        rows.limitConversation(chatPane, Math.max(MIN_ROWS,
+          Math.min(this.preferences.chatHeight, historyHeight - MIN_ROWS - 1)));
         return true;
       } catch (error) {
         this.failed = true;
@@ -215,7 +226,7 @@ export class TranscriptLayout {
     const columnDivider = divider("columns");
     const rowDivider = divider("rows");
     const columns = new HStack();
-    const rows = new VStack();
+    const rows = new TranscriptRows();
     this.rebuild = (): void => {
       for (const [stack, axis] of [[columns, "columns"], [rows, "rows"]] as const) {
         stack.clear();
@@ -223,10 +234,11 @@ export class TranscriptLayout {
         const chatEntry = {
           component: chatPane, basis: axis === "columns" ? this.preferences.chatWidth : "auto" as const,
           maxSize: axis === "rows" ? this.preferences.chatHeight : undefined,
-          minSize: minimum, shrink: 1,
+          minSize: minimum, shrink: axis === "columns" ? 1 : 0,
         };
         const activityEntry = {
-          component: activityPane, basis: 0, grow: 1, minSize: axis === "columns" ? MIN_ACTIVITY : MIN_ROWS,
+          component: activityPane, basis: axis === "columns" ? 0 : "auto" as const,
+          grow: axis === "columns" ? 1 : 0, minSize: axis === "columns" ? MIN_ACTIVITY : MIN_ROWS,
         };
         const first = this.preferences.side === "left" ? chatEntry : activityEntry;
         const second = this.preferences.side === "left" ? activityEntry : chatEntry;
@@ -240,9 +252,9 @@ export class TranscriptLayout {
       { component: toolbar, basis: 1, shrink: 0 },
       { component: columns, basis: 0, grow: 1, minSize: 1,
         visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "columns" },
-      { component: rows, basis: 0, grow: 1, minSize: 1,
+      { component: rows, basis: "auto", minSize: 1,
         visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "rows" },
-      { component: activityPane, basis: 0, grow: 1, minSize: 1,
+      { component: activityPane, basis: "auto", minSize: MIN_ROWS,
         visible: viewport => shown(viewport) && this.preferences.zoom === "activity" },
       { component: chatPane, basis: "auto", minSize: MIN_ROWS,
         visible: viewport => shown(viewport) && this.preferences.zoom === "chat" },

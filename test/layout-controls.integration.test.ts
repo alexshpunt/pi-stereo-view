@@ -29,7 +29,7 @@ test("starts new settings in rows with conversation above activity", async () =>
   }).run("USER MARKER");
   const frames: { rows: string[]; columns: string[] } = JSON.parse(await readFile(path.join(cwd, "default-layouts.json"), "utf8"));
   expect(headerRow(frames.rows, "Conversation")).toBe(2);
-  expect(headerRow(frames.rows, "Activity")).toBe(7);
+  expect(headerRow(frames.rows, "Activity")).toBe(8);
   expect(clean(frames.rows)).toContain("═".repeat(120));
   const header = stripTerminalSequences(frames.columns[headerRow(frames.columns, "Conversation")]);
   expect(header.indexOf("Conversation")).toBeLessThan(header.indexOf("Activity"));
@@ -72,7 +72,7 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   expect(headerRow(frames.canceledClick, "Conversation")).toBe(2);
   expect(headerRow(frames.canceledClick, "Activity")).toBe(2);
   expect(headerRow(frames.rows, "Conversation")).toBe(2);
-  expect(headerRow(frames.rows, "Activity")).toBe(7);
+  expect(headerRow(frames.rows, "Activity")).toBe(8);
   expect(headerRow(frames.rowDrag, "Activity")).toBe(6);
   expect(headerRow(frames.rowSwap, "Activity")).toBeLessThan(headerRow(frames.rowSwap, "Conversation"));
   expect(stripTerminalSequences(frames.columnDrag[1]).indexOf("║")).toBe(75);
@@ -147,7 +147,7 @@ test("keeps the mouse return control after restarting in saved combined mode", a
   expect(clean(frames.before)).toContain("USER MARKER");
   expect(clean(frames.before)).toContain("ANSWER MARKER");
   expect(headerRow(frames.after, "Conversation")).toBe(2);
-  expect(headerRow(frames.after, "Activity")).toBe(7);
+  expect(headerRow(frames.after, "Activity")).toBe(8);
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, showTimestamps: true });
 });
 
