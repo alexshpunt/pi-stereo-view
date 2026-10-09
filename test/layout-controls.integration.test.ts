@@ -28,10 +28,10 @@ test("starts new settings in rows with conversation above activity", async () =>
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
   }).run("USER MARKER");
   const frames: { rows: string[]; columns: string[] } = JSON.parse(await readFile(path.join(cwd, "default-layouts.json"), "utf8"));
-  expect(headerRow(frames.rows, "Conversation")).toBe(1);
+  expect(headerRow(frames.rows, "Conversation")).toBe(2);
   expect(headerRow(frames.rows, "Activity")).toBe(14);
   expect(clean(frames.rows)).toContain("═".repeat(120));
-  const header = stripTerminalSequences(frames.columns[1]);
+  const header = stripTerminalSequences(frames.columns[headerRow(frames.columns, "Conversation")]);
   expect(header.indexOf("Conversation")).toBeLessThan(header.indexOf("Activity"));
   expect(header.indexOf("║")).toBe(40);
   expect(clean(frames.columns)).toContain("ANSWER MARKER");
@@ -63,24 +63,24 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   expect(getToolExecution(result, "button-write").isError).toBe(false);
   expect(await readFile(path.join(cwd, "effect.txt"), "utf8")).toBe("real effect");
   const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "panel-controls.json"), "utf8"));
-  const first = stripTerminalSequences(frames.initial[1]);
+  const first = stripTerminalSequences(frames.initial[headerRow(frames.initial, "Conversation")]);
   expect(clean(frames.initial.slice(0, 2))).toContain("[ ↔ ]");
-  expect(clean(frames.initial.slice(0, 2))).toContain("[ ↗ ]");
+  expect(first).toContain("[ ↗ ]");
   expect(stripTerminalSequences(frames.rows[0])).toContain("[ ↕ ]");
   expect(first.indexOf("Conversation")).toBeLessThan(first.indexOf("Activity"));
   expect(first.indexOf("║")).toBe(36);
-  expect(headerRow(frames.canceledClick, "Conversation")).toBe(1);
-  expect(headerRow(frames.canceledClick, "Activity")).toBe(1);
-  expect(headerRow(frames.rows, "Conversation")).toBe(1);
+  expect(headerRow(frames.canceledClick, "Conversation")).toBe(2);
+  expect(headerRow(frames.canceledClick, "Activity")).toBe(2);
+  expect(headerRow(frames.rows, "Conversation")).toBe(2);
   expect(headerRow(frames.rows, "Activity")).toBe(14);
   expect(headerRow(frames.rowDrag, "Activity")).toBe(11);
   expect(headerRow(frames.rowSwap, "Activity")).toBeLessThan(headerRow(frames.rowSwap, "Conversation"));
   expect(stripTerminalSequences(frames.columnDrag[1]).indexOf("║")).toBe(75);
-  expect(headerRow(frames.activity, "Activity")).toBe(1);
+  expect(headerRow(frames.activity, "Activity")).toBe(2);
   expect(headerRow(frames.activity, "Conversation")).toBe(-1);
   expect(clean(frames.activity)).toContain("NATIVE RESULT MARKER");
   expect(clean(frames.activity)).not.toContain("ANSWER MARKER");
-  expect(headerRow(frames.chat, "Conversation")).toBe(1);
+  expect(headerRow(frames.chat, "Conversation")).toBe(2);
   expect(headerRow(frames.chat, "Activity")).toBe(-1);
   expect(clean(frames.chat)).toContain("USER MARKER");
   expect(clean(frames.chat)).toContain("ANSWER MARKER");
@@ -94,8 +94,8 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   }
   expect(headerRow(frames.shortRows, "Activity")).toBe(-1);
   expect(clean(frames.shortRows)).toContain("[ ◫ ]");
-  expect(headerRow(frames.tallRows, "Activity")).toBe(1);
-  expect(headerRow(frames.tallRows, "Conversation")).toBeGreaterThan(1);
+  expect(headerRow(frames.tallRows, "Activity")).toBe(2);
+  expect(headerRow(frames.tallRows, "Conversation")).toBeGreaterThan(2);
   for (const frame of Object.values(frames)) {
     const headerRows = new Set([0, headerRow(frame, "Activity"), headerRow(frame, "Conversation")]);
     for (const row of headerRows) {
@@ -110,11 +110,11 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
     expect(frame.slice(-5).some(line => stripTerminalSequences(line).includes("─".repeat(120)))).toBe(true);
   }
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({
-    mode: "split", side: "right", chatWidth: 44, layout: "rows", chatHeight: 9, zoom: "chat",
+    mode: "split", side: "right", chatWidth: 44, layout: "rows", chatHeight: 9, zoom: "chat", showTimestamps: true,
   });
   await run("expanded-panel-restart", false);
   const restored: string[] = JSON.parse(await readFile(path.join(cwd, "native-snapshot.json"), "utf8"));
-  expect(headerRow(restored, "Conversation")).toBe(1);
+  expect(headerRow(restored, "Conversation")).toBe(2);
   expect(headerRow(restored, "Activity")).toBe(-1);
   expect(clean(restored)).toContain("[ ↙ ]");
   expect(clean(restored)).toContain("[ ▥ ]");
@@ -136,16 +136,16 @@ test("keeps the mouse return control after restarting in saved combined mode", a
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
   }).run("USER MARKER");
   await run("save-combined-buttons");
-  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, mode: "combined" });
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, mode: "combined", showTimestamps: true });
   await run("restore-combined-buttons");
   const frames: { before: string[]; after: string[] } = JSON.parse(await readFile(path.join(cwd, "button-toggle.json"), "utf8"));
   expect(clean(frames.before)).toContain("[ ◫ ]");
   expect(headerRow(frames.before, "Conversation")).toBe(-1);
   expect(clean(frames.before)).toContain("USER MARKER");
   expect(clean(frames.before)).toContain("ANSWER MARKER");
-  expect(headerRow(frames.after, "Conversation")).toBe(1);
+  expect(headerRow(frames.after, "Conversation")).toBe(2);
   expect(headerRow(frames.after, "Activity")).toBe(11);
-  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual(saved);
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, showTimestamps: true });
 });
 
 test("keeps mouse controls active while text and a real tool call stream", async () => {

@@ -51,6 +51,7 @@ export class NativeDocument extends Container {
     private readonly timestamps: TranscriptTimestamps,
     private readonly theme: () => Theme,
     private readonly timestampGutter: () => number,
+    private readonly showTimestamps: () => boolean,
   ) {
     super();
   }
@@ -103,7 +104,7 @@ export class NativeDocument extends Container {
         else {
           let stamped = this.stamped.get(routed);
           if (!stamped) {
-            stamped = new TimestampedMessage(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter);
+            stamped = new TimestampedMessage(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
             this.stamped.set(routed, stamped);
           }
           result.push(...spacing, stamped);

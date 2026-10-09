@@ -218,7 +218,7 @@ test("restores repeated messages, branch-local starts, legacy approximations and
   expect(timeAbove(combined, "LEGACY CALL MARKER")).toBe("~11:03:04");
   expect(timeAbove(combined, "EXACT CALL MARKER")).toBe("14:06:07");
   expect(timeAbove(combined, "[timestamp-note]")).toBe("15:07:08");
-  expect(timeAbove(combined, "echo BASH_MARKER")).toBe("16:08:09");
+  expect(timeAbove(clean(frames.combinedEnd), "echo BASH_MARKER")).toBe("16:08:09");
   expect(timeAbove(clean(frames.combinedEnd), "UNKNOWN USER")).toBe("--:--:--");
   for (const frame of Object.values(frames)) expect(clean(frame).join("\n")).not.toContain("ABANDONED ANSWER");
   const { chat, activity } = panes(frames.columns);
@@ -231,6 +231,47 @@ test("restores repeated messages, branch-local starts, legacy approximations and
   expect(timeAbove(clean(frames.rowsEnd), "[timestamp-note]")).toBe("15:07:08");
   const resumed = SessionManager.open(path.join(cwd, "timestamp-session.jsonl"));
   expect(resumed.getBranch().filter(entry => entry.type === "custom" && entry.customType === "pi-agent-transcript/tool-start")).toHaveLength(1);
+});
+
+test("collects tool starts while hidden and restores the original time when enabled after restart", async () => {
+  const { cwd, agent } = await workspace();
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+    mode: "split", side: "right", chatWidth: 40, layout: "columns", chatHeight: 12,
+    zoom: null, showTimestamps: false,
+  }));
+  await new PiIntegrationTest({
+    testName: "hidden-tool-start", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+    piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
+    environment: { PI_CODING_AGENT_DIR: agent, TZ: "UTC" },
+    rawMode: false, tuiSize: { cols: 120, rows: 45 },
+    extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/timestamp-probe.ts")],
+    tools: ["clock_probe"], conversation: [
+      assistantMessage([toolCall({ id: "hidden-start", name: "clock_probe", arguments: {} })], { stopReason: "toolUse" }),
+      assistantMessage([text("ANSWER MARKER")]),
+    ],
+  }).run("USER MARKER");
+  const first: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "timestamp-frames.json"), "utf8"));
+  expect(clean(first.finished).join("\n")).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+  expect(clean(first.finished).join("\n")).toContain("CLOCK CALL MARKER");
+  const saved = path.join(cwd, "timestamp-session.jsonl");
+  const entry = SessionManager.open(saved).getBranch().find(item =>
+    item.type === "custom" && item.customType === "pi-agent-transcript/tool-start");
+  expect(entry?.type).toBe("custom");
+  if (entry?.type !== "custom") throw new Error("Missing hidden tool-start metadata");
+  const data = entry.data as { toolCallId: string; time: number };
+  expect(data.toolCallId).toBe("hidden-start");
+  await new PiIntegrationTest({
+    testName: "enable-restored-tool-start", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+    piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
+    environment: { PI_CODING_AGENT_DIR: agent, TZ: "UTC", PI_TRANSCRIPT_TEST_SESSION: saved, TIMESTAMP_ENABLE_TIMES: "1" },
+    rawMode: false, tuiSize: { cols: 120, rows: 45 },
+    extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/timestamp-probe.ts")],
+    tools: ["clock_probe"], conversation: [assistantMessage([text("RESTORED ANSWER")])],
+  }).run("FRESH USER");
+  const restored: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "timestamp-frames.json"), "utf8"));
+  expect(clean(restored.hidden).join("\n")).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+  expect(timeAbove(panes(restored.enabled).activity, "CLOCK CALL MARKER")).toBe(utcTime(data.time));
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8")).showTimestamps).toBe(true);
 });
 
 test("restores undecorated native history once when timestamp metadata changes shape", async () => {

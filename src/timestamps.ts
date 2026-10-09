@@ -1,5 +1,5 @@
 import { parseSkillBlock, sessionEntryToContextMessages, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
-import { Container, Text, type Component } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, type Component } from "@earendil-works/pi-tui";
 
 type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
@@ -164,11 +164,13 @@ export class TranscriptTimestamps {
   }
 }
 
-/** Add one dim row while retaining the native component and its mouse layout. */
+/** Add optional clock spacing while retaining the native component and mouse target. */
 export class TimestampedMessage extends Container {
   private readonly timeRow: Component;
+  private readonly spacing = new Spacer(1);
 
-  constructor(private readonly component: Component, label: () => string, theme: () => Theme, gutter: () => number) {
+  constructor(private readonly component: Component, label: () => string, theme: () => Theme, gutter: () => number,
+    private readonly show: () => boolean) {
     super();
     this.timeRow = {
       render: width => {
@@ -184,7 +186,8 @@ export class TimestampedMessage extends Container {
     // Native self-rendered tools may intentionally return no visible block.
     // Render once, preserving its exact lines and the original mouse target.
     const content = this.component.render(width);
-    this.children = content.length ? [this.timeRow, this.component] : [this.component];
-    return content.length ? [...this.timeRow.render(width), ...content] : content;
+    const decorated = content.length > 0 && this.show();
+    this.children = decorated ? [this.spacing, this.timeRow, this.component] : [this.component];
+    return decorated ? [...this.spacing.render(width), ...this.timeRow.render(width), ...content] : content;
   }
 }

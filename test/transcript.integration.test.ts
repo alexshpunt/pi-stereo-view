@@ -138,7 +138,7 @@ test("drags, swaps, restores native combined history, and remembers settings on 
   expect(clean(frames[6])).toContain("ANSWER MARKER");
 
   const preferences = JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"));
-  expect(preferences).toEqual({ mode: "split", side: "left", chatWidth: 36, layout: "columns", chatHeight: 12, zoom: null });
+  expect(preferences).toEqual({ mode: "split", side: "left", chatWidth: 36, layout: "columns", chatHeight: 12, zoom: null, showTimestamps: true });
   expect(frames.map(frame => clean(frame).includes("Conversation")))
     .toEqual([true, true, true, true, true, true, false, true, true, true, true]);
   await run("layout-restart", false);
