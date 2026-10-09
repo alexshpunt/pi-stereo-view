@@ -38,9 +38,10 @@ Click the history toolbar to switch layouts, swap panels, or return to combined 
 | `↗` / `↙` | Expand / restore the panel |
 | `≡` | Transcript settings |
 
-The toolbar stays visible in combined mode. Expansion fills only history; the native input dock stays full width. Run `/transcript help` for the icon legend.
+The toolbar stays visible in combined mode. Expansion hides the other history panel; the native input dock stays full width. Run `/transcript help` for the icon legend.
 
 Drag the double-line divider (`═` or `║`) to change conversation height or width. Restore keeps the split arrangement and sizes.
+In Rows, the saved Conversation height is a maximum: short conversations use only the space they need, and Activity gets the rest. Expanded Conversation also fits its content, up to the available screen height. Long conversations scroll without pushing the input off screen.
 
 New settings start in Rows with Conversation above Activity. In Columns, Conversation starts on the left. Saved arrangements are not reset, including first-version column settings.
 
@@ -63,13 +64,13 @@ Mode, layout, panel order, both sizes, the expanded panel, and timestamp visibil
 
 ## Message times
 
-Fullscreen history shows a dim, right-aligned local `HH:mm:ss` row above each message, with one blank row above the clock. Assistant text and thinking share their original message time. Native content and tool renderers stay unchanged.
+Conversation shows a dim local `HH:mm:ss` clock on the first line of each text message, aligned to the right. A small right gutter keeps text clear of the clock. Extra spacing around messages is removed; paragraph breaks inside messages stay intact. Activity and combined history keep their separate clock rows. Assistant text and thinking share their original message time. Native content and tool renderers stay unchanged.
 
 New tool blocks show the time observed when execution starts. That time is saved as display-only session metadata and stays fixed through partial output, completion, and restart. Old tools without that metadata show `~HH:mm:ss`, using the owning assistant message time. An unavailable or invalid time is shown as `--:--:--`, never the current time.
 
-The rows work in split, expanded, and combined fullscreen history. They do not decorate regular scrollback, the input dock, startup headers, or widgets. Tool-start metadata does not enter the model's conversation.
+Clocks work in split, expanded, and combined fullscreen history. They do not decorate regular scrollback, the input dock, startup headers, or widgets. Tool-start metadata does not enter the model's conversation.
 
-Use `≡` or `/transcript settings` to hide or show clocks. Hiding also removes the extra clock spacing. The setting survives restart; tool-start times are still collected and return unchanged when clocks are shown again.
+Use `≡` or `/transcript settings` to hide or show clocks. Hiding also removes the clock gutter or extra clock rows. The setting survives restart; tool-start times are still collected and return unchanged when clocks are shown again.
 
 ## Development
 

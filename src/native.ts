@@ -1,6 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Container, type Component } from "@earendil-works/pi-tui";
-import { TimestampedMessage, type TranscriptTimestamps } from "./timestamps.js";
+import { CompactMessage, TimestampedMessage, type TranscriptTimestamps } from "./timestamps.js";
 
 export type Pane = "activity" | "chat";
 interface NativeAssistant extends Container {
@@ -30,7 +30,7 @@ function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
     const target = name === "Markdown" ? "chat" :
       name === "MouseRegion" || name === "Text" ? "activity" : undefined;
     if (!target) throw new Error("Pi's assistant content layout is not supported");
-    if (target === pane) result.push(...spacing, component);
+    if (target === pane) result.push(...(pane === "chat" ? [] : spacing), component);
     spacing = [];
   }
   return result;
@@ -43,7 +43,7 @@ function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
  */
 export class NativeDocument extends Container {
   private readonly views = new WeakMap<NativeAssistant, Container>();
-  private readonly stamped = new WeakMap<Component, TimestampedMessage>();
+  private readonly stamped = new WeakMap<Component, Component>();
 
   constructor(
     private readonly source: Container,
@@ -104,15 +104,16 @@ export class NativeDocument extends Container {
         else {
           let stamped = this.stamped.get(routed);
           if (!stamped) {
-            stamped = new TimestampedMessage(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
+            const Decorator = this.pane === "chat" && name !== "Image" ? CompactMessage : TimestampedMessage;
+            stamped = new Decorator(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
             this.stamped.set(routed, stamped);
           }
-          result.push(...spacing, stamped);
+          result.push(...(this.pane === "chat" ? [] : spacing), stamped);
         }
       }
       spacing = [];
     }
-    if (previous === this.pane || this.pane === "combined") result.push(...spacing);
+    if (this.pane !== "chat" && (previous === this.pane || this.pane === "combined")) result.push(...spacing);
     this.children = result;
     return super.render(width);
   }

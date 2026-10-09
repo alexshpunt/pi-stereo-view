@@ -1,5 +1,8 @@
 import { parseSkillBlock, sessionEntryToContextMessages, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, type Component } from "@earendil-works/pi-tui";
+import {
+  Container, Spacer, Text, stripTerminalSequences, visibleWidth,
+  type Component, type TuiMouseEvent,
+} from "@earendil-works/pi-tui";
 
 type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
@@ -161,6 +164,56 @@ export class TranscriptTimestamps {
     }
     const message = name === "AssistantMessageComponent" ? native.lastMessage : native.message;
     return timestampLabel(message ? validTime(message.timestamp) ?? this.messageTimes.get(message) : native.entry?.timestamp);
+  }
+}
+
+/** Trim message edges and reserve a clock gutter without changing native text or mouse targets. */
+export class CompactMessage extends Container {
+  private top = 0;
+  private contentWidth = 0;
+  private contentHeight = 0;
+
+  constructor(private readonly component: Component, private readonly label: () => string,
+    private readonly theme: () => Theme, private readonly gutter: () => number,
+    private readonly show: () => boolean) {
+    super();
+    this.addChild(component);
+  }
+
+  override render(width: number): string[] {
+    const label = this.show() ? this.label() : "";
+    const time = width > label.length + this.gutter() + 1 ? label : "";
+    this.contentWidth = Math.max(1, width - (time ? time.length + 1 + this.gutter() : 0));
+    const content = this.component.render(this.contentWidth);
+    this.contentHeight = content.length;
+    const blank = (line: string): boolean => stripTerminalSequences(line).trim().length === 0;
+    this.top = 0;
+    let end = content.length;
+    while (this.top < end && blank(content[this.top])) this.top++;
+    while (end > this.top && blank(content[end - 1])) end--;
+    const lines = content.slice(this.top, end);
+    if (!lines.length) return lines;
+    // User message zones live on native padding rows. Keep those shell markers.
+    const zones = (rows: string[]): string => rows.join("").match(/\x1b\]133;[ABC](?:\x07|\x1b\\)/g)?.join("") ?? "";
+    lines[0] = zones(content.slice(0, this.top)) + lines[0];
+    lines[lines.length - 1] += zones(content.slice(end));
+    if (time) {
+      lines[0] += "\x1b[0m\x1b]8;;\x07" +
+        " ".repeat(Math.max(1, width - this.gutter() - time.length - visibleWidth(lines[0]))) +
+        this.theme().fg("dim", time);
+    }
+    return lines;
+  }
+
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+    if (event.x >= this.contentWidth) return undefined;
+    return super.handleMouse({
+      ...event, y: event.y + this.top, width: this.contentWidth, height: this.contentHeight,
+    });
+  }
+
+  override invalidate(): void {
+    this.component.invalidate();
   }
 }
 
