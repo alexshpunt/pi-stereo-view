@@ -3,10 +3,10 @@
 <h1 align="center">Pi Agent Transcript</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/pi-agent-transcript"><img src="https://img.shields.io/badge/npm-unreleased-lightgrey" alt="npm version: unreleased"></a>
-  <a href="https://www.npmjs.com/package/pi-agent-transcript"><img src="https://img.shields.io/badge/downloads-not_published-lightgrey" alt="npm downloads: not published"></a>
-  <a href="https://github.com/alexshpunt/pi-agent-transcript/actions"><img src="https://img.shields.io/badge/CI-not_configured-lightgrey" alt="CI status: not configured"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <a href="https://www.npmjs.com/package/pi-agent-transcript"><img src="https://img.shields.io/npm/v/pi-agent-transcript" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/pi-agent-transcript"><img src="https://img.shields.io/npm/dm/pi-agent-transcript" alt="npm downloads"></a>
+  <a href="https://github.com/alexshpunt/pi-agent-transcript/actions/workflows/ci.yml"><img src="https://github.com/alexshpunt/pi-agent-transcript/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/pi-agent-transcript" alt="MIT license"></a>
 </p>
 
 You come back to a chat and can't remember what you were talking about?
@@ -24,19 +24,9 @@ Pi's native message and tool renderers stay the same. Only history changes; the 
 
 ## Install
 
-The public npm package is **not published yet**. After release, installation will be:
-
 ```sh
 pi install npm:pi-agent-transcript
 ```
-
-For now, install a local checkout:
-
-```sh
-pi install /path/to/pi-agent-transcript
-```
-
-Use one install source at a time, not both the checkout and the npm package.
 
 Split history needs Pi's **fullscreen** mode. Choose it in `/settings`, or start Pi with:
 
