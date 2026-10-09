@@ -2,12 +2,14 @@ import path from "node:path";
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text, type TUI } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.js";
+import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
 
-/** Split native fullscreen history without changing session data or the input dock. */
+/** Split native fullscreen history without changing message content or the input dock. */
 export default function transcript(pi: ExtensionAPI): void {
   let layout: TranscriptLayout | undefined;
   let host: TUI | undefined;
+  let timestamps: TranscriptTimestamps | undefined;
   let unsubscribeInput: (() => void) | undefined;
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
@@ -27,6 +29,7 @@ export default function transcript(pi: ExtensionAPI): void {
     if (ctx.mode !== "tui") return;
     layout?.dispose();
     unsubscribeInput?.();
+    timestamps = new TranscriptTimestamps(ctx.sessionManager);
     try {
       preferences = await loadPreferences(file);
     } catch (error) {
@@ -38,7 +41,7 @@ export default function transcript(pi: ExtensionAPI): void {
       host = tui;
       finish = done;
       layout = new TranscriptLayout(preferences, () => ctx.ui.theme,
-        message => ctx.ui.notify(message, "warning"), () => persist(ctx));
+        message => ctx.ui.notify(message, "warning"), () => persist(ctx), timestamps!);
       ensureLayout();
       return new Text("", 0, 0);
     }, {
@@ -51,12 +54,25 @@ export default function transcript(pi: ExtensionAPI): void {
       return undefined;
     });
   });
-  pi.on("message_update", () => ensureLayout());
+  pi.on("message_start", event => timestamps?.observe(event.message));
+  pi.on("message_update", event => {
+    timestamps?.observe(event.message);
+    ensureLayout();
+  });
+  pi.on("message_end", event => timestamps?.observe(event.message, true));
+  pi.on("tool_execution_start", event => {
+    if (!timestamps || event.parentToolCallId) return;
+    pi.appendEntry(TOOL_START_ENTRY, { toolCallId: event.toolCallId, time: Date.now() });
+    host?.requestRender();
+  });
+  pi.on("session_tree", () => timestamps?.reset());
+  pi.on("session_compact", () => timestamps?.reset());
   pi.on("session_shutdown", async () => {
     unsubscribeInput?.();
     unsubscribeInput = undefined;
     layout?.dispose();
     layout = undefined;
+    timestamps = undefined;
     host = undefined;
     await writes;
   });
