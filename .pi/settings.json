@@ -1,3 +1,4 @@
 {
+  "tuiMode": "fullscreen",
   "extensions": ["../src/index.ts"]
 }
