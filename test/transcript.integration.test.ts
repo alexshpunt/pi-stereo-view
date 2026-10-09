@@ -178,6 +178,33 @@ test("changes layout during streaming and restores the requested split after a l
   expect(clean([observed.modeFrames[1].lines[0]]).indexOf("│")).toBe(44);
 });
 
+test("does not pull a reader back to the bottom when more text streams", async () => {
+  const cwd = await mkdtemp(path.resolve("tmp/reading-"));
+  directories.push(cwd);
+  const result = await new PiIntegrationTest({
+    testName: "reading-during-streaming",
+    artifactsDir: path.resolve("tmp/test-runs"),
+    cwd,
+    piCommand: path.resolve("test/fixtures/pi-host.sh"),
+    isolateUserResources: true,
+    environment: { TRANSCRIPT_PROBE_READING: "1" },
+    rawMode: false,
+    tuiSize: { cols: 120, rows: 35 },
+    extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/native-probe.ts")],
+    tools: [],
+    conversation: [assistantMessage([text(Array.from({ length: 45 }, (_, index) => "Reading line " + index).join("\n\n"), {
+      chunks: { kind: "fixed", size: 75 }, delayMs: 10,
+    })])],
+  }).run("USER MARKER");
+  const observed: { paused: string[]; finished: string[] } =
+    JSON.parse(await readFile(path.join(cwd, "reading-observation.json"), "utf8"));
+  const readingWindow = (frame: string[]) => frame.slice(1, 12)
+    .map(line => stripTerminalSequences(sliceByColumn(line, 80, 38, true)));
+  expect(readingWindow(observed.finished)).toEqual(readingWindow(observed.paused));
+  expect(clean(observed.finished)).not.toContain("Reading line 44");
+  expect(JSON.stringify(result.messages)).toContain("Reading line 44");
+});
+
 test.each([[40, "fullscreen"], [120, "regular"]])("keeps native combined history at %i columns in %s mode", async (cols, mode) => {
   const screen = await fallbackRun("fallback-" + mode, Number(cols), String(mode));
   expect(screen).toContain("USER MARKER");

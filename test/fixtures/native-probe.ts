@@ -17,6 +17,16 @@ export default function nativeProbe(pi: ExtensionAPI): void {
   let tui: TestHost | undefined;
   const streamingFrames: { idle: boolean; lines: string[] }[] = [];
   let streamStep = 0;
+  let readingCapture: Promise<string[]> | undefined;
+  pi.on("message_update", event => {
+    if (!tui || process.env.TRANSCRIPT_PROBE_READING !== "1" || readingCapture ||
+        event.message.role !== "assistant" || !event.message.content.some(block =>
+          block.type === "text" && block.text.includes("Reading line 20"))) return;
+    readingCapture = capture().then(async () => {
+      tui!.handleTerminalInput("\x1b[<64;90;5M");
+      return capture();
+    });
+  });
   let streamingCapture = Promise.resolve();
   const capture = async (): Promise<string[]> => {
     tui!.requestRender(true);
@@ -62,6 +72,10 @@ export default function nativeProbe(pi: ExtensionAPI): void {
   pi.on("agent_before_settle", async (_event, ctx) => {
     if (!tui) return;
     await streamingCapture;
+    if (readingCapture) {
+      const paused = await readingCapture;
+      await writeFile(path.join(ctx.cwd, "reading-observation.json"), JSON.stringify({ paused, finished: await capture() }));
+    }
     if (process.env.TRANSCRIPT_PROBE_DYNAMIC === "1") {
       const columns = process.stdout.columns;
       const widthFrames: string[][] = [await capture()];
