@@ -253,3 +253,26 @@ test("restores undecorated native history once when timestamp metadata changes s
   }
   expect(clean(frames.finished).join("\n").split("Pi's message timestamp metadata is not supported")).toHaveLength(2);
 });
+
+test("does not leave orphan clocks for a native tool renderer that draws no content", async () => {
+  const { cwd, agent } = await workspace();
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+    mode: "split", side: "right", chatWidth: 40, layout: "columns", chatHeight: 12, zoom: null,
+  }));
+  const result = await new PiIntegrationTest({
+    testName: "timestamp-hidden-renderer", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+    piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
+    environment: { PI_CODING_AGENT_DIR: agent, TIMESTAMP_HIDE_TOOL: "1" },
+    rawMode: false, tuiSize: { cols: 120, rows: 60 },
+    extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/timestamp-probe.ts")],
+    tools: ["clock_probe"], conversation: [
+      assistantMessage([toolCall({ id: "hidden-clock", name: "clock_probe", arguments: {} })], { stopReason: "toolUse" }),
+      assistantMessage([text("ANSWER MARKER")]),
+    ],
+  }).run("USER MARKER");
+  expect(getToolExecution(result, "hidden-clock").isError).toBe(false);
+  const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "timestamp-frames.json"), "utf8"));
+  const { activity, chat } = panes(frames.finished);
+  expect(activity.join("\n")).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+  expect(chat.join("\n")).toContain("ANSWER MARKER");
+});

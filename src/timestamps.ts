@@ -166,15 +166,25 @@ export class TranscriptTimestamps {
 
 /** Add one dim row while retaining the native component and its mouse layout. */
 export class TimestampedMessage extends Container {
-  constructor(component: Component, label: () => string, theme: () => Theme, gutter: () => number) {
+  private readonly timeRow: Component;
+
+  constructor(private readonly component: Component, label: () => string, theme: () => Theme, gutter: () => number) {
     super();
-    this.addChild({
+    this.timeRow = {
       render: width => {
         const time = label();
         return new Text(theme().fg("dim", time.padStart(Math.max(time.length, width - gutter()))), 0, 0).render(width);
       },
       invalidate() {},
-    });
+    };
     this.addChild(component);
+  }
+
+  override render(width: number): string[] {
+    // Native self-rendered tools may intentionally return no visible block.
+    // Render once, preserving its exact lines and the original mouse target.
+    const content = this.component.render(width);
+    this.children = content.length ? [this.timeRow, this.component] : [this.component];
+    return content.length ? [...this.timeRow.render(width), ...content] : content;
   }
 }
