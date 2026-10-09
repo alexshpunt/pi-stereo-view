@@ -128,11 +128,17 @@ export default function nativeProbe(pi: ExtensionAPI): void {
           tui.resetTextSelection();
         }
         const beforeWheel = await capture();
-        tui.handleTerminalInput("\x1b[<64;2;5M");
-        await setImmediate();
+        const wheelAt = async (marker: string): Promise<void> => {
+          const frame = beforeWheel.map(stripTerminalSequences);
+          const row = frame.findIndex(line => line.includes(marker));
+          if (row < 0) throw new Error("Wheel marker is not visible: " + marker);
+          const column = frame[row].indexOf(marker);
+          tui!.handleTerminalInput(`\x1b[<64;${column + 1};${row + 1}M`);
+          await setImmediate();
+        };
+        await wheelAt("NATIVE CALL MARKER");
         const activityWheel = await capture();
-        tui.handleTerminalInput("\x1b[<64;90;5M");
-        await setImmediate();
+        await wheelAt("CHAT_COPY_MARKER");
         const chatWheel = await capture();
         await writeFile(path.join(ctx.cwd, "selection-observation.json"), JSON.stringify({ copied, beforeWheel, activityWheel, chatWheel }));
       } finally {

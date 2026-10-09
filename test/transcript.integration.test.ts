@@ -12,6 +12,12 @@ beforeAll(async () => {
 });
 
 const clean = (lines: string[]): string => lines.map(stripTerminalSequences).join("\n");
+const splitHeader = (lines: string[]): string => {
+  const header = lines.map(stripTerminalSequences).find(line =>
+    line.includes("Activity") && line.includes("Conversation") && line.includes("│"));
+  expect(header, "both native pane headers must share the column divider").toBeDefined();
+  return header!;
+};
 
 async function fallbackRun(name: string, cols: number, mode: string, incompatible = false): Promise<string> {
   const cwd = await mkdtemp(path.resolve("tmp/fallback-"));
@@ -113,21 +119,21 @@ test("drags, swaps, restores native combined history, and remembers settings on 
   await run("layout-controls", true);
   const frames: string[][] = JSON.parse(await readFile(path.join(cwd, "control-frames.json"), "utf8"));
   expect(clean(frames[0])).toContain("Activity");
-  expect(frames[0][0].indexOf("Activity")).toBeLessThan(frames[0][0].indexOf("Conversation"));
-  expect(frames[1][0].indexOf("Conversation")).toBeLessThan(frames[1][0].indexOf("Activity"));
-  expect(clean([frames[4][0]]).indexOf("│")).toBe(32);
-  expect(clean([frames[5][0]]).indexOf("│")).toBe(36);
+  expect(splitHeader(frames[0]).indexOf("Activity")).toBeLessThan(splitHeader(frames[0]).indexOf("Conversation"));
+  expect(splitHeader(frames[1]).indexOf("Conversation")).toBeLessThan(splitHeader(frames[1]).indexOf("Activity"));
+  expect(splitHeader(frames[4]).indexOf("│")).toBe(32);
+  expect(splitHeader(frames[5]).indexOf("│")).toBe(36);
   expect(clean(frames[6])).not.toContain("Conversation");
   expect(clean(frames[6])).toContain("ANSWER MARKER");
 
   const preferences = JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"));
-  expect(preferences).toEqual({ mode: "split", side: "left", chatWidth: 36 });
+  expect(preferences).toEqual({ mode: "split", side: "left", chatWidth: 36, layout: "columns", chatHeight: 12, zoom: null });
   expect(frames.map(frame => clean(frame).includes("Conversation")))
     .toEqual([true, true, true, true, true, true, false, true, true, true, true]);
   await run("layout-restart", false);
   const restored: string[] = JSON.parse(await readFile(path.join(cwd, "native-snapshot.json"), "utf8"));
-  expect(restored[0].indexOf("Conversation")).toBeLessThan(restored[0].indexOf("Activity"));
-  expect(clean([restored[0]]).indexOf("│")).toBe(36);
+  expect(splitHeader(restored).indexOf("Conversation")).toBeLessThan(splitHeader(restored).indexOf("Activity"));
+  expect(splitHeader(restored).indexOf("│")).toBe(36);
   const dock = restored.slice(-5).map(line => clean([line]));
   expect(dock.filter(line => line.includes("│"))).toHaveLength(0);
   expect(dock.some(line => line.includes("─".repeat(120)))).toBe(true);
@@ -163,7 +169,7 @@ test("changes layout during streaming and restores the requested split after a l
     .toEqual([false, true, true, true]);
   const streamed = clean(observed.streamingFrames[3].lines);
   expect(streamed.indexOf("Conversation")).toBeLessThan(streamed.indexOf("Activity"));
-  expect(clean([observed.streamingFrames[3].lines[0]]).indexOf("│")).toBe(44);
+  expect(splitHeader(observed.streamingFrames[3].lines).indexOf("│")).toBe(44);
   const [wide, narrow, restored] = observed.widthFrames.map(clean);
   expect(wide).toContain("Conversation");
   expect(narrow).not.toContain("Conversation");
@@ -171,15 +177,15 @@ test("changes layout during streaming and restores the requested split after a l
   expect(narrow).toContain("STREAM MARKER completed.");
   expect(restored).toContain("Conversation");
   expect(restored.match(/STREAM MARKER completed\./g)).toHaveLength(1);
-  expect(clean([observed.widthFrames[2][0]]).indexOf("│")).toBe(44);
-  expect(observed.widthFrames[2][0].indexOf("Conversation"))
-    .toBeLessThan(observed.widthFrames[2][0].indexOf("Activity"));
+  expect(splitHeader(observed.widthFrames[2]).indexOf("│")).toBe(44);
+  expect(splitHeader(observed.widthFrames[2]).indexOf("Conversation"))
+    .toBeLessThan(splitHeader(observed.widthFrames[2]).indexOf("Activity"));
   expect(observed.modeFrames.map(frame => frame.mode)).toEqual(["regular", "fullscreen"]);
   expect(clean(observed.modeFrames[0].lines)).not.toContain("Conversation");
   const remounted = clean(observed.modeFrames[1].lines);
   expect(remounted.match(/Conversation/g)).toHaveLength(1);
   expect(remounted.match(/STREAM MARKER completed\./g)).toHaveLength(1);
-  expect(clean([observed.modeFrames[1].lines[0]]).indexOf("│")).toBe(44);
+  expect(splitHeader(observed.modeFrames[1].lines).indexOf("│")).toBe(44);
 });
 
 test("does not pull a reader back to the bottom when more text streams", async () => {
@@ -260,16 +266,20 @@ test("resumes native history and shows only the selected session branch", async 
   expect(selected).not.toContain("ORIGINAL ANSWER");
 });
 
-test("keeps selection, copy, and mouse scrolling inside the chosen native pane", async () => {
+test.each(["columns", "rows"])("keeps selection, copy, and independent scrolling in %s", async layout => {
   const cwd = await mkdtemp(path.resolve("tmp/selection-"));
-  directories.push(cwd);
+  const agent = await mkdtemp(path.resolve("tmp/selection-agent-"));
+  directories.push(cwd, agent);
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+    mode: "split", side: "right", chatWidth: 40, layout, chatHeight: 12, zoom: null,
+  }));
   await new PiIntegrationTest({
-    testName: "selection-and-scrolling",
+    testName: "selection-and-scrolling-" + layout,
     artifactsDir: path.resolve("tmp/test-runs"),
     cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"),
-    isolateUserResources: true,
-    environment: { TRANSCRIPT_PROBE_SELECTION: "1" },
+    isolateUserResources: false,
+    environment: { PI_CODING_AGENT_DIR: agent, TRANSCRIPT_PROBE_SELECTION: "1" },
     rawMode: false,
     tuiSize: { cols: 120, rows: 35 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/native-probe.ts")],
@@ -284,9 +294,14 @@ test("keeps selection, copy, and mouse scrolling inside the chosen native pane",
   expect(observation.copied).toContain("CHAT_COPY_MARKER");
   expect(observation.copied).toContain("NATIVE CALL MARKER");
   expect(observation.copied.every(value => value === "CHAT_COPY_MARKER" || value === "NATIVE CALL MARKER")).toBe(true);
-  const pane = (frame: string[], column: number) => frame.slice(1, -6)
-    .map(line => stripTerminalSequences(sliceByColumn(line, column === 0 ? 0 : 80, column === 0 ? 78 : 39)))
-    .join("\n");
+  const pane = (frame: string[], column: number): string => {
+    if (layout === "columns") return frame.slice(2, -6)
+      .map(line => stripTerminalSequences(sliceByColumn(line, column === 0 ? 0 : 80, column === 0 ? 78 : 39)))
+      .join("\n");
+    const chatHeader = frame.findIndex(line => stripTerminalSequences(line).includes("Conversation"));
+    expect(chatHeader).toBeGreaterThan(1);
+    return clean(column === 0 ? frame.slice(2, chatHeader - 1) : frame.slice(chatHeader + 1, -6));
+  };
   expect(pane(observation.activityWheel, 0)).not.toBe(pane(observation.beforeWheel, 0));
   expect(pane(observation.activityWheel, 1)).toBe(pane(observation.beforeWheel, 1));
   expect(pane(observation.chatWheel, 0)).toBe(pane(observation.activityWheel, 0));

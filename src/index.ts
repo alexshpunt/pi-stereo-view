@@ -14,7 +14,7 @@ export default function transcript(pi: ExtensionAPI): void {
   const file = path.join(getAgentDir(), "transcript.json");
 
   const ensureLayout = (): void => {
-    if (host && preferences.mode === "split") layout?.attach(host);
+    if (host) layout?.attach(host);
   };
   const persist = (ctx: ExtensionContext): void => {
     const snapshot = { ...preferences };
@@ -63,11 +63,10 @@ export default function transcript(pi: ExtensionAPI): void {
 
   const toggle = (): void => {
     layout?.toggle();
-    if (preferences.mode === "combined") layout?.dispose();
-    else ensureLayout();
+    ensureLayout();
   };
   pi.registerCommand("transcript", {
-    description: "Split history: toggle, swap, width <columns>, scroll <chat|activity> <lines>",
+    description: "History: toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
     handler: async (args, ctx) => {
       if (ctx.mode !== "tui" || !layout) {
         ctx.ui.notify("Transcript layout is available only in interactive Pi.", "warning");
@@ -77,10 +76,13 @@ export default function transcript(pi: ExtensionAPI): void {
       if (action === "toggle" || action === "") toggle();
       else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
+      else if (action === "height" && /^\d+$/.test(target ?? "")) layout.setHeight(Number(target));
+      else if (action === "layout" && (target === "columns" || target === "rows")) layout.setLayout(target);
+      else if (action === "zoom" && (target === "chat" || target === "activity")) layout.maximize(target);
       else if (action === "scroll" && (target === "chat" || target === "activity") && /^-?\d+$/.test(amount ?? "")) {
         layout.scroll(target, Number(amount));
       } else {
-        ctx.ui.notify("Use /transcript [toggle|swap|width <columns>|scroll <chat|activity> <lines>]", "warning");
+        ctx.ui.notify("Use /transcript [toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows>|scroll <chat|activity> <lines>]", "warning");
         return;
       }
       ensureLayout();
@@ -89,10 +91,10 @@ export default function transcript(pi: ExtensionAPI): void {
   });
   pi.registerShortcut("ctrl+alt+t", { description: "Toggle split history", handler: async () => toggle() });
   pi.registerShortcut("ctrl+alt+s", { description: "Swap transcript panels", handler: async () => layout?.swap() });
-  pi.registerShortcut("ctrl+alt+left", { description: "Narrow conversation panel", handler: async () => {
-    layout?.setWidth(preferences.chatWidth - 4);
+  pi.registerShortcut("ctrl+alt+left", { description: "Shrink conversation along the split axis", handler: async () => {
+    layout?.resize(-1);
   } });
-  pi.registerShortcut("ctrl+alt+right", { description: "Widen conversation panel", handler: async () => {
-    layout?.setWidth(preferences.chatWidth + 4);
+  pi.registerShortcut("ctrl+alt+right", { description: "Grow conversation along the split axis", handler: async () => {
+    layout?.resize(1);
   } });
 }
