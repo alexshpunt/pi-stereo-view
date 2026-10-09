@@ -1,7 +1,7 @@
-"""Print bracketed icons for a pixel test in the affected native terminal.
+"""Print baseline and approved icons for a pixel test in the native terminal.
 
-Current and alternative labels have identical spacing. Alternatives were checked
-against the configured FiraCode NFM Retina font. Presence is not a centering proof.
+Both sets have identical spacing. The approved icons passed the native screenshot
+check on FiraCode NFM Retina. Other terminals still need their own pixel check.
 Do not use a headless HTML capture as a native terminal screenshot.
 """
 
@@ -16,9 +16,9 @@ icons = [
     ("restore", "↙", "↙"),
 ]
 
-print("Native icon rendering test — current vs font-covered candidates")
-print("Action           Current       Candidate")
-for name, current, candidate in icons:
-    print(f"{name:12}     \033[38;2;131;165;152m[ {current} ]\033[0m"
-          f"         \033[38;2;131;165;152m[ {candidate} ]\033[0m")
+print("Native icon rendering test — baseline vs approved icons")
+print("Action           Baseline      Approved")
+for name, baseline, approved in icons:
+    print(f"{name:12}     \033[38;2;131;165;152m[ {baseline} ]\033[0m"
+          f"         \033[38;2;131;165;152m[ {approved} ]\033[0m")
 print("ASCII control    \033[38;2;131;165;152m[ + ]\033[0m")

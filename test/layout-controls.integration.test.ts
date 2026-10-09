@@ -7,7 +7,7 @@ import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 const directories: string[] = [];
 const clean = (lines: string[]): string => lines.map(stripTerminalSequences).join("\n");
 const headerRow = (lines: string[], title: string): number => lines.findIndex(line =>
-  stripTerminalSequences(line).includes(title) && /\[ (⛶|↙) \]/.test(stripTerminalSequences(line)));
+  stripTerminalSequences(line).includes(title) && /\[ (↗|↙) \]/.test(stripTerminalSequences(line)));
 
 beforeAll(async () => { await mkdir(path.resolve("tmp"), { recursive: true }); });
 afterEach(async () => {
@@ -64,6 +64,9 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   expect(await readFile(path.join(cwd, "effect.txt"), "utf8")).toBe("real effect");
   const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "panel-controls.json"), "utf8"));
   const first = stripTerminalSequences(frames.initial[1]);
+  expect(clean(frames.initial.slice(0, 2))).toContain("[ ↔ ]");
+  expect(clean(frames.initial.slice(0, 2))).toContain("[ ↗ ]");
+  expect(stripTerminalSequences(frames.rows[0])).toContain("[ ↕ ]");
   expect(first.indexOf("Conversation")).toBeLessThan(first.indexOf("Activity"));
   expect(first.indexOf("║")).toBe(36);
   expect(headerRow(frames.canceledClick, "Conversation")).toBe(1);

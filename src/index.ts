@@ -75,7 +75,7 @@ export default function transcript(pi: ExtensionAPI): void {
       const [action = "toggle", target, amount] = args.trim().split(/\s+/);
       if (action === "toggle" || action === "") toggle();
       else if (action === "help") {
-        ctx.ui.notify("Transcript icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ⇅/⇄ swap, ⛶ expand, ↙ restore. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("Transcript icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && /^\d+$/.test(target ?? "")) layout.setHeight(Number(target));

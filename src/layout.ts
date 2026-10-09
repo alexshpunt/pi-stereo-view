@@ -117,7 +117,7 @@ export class TranscriptLayout {
         () => this.setLayout(this.preferences.layout === "columns" ? "rows" : "columns"), () => !this.failed,
       ), basis: BUTTON_WIDTH, shrink: 0 },
       { component: this.button(
-        () => this.preferences.layout === "columns" ? "⇄" : "⇅", () => this.swap(),
+        () => this.preferences.layout === "columns" ? "↔" : "↕", () => this.swap(),
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
       ), basis: BUTTON_WIDTH, shrink: 0 },
     ], { gap: 1 });
@@ -128,7 +128,7 @@ export class TranscriptLayout {
           invalidate() {},
         }, basis: 0, grow: 1, minSize: 1 },
         { component: this.button(
-          () => this.preferences.zoom === target ? "↙" : "⛶",
+          () => this.preferences.zoom === target ? "↙" : "↗",
           () => this.maximize(target),
         ), basis: BUTTON_WIDTH, shrink: 0 },
       ], { gap: 1 }), basis: 1 },

@@ -21,8 +21,8 @@ Click the history toolbar to switch layouts, swap panels, or return to combined 
 | --- | --- |
 | `▣` / `◫` | Combined history / return to split |
 | `▤` / `▥` | Switch to rows / columns |
-| `⇅` / `⇄` | Swap top/bottom or left/right |
-| `⛶` / `↙` | Expand / restore the panel |
+| `↕` / `↔` | Swap top/bottom or left/right |
+| `↗` / `↙` | Expand / restore the panel |
 
 The toolbar stays visible in combined mode. Expansion fills only history; the native input dock stays full width. Run `/transcript help` for the icon legend.
 
