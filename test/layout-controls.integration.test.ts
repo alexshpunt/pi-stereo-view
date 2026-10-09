@@ -7,11 +7,34 @@ import { stripTerminalSequences } from "@earendil-works/pi-tui";
 const directories: string[] = [];
 const clean = (lines: string[]): string => lines.map(stripTerminalSequences).join("\n");
 const headerRow = (lines: string[], title: string): number => lines.findIndex(line =>
-  stripTerminalSequences(line).includes(title) && /\[(Expand|Restore)\]/.test(stripTerminalSequences(line)));
+  stripTerminalSequences(line).includes(title) && /\[(⛶|↙)\]/.test(stripTerminalSequences(line)));
 
 beforeAll(async () => { await mkdir(path.resolve("tmp"), { recursive: true }); });
 afterEach(async () => {
   await Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true })));
+});
+
+test("starts new settings in rows with conversation above activity", async () => {
+  const cwd = await mkdtemp(path.resolve("tmp/default-rows-"));
+  const agent = await mkdtemp(path.resolve("tmp/default-agent-"));
+  directories.push(cwd, agent);
+  await new PiIntegrationTest({
+    testName: "default-rows", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+    piCommand: path.resolve("test/fixtures/pi-host.sh"),
+    isolateUserResources: false,
+    environment: { PI_CODING_AGENT_DIR: agent, TRANSCRIPT_BUTTON_DEFAULTS: "1" },
+    rawMode: false, tuiSize: { cols: 120, rows: 35 },
+    extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/panel-controls.ts")],
+    tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
+  }).run("USER MARKER");
+  const frames: { rows: string[]; columns: string[] } = JSON.parse(await readFile(path.join(cwd, "default-layouts.json"), "utf8"));
+  expect(headerRow(frames.rows, "Conversation")).toBe(1);
+  expect(headerRow(frames.rows, "Activity")).toBe(14);
+  expect(clean(frames.rows)).toContain("═".repeat(120));
+  const header = stripTerminalSequences(frames.columns[1]);
+  expect(header.indexOf("Conversation")).toBeLessThan(header.indexOf("Activity"));
+  expect(header.indexOf("║")).toBe(40);
+  expect(clean(frames.columns)).toContain("ANSWER MARKER");
 });
 
 test("uses mouse buttons and both dividers, then restores the expanded panel on restart", async () => {
@@ -42,14 +65,14 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "panel-controls.json"), "utf8"));
   const first = stripTerminalSequences(frames.initial[1]);
   expect(first.indexOf("Conversation")).toBeLessThan(first.indexOf("Activity"));
-  expect(first.indexOf("│")).toBe(36);
+  expect(first.indexOf("║")).toBe(36);
   expect(headerRow(frames.canceledClick, "Conversation")).toBe(1);
   expect(headerRow(frames.canceledClick, "Activity")).toBe(1);
   expect(headerRow(frames.rows, "Conversation")).toBe(1);
   expect(headerRow(frames.rows, "Activity")).toBe(14);
   expect(headerRow(frames.rowDrag, "Activity")).toBe(11);
   expect(headerRow(frames.rowSwap, "Activity")).toBeLessThan(headerRow(frames.rowSwap, "Conversation"));
-  expect(stripTerminalSequences(frames.columnDrag[1]).indexOf("│")).toBe(75);
+  expect(stripTerminalSequences(frames.columnDrag[1]).indexOf("║")).toBe(75);
   expect(headerRow(frames.activity, "Activity")).toBe(1);
   expect(headerRow(frames.activity, "Conversation")).toBe(-1);
   expect(clean(frames.activity)).toContain("NATIVE RESULT MARKER");
@@ -59,19 +82,19 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   expect(clean(frames.chat)).toContain("USER MARKER");
   expect(clean(frames.chat)).toContain("ANSWER MARKER");
   expect(clean(frames.chat)).not.toContain("NATIVE CALL MARKER");
-  expect(clean(frames.combined)).toContain("[Split]");
+  expect(clean(frames.combined)).toContain("[◫]");
   expect(headerRow(frames.combined, "Conversation")).toBe(-1);
   expect(clean(frames.combined)).toContain("NATIVE RESULT MARKER");
   expect(clean(frames.combined)).toContain("ANSWER MARKER");
   for (const key of ["activityRestored", "chatRestored", "splitRestored"]) {
-    expect(stripTerminalSequences(frames[key][1]).indexOf("│")).toBe(75);
+    expect(stripTerminalSequences(frames[key][1]).indexOf("║")).toBe(75);
   }
   expect(headerRow(frames.shortRows, "Activity")).toBe(-1);
-  expect(clean(frames.shortRows)).toContain("[Split]");
+  expect(clean(frames.shortRows)).toContain("[◫]");
   expect(headerRow(frames.tallRows, "Activity")).toBe(1);
   expect(headerRow(frames.tallRows, "Conversation")).toBeGreaterThan(1);
   for (const frame of Object.values(frames)) {
-    expect(frame.slice(-5).some(line => line.includes("│"))).toBe(false);
+    expect(frame.slice(-5).some(line => line.includes("║"))).toBe(false);
     expect(frame.slice(-5).some(line => stripTerminalSequences(line).includes("─".repeat(120)))).toBe(true);
   }
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({
@@ -81,8 +104,8 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   const restored: string[] = JSON.parse(await readFile(path.join(cwd, "native-snapshot.json"), "utf8"));
   expect(headerRow(restored, "Conversation")).toBe(1);
   expect(headerRow(restored, "Activity")).toBe(-1);
-  expect(clean(restored)).toContain("[Restore]");
-  expect(clean(restored)).toContain("[Cols]");
+  expect(clean(restored)).toContain("[↙]");
+  expect(clean(restored)).toContain("[▥]");
 });
 
 test("keeps the mouse return control after restarting in saved combined mode", async () => {
@@ -104,7 +127,7 @@ test("keeps the mouse return control after restarting in saved combined mode", a
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, mode: "combined" });
   await run("restore-combined-buttons");
   const frames: { before: string[]; after: string[] } = JSON.parse(await readFile(path.join(cwd, "button-toggle.json"), "utf8"));
-  expect(clean(frames.before)).toContain("[Split]");
+  expect(clean(frames.before)).toContain("[◫]");
   expect(headerRow(frames.before, "Conversation")).toBe(-1);
   expect(clean(frames.before)).toContain("USER MARKER");
   expect(clean(frames.before)).toContain("ANSWER MARKER");
@@ -115,14 +138,18 @@ test("keeps the mouse return control after restarting in saved combined mode", a
 
 test("keeps mouse controls active while text and a real tool call stream", async () => {
   const cwd = await mkdtemp(path.resolve("tmp/button-stream-"));
-  directories.push(cwd);
+  const agent = await mkdtemp(path.resolve("tmp/stream-agent-"));
+  directories.push(cwd, agent);
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+    mode: "split", side: "right", chatWidth: 40, layout: "columns", chatHeight: 12, zoom: null,
+  }));
   const result = await new PiIntegrationTest({
     testName: "buttons-during-streaming",
     artifactsDir: path.resolve("tmp/test-runs"),
     cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"),
-    isolateUserResources: true,
-    environment: { TRANSCRIPT_BUTTON_STREAM: "1" },
+    isolateUserResources: false,
+    environment: { PI_CODING_AGENT_DIR: agent, TRANSCRIPT_BUTTON_STREAM: "1" },
     rawMode: false,
     tuiSize: { cols: 120, rows: 35 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/native-probe.ts"), path.resolve("test/fixtures/panel-controls.ts")],

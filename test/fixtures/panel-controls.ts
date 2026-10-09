@@ -54,7 +54,7 @@ export default function panelControls(pi: ExtensionAPI): void {
     if (process.env.TRANSCRIPT_BUTTON_STREAM !== "1" ||
         event.assistantMessageEvent.type !== "text_delta" || step >= 5) return;
     const actions: [string, string?][] = [
-      ["[Rows]"], ["[Expand]", "Activity"], ["[Restore]", "Activity"], ["[Combined]"], ["[Split]"],
+      ["[▤]"], ["[⛶]", "Activity"], ["[↙]", "Activity"], ["[▣]"], ["[◫]"],
     ];
     const [label, owner] = actions[step++];
     pending = pending.then(async () => {
@@ -70,48 +70,57 @@ export default function panelControls(pi: ExtensionAPI): void {
     }
     if (process.env.TRANSCRIPT_BUTTON_TOGGLE === "1") {
       const before = await capture();
-      await click(stripTerminalSequences(before[0]).includes("[Combined]") ? "[Combined]" : "[Split]");
+      await click(stripTerminalSequences(before[0]).includes("[▣]") ? "[▣]" : "[◫]");
       await writeFile(path.join(ctx.cwd, "button-toggle.json"), JSON.stringify({ before, after: await capture() }));
+    }
+    if (process.env.TRANSCRIPT_BUTTON_DEFAULTS === "1") {
+      const rows = await capture();
+      const file = path.join(ctx.cwd, "default-layouts.json");
+      await writeFile(file, JSON.stringify({ rows, columns: rows }));
+      if (stripTerminalSequences(rows[0]).includes("[▥]")) {
+        await click("[▥]");
+        await writeFile(file, JSON.stringify({ rows, columns: await capture() }));
+      }
     }
     if (process.env.TRANSCRIPT_BUTTON_CONTROLS !== "1") return;
     const frames: Record<string, string[]> = { initial: await capture() };
-    const { x, y } = await target("[Expand]", "Activity");
+    const { x, y } = await target("[⛶]", "Activity");
     await mouse(0, x, y);
     await mouse(32, x, y + 2);
     await mouse(0, x, y + 2, "m");
     frames.canceledClick = await capture();
-    await click("[Rows]");
+    await click("[▤]");
     frames.rows = await capture();
     const lines = frames.rows.map(stripTerminalSequences);
-    const row = lines.findIndex((line, index) => index > 1 && line.startsWith("─".repeat(120)));
+    const row = lines.findIndex((line, index) => index > 1 && line.startsWith("═".repeat(120)));
     if (row < 0) throw new Error("Missing draggable horizontal divider");
     await mouse(0, 10, row);
     await mouse(32, 10, row - 3);
     await mouse(0, 10, row - 3, "m");
     frames.rowDrag = await capture();
-    await click("[Swap]");
+    await click("[⇅]");
     frames.rowSwap = await capture();
-    await click("[Cols]");
+    await click("[▥]");
     frames.columns = await capture();
-    const divider = stripTerminalSequences(frames.columns[1]).indexOf("│");
+    const divider = stripTerminalSequences(frames.columns[1]).indexOf("║");
     if (divider < 0) throw new Error("Missing draggable vertical divider");
     await mouse(0, divider, 2);
     await mouse(32, divider - 8, 2);
     await mouse(0, divider - 8, 2, "m");
     frames.columnDrag = await capture();
-    await click("[Expand]", "Activity");
+    await click("[⛶]", "Activity");
     frames.activity = await capture();
-    await click("[Restore]", "Activity");
+    await click("[↙]", "Activity");
     frames.activityRestored = await capture();
-    await click("[Expand]", "Conversation");
+    await click("[⛶]", "Conversation");
     frames.chat = await capture();
-    await click("[Restore]", "Conversation");
+    await click("[↙]", "Conversation");
     frames.chatRestored = await capture();
-    await click("[Combined]");
+    await click("[▣]");
     frames.combined = await capture();
-    await click("[Split]");
+    await click("[◫]");
     frames.splitRestored = await capture();
-    await click("[Rows]");
+    await click("[▤]");
     frames.rowsRestored = await capture();
     const rows = process.stdout.rows;
     try {
@@ -123,7 +132,7 @@ export default function panelControls(pi: ExtensionAPI): void {
       process.stdout.emit("resize");
     }
     frames.tallRows = await capture();
-    await click("[Expand]", "Conversation");
+    await click("[⛶]", "Conversation");
     frames.savedChat = await capture();
     await writeFile(path.join(ctx.cwd, "panel-controls.json"), JSON.stringify(frames));
   });

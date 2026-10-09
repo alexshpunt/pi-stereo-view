@@ -108,16 +108,17 @@ export class TranscriptLayout {
     };
     const toolbar = new HStack([
       { component: this.button(
-        () => this.preferences.mode === "combined" || this.fallback || this.failed ? "[Split]" : "[Combined]",
+        () => this.preferences.mode === "combined" || this.fallback || this.failed ? "[◫]" : "[▣]",
         () => this.toggle(), () => !this.fallback && !this.failed,
-      ), basis: 10, shrink: 0 },
+      ), basis: 3, shrink: 0 },
       { component: this.button(
-        () => this.preferences.layout === "columns" ? "[Rows]" : "[Cols]",
+        () => this.preferences.layout === "columns" ? "[▤]" : "[▥]",
         () => this.setLayout(this.preferences.layout === "columns" ? "rows" : "columns"), () => !this.failed,
-      ), basis: 6, shrink: 0 },
-      { component: this.button(() => "[Swap]", () => this.swap(),
+      ), basis: 3, shrink: 0 },
+      { component: this.button(
+        () => this.preferences.layout === "columns" ? "[⇄]" : "[⇅]", () => this.swap(),
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
-      ), basis: 6, shrink: 0 },
+      ), basis: 3, shrink: 0 },
     ], { gap: 1 });
     const pane = (title: string, target: Pane, view: ScrollView): Component => new VStack([
       { component: new HStack([
@@ -126,9 +127,9 @@ export class TranscriptLayout {
           invalidate() {},
         }, basis: 0, grow: 1, minSize: 1 },
         { component: this.button(
-          () => this.preferences.zoom === target ? "[Restore]" : "[Expand]",
+          () => this.preferences.zoom === target ? "[↙]" : "[⛶]",
           () => this.maximize(target),
-        ), basis: 9, shrink: 0 },
+        ), basis: 3, shrink: 0 },
       ], { gap: 1 }), basis: 1 },
       { component: view, basis: 0, grow: 1, minSize: 1 },
     ]);
@@ -136,8 +137,8 @@ export class TranscriptLayout {
     const chatPane = pane("Conversation", "chat", this.chat);
     const divider = (axis: "columns" | "rows"): Component => new MouseRegion({
       render: width => axis === "columns" ?
-        Array.from({ length: host.terminal.rows }, () => this.theme().fg("dim", "│")) :
-        [this.theme().fg("dim", "─".repeat(width))],
+        Array.from({ length: host.terminal.rows }, () => this.theme().fg("dim", "║")) :
+        [this.theme().fg("dim", "═".repeat(width))],
       invalidate() {},
     }, event => {
       if (event.button !== "left" && event.type !== "release") return;

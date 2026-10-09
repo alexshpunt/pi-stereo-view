@@ -14,7 +14,7 @@ export interface Preferences {
 }
 
 export const defaults: Preferences = {
-  mode: "split", side: "right", chatWidth: 40, layout: "columns", chatHeight: 12, zoom: null,
+  mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: 12, zoom: null,
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -28,7 +28,8 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   }
   if (!value || typeof value !== "object") throw new Error("Invalid transcript preferences");
   const record = value as Record<string, unknown>;
-  const layout = record.layout === undefined ? defaults.layout : record.layout;
+  // The first version only had columns; keep that saved arrangement.
+  const layout = record.layout === undefined ? "columns" : record.layout;
   const chatHeight = record.chatHeight === undefined ? defaults.chatHeight : record.chatHeight;
   const zoom = record.zoom === undefined ? defaults.zoom : record.zoom;
   if ((record.mode !== "split" && record.mode !== "combined") ||
