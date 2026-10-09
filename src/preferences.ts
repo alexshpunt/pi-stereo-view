@@ -7,7 +7,8 @@ export interface Preferences {
   mode: "split" | "combined";
   /** Left means first: left in columns, top in rows. */
   side: "left" | "right";
-  chatWidth: number;
+  /** Null reserves 20% of the column layout; a number is a manual width. */
+  chatWidth: number | null;
   layout: "columns" | "rows";
   /** Null grows to half the history area; a number is a manual maximum. */
   chatHeight: number | null;
@@ -16,7 +17,7 @@ export interface Preferences {
 }
 
 export const defaults: Preferences = {
-  mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: null, zoom: null, showTimestamps: true,
+  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true,
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -37,8 +38,8 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const showTimestamps = record.showTimestamps === undefined ? defaults.showTimestamps : record.showTimestamps;
   if ((record.mode !== "split" && record.mode !== "combined") ||
       (record.side !== "left" && record.side !== "right") ||
-      typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
-      record.chatWidth < 24 || record.chatWidth > 240 ||
+      (record.chatWidth !== null && (typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
+        record.chatWidth < 24 || record.chatWidth > 240)) ||
       (layout !== "columns" && layout !== "rows") ||
       (chatHeight !== null && (typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240)) ||
       (zoom !== null && zoom !== "activity" && zoom !== "chat") || typeof showTimestamps !== "boolean") {

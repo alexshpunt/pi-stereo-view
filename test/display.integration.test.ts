@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { colorToRgb, indexedColor, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { assistantMessage, PiIntegrationTest, text } from "pi-coding-agent-test";
@@ -34,6 +34,9 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   const cwd = await mkdtemp(path.resolve("tmp/display-"));
   const agent = await mkdtemp(path.resolve("tmp/display-agent-"));
   directories.push(cwd, agent);
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+    mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: null,
+  }));
   const run = (name: string, controls: boolean) => new PiIntegrationTest({
     testName: name, artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,

@@ -45,7 +45,7 @@ In Rows, Conversation starts with automatic height. It grows with its content up
 
 Both panels use only the space their content needs. When history fills up, Activity shrinks first while Conversation keeps its limit. Expanded panels fit their content up to the available screen height. Long histories scroll without pushing the input off screen.
 
-New settings start in Rows with Conversation above Activity. In Columns, Conversation starts on the left. Saved arrangements are not reset, including first-version column settings.
+New settings start in Columns: Conversation on the left gets 20% of the width, Activity gets 80%. This ratio follows window resizing, not content growth, while respecting minimum panel widths. Dragging or a width shortcut or command saves a manual width instead. Saved arrangements are not reset, including first-version column settings.
 
 | Action | Command | Shortcut |
 | --- | --- | --- |

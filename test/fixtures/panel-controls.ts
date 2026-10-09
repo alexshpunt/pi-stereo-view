@@ -74,13 +74,21 @@ export default function panelControls(pi: ExtensionAPI): void {
       await writeFile(path.join(ctx.cwd, "button-toggle.json"), JSON.stringify({ before, after: await capture() }));
     }
     if (process.env.TRANSCRIPT_BUTTON_DEFAULTS === "1") {
+      const columns = await capture();
+      Object.defineProperty(process.stdout, "columns", { configurable: true, value: 400 });
+      process.stdout.emit("resize");
+      const wider = await capture();
+      await click("[ ▤ ]");
       const rows = await capture();
-      const file = path.join(ctx.cwd, "default-layouts.json");
-      await writeFile(file, JSON.stringify({ rows, columns: rows }));
-      if (stripTerminalSequences(rows[0]).includes("[ ▥ ]")) {
-        await click("[ ▥ ]");
-        await writeFile(file, JSON.stringify({ rows, columns: await capture() }));
-      }
+      await click("[ ▥ ]");
+      const divider = stripTerminalSequences(wider[1]).indexOf("║");
+      await mouse(0, divider, 2);
+      await mouse(32, divider + 4, 2);
+      await mouse(0, divider + 4, 2, "m");
+      const manual = await capture();
+      Object.defineProperty(process.stdout, "columns", { configurable: true, value: 500 });
+      process.stdout.emit("resize");
+      await writeFile(path.join(ctx.cwd, "default-layouts.json"), JSON.stringify({ columns, wider, rows, manual, resized: await capture() }));
     }
     if (process.env.TRANSCRIPT_BUTTON_CONTROLS !== "1") return;
     const frames: Record<string, string[]> = { initial: await capture() };

@@ -12,7 +12,7 @@ test("keeps one blank row between tool calls and fits short Activity to its cont
   const agent = await mkdtemp(path.resolve("tmp/compact-activity-agent-"));
   directories.push(cwd, agent);
   await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
-  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({ mode: "split", layout: "rows", zoom: "activity" }));
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({ mode: "split", side: "left", chatWidth: 40, layout: "rows", zoom: "activity" }));
   const result = await new PiIntegrationTest({
     testName: "compact-activity", artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
@@ -51,7 +51,7 @@ test("fits Conversation to its content and puts clocks beside text without losin
   const agent = await mkdtemp(path.resolve("tmp/compact-agent-"));
   directories.push(cwd, agent);
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
-    mode: "split", side: "left", layout: "rows", chatHeight: 100,
+    mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: 100,
   }));
   const result = await new PiIntegrationTest({
     testName: "compact-conversation", artifactsDir: path.resolve("tmp/test-runs"), cwd,
@@ -87,7 +87,7 @@ test.each([false, true])("keeps the full input visible when expanded Conversatio
   const agent = await mkdtemp(path.resolve("tmp/compact-resize-agent-"));
   directories.push(cwd, agent);
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
-    mode: "split", side: "left", layout: "rows", chatHeight: 100,
+    mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: 100,
   }));
   const answer = long ? Array.from({ length: 60 }, (_, index) => "Line " + index).join("\n") : "SHORT ANSWER";
   await new PiIntegrationTest({

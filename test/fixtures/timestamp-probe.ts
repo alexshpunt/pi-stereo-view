@@ -104,7 +104,10 @@ export default function timestampProbe(pi: ExtensionAPI): void {
     if (process.env.TIMESTAMP_SCROLLBAR === "1") {
       for (const view of views()) {
         view.setScrollbar("auto");
-        view.scrollTo(0);
+        const lines = view.children[0].render(tui.terminal.columns).map(stripTerminalSequences);
+        const userRow = lines.findIndex(line => line.includes("USER MARKER"));
+        // Combined history also contains the startup header; show the message and its clock.
+        view.scrollTo(Math.max(0, userRow - 3));
       }
       await capture();
       // Native pointer activation makes the auto scrollbar overlay visible.
