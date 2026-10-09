@@ -11,7 +11,7 @@ npm ci
 pi --tui-mode fullscreen -e ./src/index.ts
 ```
 
-The checkout also loads the extension through `.pi/settings.json` when the project is trusted. Run `/reload` after local changes.
+The trusted checkout loads the extension and starts Pi in fullscreen through `.pi/settings.json`. Restart Pi if the current session started in regular mode. Run `/reload` after extension code changes.
 
 ## Controls
 
