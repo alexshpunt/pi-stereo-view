@@ -23,6 +23,8 @@ Do not use `inspect_tui` as native font proof: its installed implementation recr
 
 ## Approved native samples
 
+`native-atlas.png` preserves the complete unchanged screenshot. The eight crops use x=355..419 and y=97+22×row..119+22×row (exclusive end), in the table's action order. Linear removes embedded data-URL images from exported Markdown, so this tracked source preserves the native pixel evidence.
+
 `approved/*.png` contains eight unchanged crops from the user's native atlas screenshot (925×291 pixels). The source was captured from the `7c7d450` diagnostic table before changing production icons. The user approved its candidate column. Each crop is 64×22 pixels; no resizing or font substitution was applied. The Bash output uses RGB `235,219,178`, so pass that foreground color.
 
 ```sh
