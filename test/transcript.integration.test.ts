@@ -309,13 +309,16 @@ test.each(["columns", "rows"])("keeps selection, copy, and independent scrolling
   expect(observation.copied).toContain("NATIVE CALL MARKER");
   expect(observation.copied.every(value => value === "CHAT_COPY_MARKER" || value === "NATIVE CALL MARKER")).toBe(true);
   const pane = (frame: string[], column: number): string => {
-    if (layout === "columns") return frame.slice(2, -6)
+    if (layout === "columns") return frame.slice(4, -6)
       .map(line => stripTerminalSequences(sliceByColumn(line, column === 0 ? 0 : 80, column === 0 ? 78 : 39)))
       .join("\n");
     const chatHeader = frame.findIndex(line => stripTerminalSequences(line).includes("Conversation"));
     expect(chatHeader).toBeGreaterThan(1);
-    return clean(column === 0 ? frame.slice(2, chatHeader - 1) : frame.slice(chatHeader + 1, -6));
+    return clean(column === 0 ? frame.slice(4, chatHeader - 1) : frame.slice(chatHeader + 2, -6));
   };
+  // Activity tracking changes headers, not the other panel's document or scroll position.
+  expect(clean(observation.activityWheel)).toContain("● Activity");
+  expect(clean(observation.chatWheel)).toContain("● Conversation");
   expect(pane(observation.activityWheel, 0)).not.toBe(pane(observation.beforeWheel, 0));
   expect(pane(observation.activityWheel, 1)).toBe(pane(observation.beforeWheel, 1));
   expect(pane(observation.chatWheel, 0)).toBe(pane(observation.activityWheel, 0));
