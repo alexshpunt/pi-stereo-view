@@ -1,0 +1,1448 @@
+{
+  "source": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+  "nonSearchPassed": 57,
+  "profilePassed": 16,
+  "regressionTerminal": "shell:8bd00ddd73c4",
+  "terminals": {
+    "blank-padding-large-1": "shell:85925bdc344e",
+    "blank-padding-large-2": "shell:0a90a92c7232",
+    "blank-padding-normal-1": "shell:bed29c91cef8",
+    "blank-padding-normal-2": "shell:8968b6b97d57"
+  },
+  "installedDuringRuns": "0.0.0-dev.1791636688",
+  "startupSampling": false,
+  "limits": [
+    "Warm phases use the same V8 sampling in all modes. Initial/cold sampling is off.",
+    "16 warm samples make empirical p95 the maximum sample. One cold sample and six resizes per case.",
+    "Terminal-frame emission, not compositor presentation. Controls are sequential, not simultaneous.",
+    "Keep previous d394519 forward Rows slowdown and other outliers; not reproduced here, not explained.",
+    "No isolated latency benefit assigned to these small fixes; work reductions have red/green regressions.",
+    "Initial/cold, Rows resize and some Columns output/scroll tails still trail Stock; strict parity not established."
+  ],
+  "records": [
+    {
+      "run": "blank-padding-large-1",
+      "mode": "stock",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 274,
+          "height": 108,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "stock"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 575.6405300000006,
+          "cpuMs": 885.442
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 369.24996099999953,
+            "frameP95": 369.24996099999953,
+            "cpuP50": 485.188,
+            "nativeP50": 295.39931999996406,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "frame": {
+            "frameP50": 46.36578500000087,
+            "frameP95": 66.35739699999976,
+            "cpuP50": 51.115,
+            "nativeP50": 41.64017000000331,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "typing": {
+            "frameP50": 47.808014000000185,
+            "frameP95": 64.57501400000001,
+            "cpuP50": 55.028,
+            "nativeP50": 42.43797499999073,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "scroll": {
+            "frameP50": 58.236251000000266,
+            "frameP95": 79.49690299999929,
+            "cpuP50": 62.941,
+            "nativeP50": 40.55237900002794,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "resize": {
+            "frameP50": 336.47462500000074,
+            "frameP95": 372.29610499999944,
+            "cpuP50": 461.018,
+            "nativeP50": 307.0656859999799,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "stream": {
+            "frameP50": 45.19039300000077,
+            "frameP95": 50.154599999999846,
+            "cpuP50": 48.638,
+            "nativeP50": 37.869919000017035,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "tool": {
+            "frameP50": 46.6457649999993,
+            "frameP95": 59.878772000000026,
+            "cpuP50": 50.965,
+            "nativeP50": 40.02186500003154,
+            "compactP50": 0,
+            "documentP50": 0
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-large-1",
+      "mode": "combined",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 274,
+          "height": 108,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "combined"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 574.7515149999999,
+          "cpuMs": 974.827
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 356.43119899999965,
+            "frameP95": 356.43119899999965,
+            "cpuP50": 468.521,
+            "nativeP50": 283.4733890000007,
+            "compactP50": 0,
+            "documentP50": 310.74952200000007
+          },
+          "frame": {
+            "frameP50": 60.934244000000035,
+            "frameP95": 73.15500899999915,
+            "cpuP50": 69.974,
+            "nativeP50": 39.40221199998359,
+            "compactP50": 0,
+            "documentP50": 58.02864299999965
+          },
+          "typing": {
+            "frameP50": 63.08673499999986,
+            "frameP95": 71.42879399999947,
+            "cpuP50": 69.702,
+            "nativeP50": 40.06151099999079,
+            "compactP50": 0,
+            "documentP50": 60.431407000000036
+          },
+          "scroll": {
+            "frameP50": 70.29606799999965,
+            "frameP95": 100.4190749999998,
+            "cpuP50": 76.002,
+            "nativeP50": 39.351664999989225,
+            "compactP50": 0,
+            "documentP50": 56.89000399999895
+          },
+          "resize": {
+            "frameP50": 305.43691899999976,
+            "frameP95": 328.06225300000006,
+            "cpuP50": 402.809,
+            "nativeP50": 261.1926389999662,
+            "compactP50": 0,
+            "documentP50": 283.962673
+          },
+          "stream": {
+            "frameP50": 60.700801000000865,
+            "frameP95": 77.04940999999963,
+            "cpuP50": 65.614,
+            "nativeP50": 36.802425999985644,
+            "compactP50": 0,
+            "documentP50": 54.62793899999997
+          },
+          "tool": {
+            "frameP50": 61.00986000000012,
+            "frameP95": 78.4191520000004,
+            "cpuP50": 68.332,
+            "nativeP50": 40.00870399996711,
+            "compactP50": 0,
+            "documentP50": 57.20496699999967
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-large-1",
+      "mode": "columns",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 274,
+          "height": 108,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "columns"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 704.1455619999997,
+          "cpuMs": 1219.437
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 481.1158919999998,
+            "frameP95": 481.1158919999998,
+            "cpuP50": 652.637,
+            "nativeP50": 267.12352499998724,
+            "compactP50": 112.02580600002784,
+            "documentP50": 397.418995
+          },
+          "frame": {
+            "frameP50": 38.42883599999914,
+            "frameP95": 62.557606000000305,
+            "cpuP50": 44.088,
+            "nativeP50": 0,
+            "compactP50": 12.631004999992001,
+            "documentP50": 22.411285000001044
+          },
+          "typing": {
+            "frameP50": 36.9470510000001,
+            "frameP95": 61.26878899999974,
+            "cpuP50": 41.164,
+            "nativeP50": 0,
+            "compactP50": 12.448010999985854,
+            "documentP50": 21.57641000000058
+          },
+          "scroll": {
+            "frameP50": 53.379431999999724,
+            "frameP95": 77.90613399999984,
+            "cpuP50": 58.384,
+            "nativeP50": 0,
+            "compactP50": 12.552476999970168,
+            "documentP50": 21.811110999995435
+          },
+          "resize": {
+            "frameP50": 270.0931839999994,
+            "frameP95": 290.8306599999996,
+            "cpuP50": 331.814,
+            "nativeP50": 171.61230099998102,
+            "compactP50": 47.59727299995393,
+            "documentP50": 231.68603599999915
+          },
+          "stream": {
+            "frameP50": 39.734785999999076,
+            "frameP95": 67.3710970000011,
+            "cpuP50": 45.306,
+            "nativeP50": 0.23457299999972747,
+            "compactP50": 12.67714099994555,
+            "documentP50": 22.591151999997237
+          },
+          "tool": {
+            "frameP50": 51.276740000001155,
+            "frameP95": 65.52880200000072,
+            "cpuP50": 59.416,
+            "nativeP50": 0.3400130000009085,
+            "compactP50": 13.12556800000857,
+            "documentP50": 23.067078000000038
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-large-1",
+      "mode": "rows",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 274,
+          "height": 108,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "rows"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 720.2966710000001,
+          "cpuMs": 1216.381
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 469.9893629999997,
+            "frameP95": 469.9893629999997,
+            "cpuP50": 607.629,
+            "nativeP50": 275.25813299996753,
+            "compactP50": 102.93457000002036,
+            "documentP50": 395.1020159999989
+          },
+          "frame": {
+            "frameP50": 28.31848600000012,
+            "frameP95": 37.77982199999951,
+            "cpuP50": 35.434,
+            "nativeP50": 0,
+            "compactP50": 12.459227999994255,
+            "documentP50": 22.06387900000118
+          },
+          "typing": {
+            "frameP50": 31.677638999999544,
+            "frameP95": 42.9097440000005,
+            "cpuP50": 33.842,
+            "nativeP50": 0,
+            "compactP50": 13.982219999996232,
+            "documentP50": 24.848465999999462
+          },
+          "scroll": {
+            "frameP50": 38.30741500000022,
+            "frameP95": 48.76773200000025,
+            "cpuP50": 40.824,
+            "nativeP50": 0,
+            "compactP50": 13.44540099999358,
+            "documentP50": 23.688850000001366
+          },
+          "resize": {
+            "frameP50": 382.64294900000095,
+            "frameP95": 453.8509180000001,
+            "cpuP50": 494.078,
+            "nativeP50": 279.43548300002476,
+            "compactP50": 81.28207699994164,
+            "documentP50": 369.59194299999945
+          },
+          "stream": {
+            "frameP50": 32.93966100000034,
+            "frameP95": 41.64878099999987,
+            "cpuP50": 33.315,
+            "nativeP50": 0.22046700000100827,
+            "compactP50": 13.290887999966799,
+            "documentP50": 24.01343700000143
+          },
+          "tool": {
+            "frameP50": 33.339592000000266,
+            "frameP95": 41.391262999999526,
+            "cpuP50": 34.013,
+            "nativeP50": 0.3635450000001583,
+            "compactP50": 13.455962999973053,
+            "documentP50": 23.616753999996945
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-large-2",
+      "mode": "stock",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 274,
+          "height": 108,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "stock"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 551.6937179999995,
+          "cpuMs": 928.732
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 342.50323000000026,
+            "frameP95": 342.50323000000026,
+            "cpuP50": 443.855,
+            "nativeP50": 291.1268300000138,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "frame": {
+            "frameP50": 42.96850499999982,
+            "frameP95": 46.53006000000005,
+            "cpuP50": 47.586,
+            "nativeP50": 38.23304099998404,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "typing": {
+            "frameP50": 44.08087599999999,
+            "frameP95": 49.923643000000084,
+            "cpuP50": 49.471,
+            "nativeP50": 39.283328000004076,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "scroll": {
+            "frameP50": 54.158000999999786,
+            "frameP95": 66.78309400000035,
+            "cpuP50": 59.435,
+            "nativeP50": 36.68274199996631,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "resize": {
+            "frameP50": 285.9727120000007,
+            "frameP95": 316.8168970000006,
+            "cpuP50": 380.885,
+            "nativeP50": 267.75321900001654,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "stream": {
+            "frameP50": 43.30635400000028,
+            "frameP95": 80.44080799999938,
+            "cpuP50": 46.688,
+            "nativeP50": 36.381378000027325,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "tool": {
+            "frameP50": 44.95690900000045,
+            "frameP95": 55.133083000000624,
+            "cpuP50": 49.795,
+            "nativeP50": 38.20085999998082,
+            "compactP50": 0,
+            "documentP50": 0
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-large-2",
+      "mode": "combined",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 274,
+          "height": 108,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "combined"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 602.0890659999995,
+          "cpuMs": 1022.432
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 367.5951269999996,
+            "frameP95": 367.5951269999996,
+            "cpuP50": 454.629,
+            "nativeP50": 272.6306679999889,
+            "compactP50": 0,
+            "documentP50": 306.4299739999997
+          },
+          "frame": {
+            "frameP50": 59.8505839999998,
+            "frameP95": 66.42651599999954,
+            "cpuP50": 68.287,
+            "nativeP50": 38.91616399999111,
+            "compactP50": 0,
+            "documentP50": 57.119762000000264
+          },
+          "typing": {
+            "frameP50": 59.87413200000083,
+            "frameP95": 67.72304399999939,
+            "cpuP50": 66.104,
+            "nativeP50": 38.522550000013325,
+            "compactP50": 0,
+            "documentP50": 57.09353199999987
+          },
+          "scroll": {
+            "frameP50": 73.8796199999997,
+            "frameP95": 113.42014700000072,
+            "cpuP50": 80.112,
+            "nativeP50": 39.631170999999085,
+            "compactP50": 0,
+            "documentP50": 59.967140999999174
+          },
+          "resize": {
+            "frameP50": 325.5529429999988,
+            "frameP95": 343.77397500000006,
+            "cpuP50": 415.426,
+            "nativeP50": 268.5430249999954,
+            "compactP50": 0,
+            "documentP50": 293.8358530000005
+          },
+          "stream": {
+            "frameP50": 61.97225500000059,
+            "frameP95": 79.86134200000015,
+            "cpuP50": 67.788,
+            "nativeP50": 37.47468700001991,
+            "compactP50": 0,
+            "documentP50": 55.450034000001324
+          },
+          "tool": {
+            "frameP50": 64.10627799999929,
+            "frameP95": 100.16722200000004,
+            "cpuP50": 69.748,
+            "nativeP50": 40.096069000008356,
+            "compactP50": 0,
+            "documentP50": 57.9903460000005
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-large-2",
+      "mode": "columns",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 274,
+          "height": 108,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "columns"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 728.3077699999994,
+          "cpuMs": 1260.732
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 526.4272460000002,
+            "frameP95": 526.4272460000002,
+            "cpuP50": 710.925,
+            "nativeP50": 275.1875839999957,
+            "compactP50": 127.51159699997788,
+            "documentP50": 423.99792399999933
+          },
+          "frame": {
+            "frameP50": 42.14712000000054,
+            "frameP95": 90.81261599999925,
+            "cpuP50": 48.792,
+            "nativeP50": 0,
+            "compactP50": 13.415373000003456,
+            "documentP50": 23.864770000000135
+          },
+          "typing": {
+            "frameP50": 39.653534000000036,
+            "frameP95": 68.17367999999988,
+            "cpuP50": 43.796,
+            "nativeP50": 0,
+            "compactP50": 13.347971999996844,
+            "documentP50": 23.807856999999785
+          },
+          "scroll": {
+            "frameP50": 60.694251999999324,
+            "frameP95": 107.48602100000062,
+            "cpuP50": 65.912,
+            "nativeP50": 0,
+            "compactP50": 14.72493099998428,
+            "documentP50": 29.65850599999976
+          },
+          "resize": {
+            "frameP50": 336.30738999999994,
+            "frameP95": 447.9276890000001,
+            "cpuP50": 433.355,
+            "nativeP50": 213.18454399999428,
+            "compactP50": 54.6144309999745,
+            "documentP50": 285.79999599999974
+          },
+          "stream": {
+            "frameP50": 49.47568400000091,
+            "frameP95": 92.44405199999892,
+            "cpuP50": 52.918,
+            "nativeP50": 0.25362000000131957,
+            "compactP50": 14.334234999971159,
+            "documentP50": 27.56714699999975
+          },
+          "tool": {
+            "frameP50": 48.594396000000415,
+            "frameP95": 69.1665809999995,
+            "cpuP50": 55.646,
+            "nativeP50": 0.34666199999992386,
+            "compactP50": 12.691652999994403,
+            "documentP50": 22.267562000000908
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-large-2",
+      "mode": "rows",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 274,
+          "height": 108,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "rows"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 773.1399970000002,
+          "cpuMs": 1378.424
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 570.424473,
+            "frameP95": 570.424473,
+            "cpuP50": 773.578,
+            "nativeP50": 328.65045600000303,
+            "compactP50": 128.77616500001204,
+            "documentP50": 479.84197099999983
+          },
+          "frame": {
+            "frameP50": 32.466763999999785,
+            "frameP95": 61.49269499999991,
+            "cpuP50": 38.755,
+            "nativeP50": 0,
+            "compactP50": 14.792085999989467,
+            "documentP50": 25.83214499999849
+          },
+          "typing": {
+            "frameP50": 31.11124099999961,
+            "frameP95": 40.85639999999967,
+            "cpuP50": 35.6,
+            "nativeP50": 0,
+            "compactP50": 14.086326000029658,
+            "documentP50": 24.84110899999905
+          },
+          "scroll": {
+            "frameP50": 35.69862199999989,
+            "frameP95": 52.44871899999998,
+            "cpuP50": 39.831,
+            "nativeP50": 0,
+            "compactP50": 13.269588999979533,
+            "documentP50": 22.426946999999927
+          },
+          "resize": {
+            "frameP50": 355.5427789999994,
+            "frameP95": 437.5628369999995,
+            "cpuP50": 460.368,
+            "nativeP50": 262.2907589999504,
+            "compactP50": 73.76975000004677,
+            "documentP50": 347.4240919999993
+          },
+          "stream": {
+            "frameP50": 34.604293000000325,
+            "frameP95": 76.92661100000078,
+            "cpuP50": 38.239,
+            "nativeP50": 0.24403500000153144,
+            "compactP50": 14.550568999959069,
+            "documentP50": 25.49139500000092
+          },
+          "tool": {
+            "frameP50": 35.20447400000012,
+            "frameP95": 49.64198699999906,
+            "cpuP50": 36.63,
+            "nativeP50": 0.4262299999991228,
+            "compactP50": 14.701047000005929,
+            "documentP50": 26.47958699999799
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-normal-1",
+      "mode": "stock",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 120,
+          "height": 35,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "stock"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 623.936291,
+          "cpuMs": 891.325
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 463.30300499999976,
+            "frameP95": 463.30300499999976,
+            "cpuP50": 561.761,
+            "nativeP50": 395.5844059999781,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "frame": {
+            "frameP50": 41.4256519999999,
+            "frameP95": 51.50222700000086,
+            "cpuP50": 45.873,
+            "nativeP50": 36.64715199998864,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "typing": {
+            "frameP50": 41.4187179999999,
+            "frameP95": 58.71622599999955,
+            "cpuP50": 46.023,
+            "nativeP50": 36.68987299999117,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "scroll": {
+            "frameP50": 40.458693000000494,
+            "frameP95": 52.67528100000072,
+            "cpuP50": 47.132,
+            "nativeP50": 32.88580000001457,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "resize": {
+            "frameP50": 325.5578859999987,
+            "frameP95": 363.057060000001,
+            "cpuP50": 407.561,
+            "nativeP50": 316.6308320000262,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "stream": {
+            "frameP50": 42.610632999998415,
+            "frameP95": 79.35168499999963,
+            "cpuP50": 47.036,
+            "nativeP50": 35.12597400002596,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "tool": {
+            "frameP50": 42.44937000000027,
+            "frameP95": 51.78534600000057,
+            "cpuP50": 45.644,
+            "nativeP50": 35.317480999978216,
+            "compactP50": 0,
+            "documentP50": 0
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-normal-1",
+      "mode": "combined",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 120,
+          "height": 35,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "combined"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 525.9200250000004,
+          "cpuMs": 809.182
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 345.0973270000004,
+            "frameP95": 345.0973270000004,
+            "cpuP50": 457.77,
+            "nativeP50": 264.68300900000577,
+            "compactP50": 0,
+            "documentP50": 292.25232400000004
+          },
+          "frame": {
+            "frameP50": 55.49359000000004,
+            "frameP95": 67.12041700000009,
+            "cpuP50": 62.748,
+            "nativeP50": 35.41485100002501,
+            "compactP50": 0,
+            "documentP50": 53.64027199999964
+          },
+          "typing": {
+            "frameP50": 57.56763099999989,
+            "frameP95": 72.19304399999965,
+            "cpuP50": 62.671,
+            "nativeP50": 36.28682000000754,
+            "compactP50": 0,
+            "documentP50": 54.44570699999986
+          },
+          "scroll": {
+            "frameP50": 64.40543100000104,
+            "frameP95": 91.3688230000007,
+            "cpuP50": 71.925,
+            "nativeP50": 40.38917500000025,
+            "compactP50": 0,
+            "documentP50": 59.834131999999954
+          },
+          "resize": {
+            "frameP50": 251.64175599999908,
+            "frameP95": 258.77394600000116,
+            "cpuP50": 310.433,
+            "nativeP50": 217.2270779999617,
+            "compactP50": 0,
+            "documentP50": 239.9977630000012
+          },
+          "stream": {
+            "frameP50": 56.640934999999445,
+            "frameP95": 96.8266079999994,
+            "cpuP50": 63.367,
+            "nativeP50": 34.70591099999001,
+            "compactP50": 0,
+            "documentP50": 52.59698400000161
+          },
+          "tool": {
+            "frameP50": 55.421134000000166,
+            "frameP95": 67.84714399999939,
+            "cpuP50": 60.796,
+            "nativeP50": 35.66731999995136,
+            "compactP50": 0,
+            "documentP50": 51.635151000000405
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-normal-1",
+      "mode": "columns",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 120,
+          "height": 35,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "columns"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 647.7024009999996,
+          "cpuMs": 1013.767
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 436.7563790000004,
+            "frameP95": 436.7563790000004,
+            "cpuP50": 560.561,
+            "nativeP50": 255.0469129999501,
+            "compactP50": 99.5275640000309,
+            "documentP50": 372.90660900000057
+          },
+          "frame": {
+            "frameP50": 30.348173000000315,
+            "frameP95": 42.15771599999971,
+            "cpuP50": 37.776,
+            "nativeP50": 0,
+            "compactP50": 13.192398999990473,
+            "documentP50": 23.044631000000663
+          },
+          "typing": {
+            "frameP50": 28.534987,
+            "frameP95": 41.16505799999959,
+            "cpuP50": 31.011,
+            "nativeP50": 0,
+            "compactP50": 12.344623000019055,
+            "documentP50": 21.66635199999928
+          },
+          "scroll": {
+            "frameP50": 31.499698000000535,
+            "frameP95": 54.10162500000024,
+            "cpuP50": 32.979,
+            "nativeP50": 0,
+            "compactP50": 12.350836000002346,
+            "documentP50": 21.33590499999991
+          },
+          "resize": {
+            "frameP50": 224.7391919999991,
+            "frameP95": 233.730223999999,
+            "cpuP50": 277.127,
+            "nativeP50": 159.16789000001518,
+            "compactP50": 38.04806699994151,
+            "documentP50": 209.0005250000031
+          },
+          "stream": {
+            "frameP50": 31.89838400000008,
+            "frameP95": 46.12219999999979,
+            "cpuP50": 34.326,
+            "nativeP50": 0.2084629999990284,
+            "compactP50": 12.368724999982078,
+            "documentP50": 22.072691000003033
+          },
+          "tool": {
+            "frameP50": 34.26087000000007,
+            "frameP95": 41.415483999999196,
+            "cpuP50": 37.681,
+            "nativeP50": 0.3382469999996829,
+            "compactP50": 13.64338199994927,
+            "documentP50": 23.90169899999819
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-normal-1",
+      "mode": "rows",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 120,
+          "height": 35,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "rows"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 664.76512,
+          "cpuMs": 1030.93
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 480.73239899999953,
+            "frameP95": 480.73239899999953,
+            "cpuP50": 638.086,
+            "nativeP50": 280.01803799997106,
+            "compactP50": 115.85995000003459,
+            "documentP50": 417.1016970000019
+          },
+          "frame": {
+            "frameP50": 30.52502699999968,
+            "frameP95": 38.93914700000005,
+            "cpuP50": 34.722,
+            "nativeP50": 0,
+            "compactP50": 13.430828000019574,
+            "documentP50": 24.11663899999985
+          },
+          "typing": {
+            "frameP50": 32.066155000000435,
+            "frameP95": 41.923194999999396,
+            "cpuP50": 35.222,
+            "nativeP50": 0,
+            "compactP50": 14.01296999999613,
+            "documentP50": 25.234904999998435
+          },
+          "scroll": {
+            "frameP50": 29.982339000000138,
+            "frameP95": 47.66316000000006,
+            "cpuP50": 30.897,
+            "nativeP50": 0,
+            "compactP50": 12.536393999996108,
+            "documentP50": 21.866101999999955
+          },
+          "resize": {
+            "frameP50": 290.7535169999992,
+            "frameP95": 309.44393599999967,
+            "cpuP50": 370.568,
+            "nativeP50": 211.4947219999376,
+            "compactP50": 52.285795000096186,
+            "documentP50": 277.9454399999977
+          },
+          "stream": {
+            "frameP50": 28.311851000000388,
+            "frameP95": 49.06194200000027,
+            "cpuP50": 31.689,
+            "nativeP50": 0.22198799999932817,
+            "compactP50": 12.290360000004512,
+            "documentP50": 22.02959700000065
+          },
+          "tool": {
+            "frameP50": 30.768496999999115,
+            "frameP95": 34.367433999999776,
+            "cpuP50": 32.849,
+            "nativeP50": 0.3425920000008773,
+            "compactP50": 13.08665500002644,
+            "documentP50": 23.740333999998256
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-normal-2",
+      "mode": "stock",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 120,
+          "height": 35,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "stock"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 685.5905409999996,
+          "cpuMs": 971.531
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 419.65096300000005,
+            "frameP95": 419.65096300000005,
+            "cpuP50": 505.372,
+            "nativeP50": 368.6460660000075,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "frame": {
+            "frameP50": 41.33973600000081,
+            "frameP95": 46.00885199999993,
+            "cpuP50": 46.173,
+            "nativeP50": 36.44626400002289,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "typing": {
+            "frameP50": 39.956646999999975,
+            "frameP95": 60.88201200000003,
+            "cpuP50": 45.473,
+            "nativeP50": 34.68263399999705,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "scroll": {
+            "frameP50": 42.84671399999934,
+            "frameP95": 56.45532600000024,
+            "cpuP50": 49.032,
+            "nativeP50": 33.93785400005254,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "resize": {
+            "frameP50": 337.66025399999853,
+            "frameP95": 379.0528950000007,
+            "cpuP50": 415.846,
+            "nativeP50": 328.42926100001205,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "stream": {
+            "frameP50": 42.779710999999224,
+            "frameP95": 76.5098569999991,
+            "cpuP50": 47.795,
+            "nativeP50": 35.247616000066046,
+            "compactP50": 0,
+            "documentP50": 0
+          },
+          "tool": {
+            "frameP50": 42.406066999999894,
+            "frameP95": 56.676054999999906,
+            "cpuP50": 46.857,
+            "nativeP50": 35.755974999980026,
+            "compactP50": 0,
+            "documentP50": 0
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-normal-2",
+      "mode": "combined",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 120,
+          "height": 35,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "combined"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 536.0079689999993,
+          "cpuMs": 835.611
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 322.26249199999984,
+            "frameP95": 322.26249199999984,
+            "cpuP50": 422.705,
+            "nativeP50": 244.28021399997124,
+            "compactP50": 0,
+            "documentP50": 269.42015100000026
+          },
+          "frame": {
+            "frameP50": 54.43579300000056,
+            "frameP95": 72.02432599999975,
+            "cpuP50": 64.089,
+            "nativeP50": 35.44629800002349,
+            "compactP50": 0,
+            "documentP50": 52.12662
+          },
+          "typing": {
+            "frameP50": 57.70581000000038,
+            "frameP95": 67.84040199999981,
+            "cpuP50": 64.124,
+            "nativeP50": 37.30169100000967,
+            "compactP50": 0,
+            "documentP50": 55.19705900000008
+          },
+          "scroll": {
+            "frameP50": 56.45308800000021,
+            "frameP95": 75.50434399999995,
+            "cpuP50": 63.914,
+            "nativeP50": 35.50860899995678,
+            "compactP50": 0,
+            "documentP50": 51.712705999998434
+          },
+          "resize": {
+            "frameP50": 251.08389100000022,
+            "frameP95": 265.7562390000003,
+            "cpuP50": 319.694,
+            "nativeP50": 219.34584800006814,
+            "compactP50": 0,
+            "documentP50": 241.64539799999875
+          },
+          "stream": {
+            "frameP50": 56.72094399999878,
+            "frameP95": 85.03662900000018,
+            "cpuP50": 64.565,
+            "nativeP50": 35.98071300002812,
+            "compactP50": 0,
+            "documentP50": 53.01053700000011
+          },
+          "tool": {
+            "frameP50": 58.73453399999926,
+            "frameP95": 73.97509600000012,
+            "cpuP50": 66.075,
+            "nativeP50": 35.66194200001519,
+            "compactP50": 0,
+            "documentP50": 54.82394199999908
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-normal-2",
+      "mode": "columns",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 120,
+          "height": 35,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "columns"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 675.8318590000008,
+          "cpuMs": 1067.355
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 426.5481070000005,
+            "frameP95": 426.5481070000005,
+            "cpuP50": 528.83,
+            "nativeP50": 251.99193200001446,
+            "compactP50": 84.04732899994724,
+            "documentP50": 353.34058800000093
+          },
+          "frame": {
+            "frameP50": 30.58072699999957,
+            "frameP95": 43.44879700000001,
+            "cpuP50": 37.174,
+            "nativeP50": 0,
+            "compactP50": 12.852840999984437,
+            "documentP50": 23.00792100000035
+          },
+          "typing": {
+            "frameP50": 29.315875999999662,
+            "frameP95": 47.0627370000002,
+            "cpuP50": 31.419,
+            "nativeP50": 0,
+            "compactP50": 12.841945999996824,
+            "documentP50": 22.24269700000059
+          },
+          "scroll": {
+            "frameP50": 34.365663999999924,
+            "frameP95": 54.82084299999951,
+            "cpuP50": 36.593,
+            "nativeP50": 0,
+            "compactP50": 13.351039999970453,
+            "documentP50": 22.944624999999178
+          },
+          "resize": {
+            "frameP50": 267.6701490000005,
+            "frameP95": 304.6124310000014,
+            "cpuP50": 341.599,
+            "nativeP50": 181.4291759999942,
+            "compactP50": 53.0318089999455,
+            "documentP50": 247.10621900000115
+          },
+          "stream": {
+            "frameP50": 36.50814399999945,
+            "frameP95": 52.62290100000064,
+            "cpuP50": 38.653,
+            "nativeP50": 0.24978100000043924,
+            "compactP50": 15.108399000037025,
+            "documentP50": 27.014600000000428
+          },
+          "tool": {
+            "frameP50": 31.933262999998988,
+            "frameP95": 45.25433899999916,
+            "cpuP50": 35.353,
+            "nativeP50": 0.3232159999988653,
+            "compactP50": 12.603738000012527,
+            "documentP50": 22.549290000000838
+          }
+        }
+      }
+    },
+    {
+      "run": "blank-padding-normal-2",
+      "mode": "rows",
+      "runtime": {
+        "ide": {
+          "path": "/root/dev/pi/pi-agent-ide",
+          "version": "0.8.0",
+          "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+          "workingTree": ""
+        },
+        "transcriptCommit": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+        "pi": "1.1.0",
+        "profileStartup": false,
+        "workload": {
+          "exchanges": 600,
+          "toolLines": 80,
+          "width": 120,
+          "height": 35,
+          "scrollbar": "auto",
+          "syntheticOnly": true
+        },
+        "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+        "mode": "rows"
+      },
+      "metrics": {
+        "initial": {
+          "emittedFrameMs": 714.5464250000005,
+          "cpuMs": 1104.824
+        },
+        "summary": {
+          "cold": {
+            "frameP50": 467.3803109999999,
+            "frameP95": 467.3803109999999,
+            "cpuP50": 625.21,
+            "nativeP50": 272.345444999979,
+            "compactP50": 108.40173000000686,
+            "documentP50": 401.5409870000003
+          },
+          "frame": {
+            "frameP50": 31.44192800000019,
+            "frameP95": 40.69925599999988,
+            "cpuP50": 34.914,
+            "nativeP50": 0,
+            "compactP50": 13.52472599999146,
+            "documentP50": 24.902938999999606
+          },
+          "typing": {
+            "frameP50": 27.959392000000662,
+            "frameP95": 33.15915200000018,
+            "cpuP50": 30.375,
+            "nativeP50": 0,
+            "compactP50": 12.611354000024221,
+            "documentP50": 22.161772000001292
+          },
+          "scroll": {
+            "frameP50": 29.32726399999956,
+            "frameP95": 43.351794000000154,
+            "cpuP50": 32.286,
+            "nativeP50": 0,
+            "compactP50": 12.665723000005528,
+            "documentP50": 21.855383000000074
+          },
+          "resize": {
+            "frameP50": 282.829819999999,
+            "frameP95": 320.0295700000006,
+            "cpuP50": 357.884,
+            "nativeP50": 200.9347529999759,
+            "compactP50": 59.95165799991355,
+            "documentP50": 274.2016879999974
+          },
+          "stream": {
+            "frameP50": 31.52878199999941,
+            "frameP95": 42.81064999999944,
+            "cpuP50": 33.933,
+            "nativeP50": 0.23720200000025216,
+            "compactP50": 13.077922999986185,
+            "documentP50": 23.87451599999804
+          },
+          "tool": {
+            "frameP50": 28.564039000000776,
+            "frameP95": 39.363930999999866,
+            "cpuP50": 31.18,
+            "nativeP50": 0.32464400000026217,
+            "compactP50": 12.700508999983867,
+            "documentP50": 21.92994700000054
+          }
+        }
+      }
+    }
+  ]
+}

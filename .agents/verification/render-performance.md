@@ -221,6 +221,16 @@ Subscription-presence source d394519 completed54 non-search cases and eight larg
 
 Cold profiles also show repeated blank-edge ANSI classification. A bounded pure-string cache of confirmed blank rows is the next small candidate: at most32 entries, no strings over4096 characters, native parsing unchanged, paragraphs/semantic markers/images preserved. Its test first failed with40 classifications instead of one across20 cold blocks, then all28 focused cases, typecheck and diff checks passed (shell:686d7abc57ab red; shell:5c9d0c9adf84 green). Full non-search regression and repeated normal/large controls are next; installation remains unchanged.
 
+## Final measured practical-limit checkpoint
+
+Production source9d29c78 passes57 non-search cases and16 final profile cases across normal120x35 and large274x108, in both mode orders. All use600 synthetic exchanges/80 tool lines/16 samples/native auto bars, clean current IDE0.8.0 source1922570b9882c023f284b85ac45d3bad4be46550 and Pi1.1.0. Raw evidence and full tables are in rendering/blank-padding/. A failed chained provenance check produced no measurements; fresh authorized runs passed. Source and installed version were unchanged during those controls.
+
+Normal typing medians Stock40.0–41.4ms, Columns28.5–29.3ms, Rows28.0–32.1ms. Large Stock44.1–47.8ms, Columns36.9–39.7ms, Rows31.1–31.7ms. The original severe repeated-render slowdown is removed. Cold/initial and large Rows resize still add work, and some large Columns scrolling/output tails exceed Stock. Original strict parity is not passed; no arbitrary tolerance makes it so. Previous slow Rows and Combined resize outliers remain archived, without a proven cause.
+
+The bounded blank cache received read-only review9270b9e3 with no concrete defect. The previous lifecycle/structural correctness cases remain in the57-case suite. Keep exact work reductions, not an unproven isolated wall-clock claim. Direct lookup was rejected rather than promoted. Further substantial reduction of new-width/initial work would require a virtualized/replacement layout or different height/viewport APIs, affecting native selection/copy/markers/images and memory. Public Pi API/source evidence and method limits are in rendering/practical-limit.md. This is a reasonable boundary of this implementation, not a claim that further optimization is impossible.
+
+Under the latest direct approval, proceed to final install/reload/live verification and develop merge, then record the practical-limit Result honestly. Search remains open/paused and untested.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.

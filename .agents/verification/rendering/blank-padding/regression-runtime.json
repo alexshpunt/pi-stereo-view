@@ -1,0 +1,14 @@
+{
+  "source": "9d29c78",
+  "ide": { "path": "/root/dev/pi/pi-agent-ide", "version": "0.8.0", "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550", "workingTree": "" },
+  "terminal": "shell:8bd00ddd73c4",
+  "typecheck": "passed",
+  "nonSearchFiles": 11,
+  "nonSearchPassed": 57,
+  "testDurationSeconds": 259.02,
+  "searchAcceptance": "paused and excluded",
+  "subsequentProfile": "All four provenance fetches failed before measurement due to Clanker session authentication. No timing evidence; remaining chained matrices did not run.",
+  "freshProfileTerminal": "shell:85925bdc344e",
+  "freshProfileStatus": "pending",
+  "installedVersionUnchanged": "0.0.0-dev.1791636688"
+}
