@@ -100,29 +100,46 @@ function decorate(line: string, selected: Position[], theme: Theme): string {
 }
 
 /**
- * Highlight only the query characters in one saved occurrence's native rows.
+ * Highlight exact query spans, or fuzzy query characters, in one saved line's native rows.
  * Native visible text, widths, links and markers stay unchanged. Rows containing
  * image placement, an empty query or an unmappable saved fragment are left alone.
  * For a standalone temporary excerpt, pass that excerpt as the hit's sole saved line.
  */
 export function highlightSearchRows(lines: string[], hit: SearchHit, query: string, theme: Theme, clock?: SearchClock): string[] {
   const tokens = query.trim().split(/[\s/]+/).filter(Boolean);
-  if (!tokens.length || lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;") || line.includes("\x1bP"))) return lines;
+  if (!query.trim() || lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;") || line.includes("\x1bP"))) return lines;
   let lettersOnly = false;
   let found = locate(lines, hit, false, clock);
   if (!found) { lettersOnly = true; found = locate(lines, hit, true, clock); }
   if (!found) return lines;
   const byRow = new Map<number, Map<number, Position>>();
-  for (const token of tokens) {
-    const normalized = normalize(token, lettersOnly);
-    if (!normalized) continue;
-    const matched = tokenPositions(found.text, normalized);
-    if (!matched) return lines;
-    for (const index of matched) {
-      const position = found.positions[index];
-      let selected = byRow.get(position.row);
-      if (!selected) { selected = new Map(); byRow.set(position.row, selected); }
-      selected.set(position.start, position);
+  const add = (position: Position): void => {
+    let selected = byRow.get(position.row);
+    if (!selected) { selected = new Map(); byRow.set(position.row, selected); }
+    selected.set(position.start, position);
+  };
+  if (hit.exact) {
+    const needle = query.trim().toLowerCase();
+    const saved = hit.text.toLowerCase();
+    for (let start = saved.indexOf(needle); start >= 0; start = saved.indexOf(needle, start + needle.length)) {
+      const offset = normalize(saved.slice(0, start), lettersOnly).length;
+      const positions = found.positions.slice(offset, offset + normalize(query.trim(), lettersOnly).length);
+      const spans = new Map<number, Position>();
+      for (const position of positions) {
+        const span = spans.get(position.row);
+        if (span) span.end = Math.max(span.end, position.end);
+        else spans.set(position.row, { ...position });
+      }
+      // Include the phrase's visible spaces, not unrelated earlier fuzzy letters.
+      for (const span of spans.values()) add(span);
+    }
+  } else {
+    for (const token of tokens) {
+      const normalized = normalize(token, lettersOnly);
+      if (!normalized) continue;
+      const matched = tokenPositions(found.text, normalized);
+      if (!matched) return lines;
+      for (const index of matched) add(found.positions[index]);
     }
   }
   if (!byRow.size) return lines;

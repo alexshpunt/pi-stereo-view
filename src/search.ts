@@ -1,6 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
-  fuzzyFilter, getKeybindings, HStack, Input, matchesKey, MouseRegion, stripTerminalSequences, Text, truncateToWidth,
+  fuzzyFilter, getKeybindings, HStack, Input, matchesKey, MouseRegion, stripTerminalSequences, Text, truncateToWidth, VStack,
   type Component, type TUI,
 } from "@earendil-works/pi-tui";
 
@@ -51,6 +51,8 @@ export interface SearchHit {
   entry: SearchEntry;
   line: number;
   text: string;
+  /** Exact substring mode; absent for fuzzy fallback. */
+  exact?: boolean;
 }
 
 /** Read searchable text without terminal control sequences. */
@@ -91,9 +93,23 @@ class SearchInput extends Input {
   }
 }
 
-/** A one-row live fuzzy search mounted inside a panel, never over the editor. */
-export class PanelSearch extends HStack {
+class SearchControls extends HStack {
+  constructor(private readonly count: () => string) { super([], { gap: 1 }); }
+  override render(width: number): string[] {
+    // Keep query space usable even in the smallest panel.
+    this.entries[1].basis = Math.min(this.count().length,
+      Math.max(3, width - 19));
+    return super.render(width);
+  }
+}
+
+/** Height reserved for the search field and its closed border. */
+export const PANEL_SEARCH_ROWS = 3;
+
+/** A framed live search inside a panel, preferring exact text over fuzzy fallback. */
+export class PanelSearch extends VStack {
   readonly input: SearchInput;
+  private readonly controls = new SearchControls(() => `${this.hits.length ? this.selected + 1 : 0}/${this.hits.length}`);
   private index?: SearchHit[];
   private hits: SearchHit[] = [];
   private selected = 0;
@@ -108,7 +124,7 @@ export class PanelSearch extends HStack {
     private readonly match: (hit: SearchHit | undefined, query: string) => void,
     private readonly close: () => void,
   ) {
-    super([], { gap: 1 });
+    super();
     this.input = new SearchInput(() => this.refresh(true), () => this.step(-1));
     this.input.onEscape = close;
     this.input.onSubmit = () => this.step(1);
@@ -124,14 +140,24 @@ export class PanelSearch extends HStack {
       }
       return { handled: true };
     });
-    this.addChild(this.input, { basis: 0, grow: 1, minSize: 10 });
-    this.addChild({
+    this.controls.addChild(this.input, { basis: 0, grow: 1, minSize: 10 });
+    this.controls.addChild({
       render: width => new Text(this.theme().fg(this.hits.length ? "accent" : "dim",
         truncateToWidth(`${this.hits.length ? this.selected + 1 : 0}/${this.hits.length}`, width, "…")), 0, 0).render(width),
       invalidate() {},
     }, { basis: 7, shrink: 0 });
-    this.addChild(button("[↓]", () => { this.step(1); this.focus(); }), { basis: 3, shrink: 0 });
-    this.addChild(button("[×]", close), { basis: 3, shrink: 0 });
+    this.controls.addChild(button("[↓]", () => { this.step(1); this.focus(); }), { basis: 3, shrink: 0 });
+    this.controls.addChild(button("[×]", close), { basis: 3, shrink: 0 });
+    const border = (render: (width: number) => string): Component => ({
+      render: width => [this.theme().fg("border", render(width))], invalidate() {},
+    });
+    this.addChild(border(width => "┌" + "─".repeat(Math.max(0, width - 2)) + "┐"), { basis: 1, shrink: 0 });
+    this.addChild(new HStack([
+      { component: border(() => "│"), basis: 1, shrink: 0 },
+      { component: this.controls, basis: 0, grow: 1, minSize: 1 },
+      { component: border(() => "│"), basis: 1, shrink: 0 },
+    ]), { basis: 1, shrink: 0 });
+    this.addChild(border(width => "└" + "─".repeat(Math.max(0, width - 2)) + "┘"), { basis: 1, shrink: 0 });
   }
 
   /** Focus the existing native Input without opening another interface. */
@@ -153,12 +179,19 @@ export class PanelSearch extends HStack {
     const old = this.hits[this.selected];
     if (this.dirty) this.index = undefined;
     this.dirty = false;
-    this.hits = query.trim() ? fuzzyFilter(this.index ??= candidates(this.savedEntries()), query, hit => hit.text) : [];
+    const needle = query.trim().toLowerCase();
+    this.hits = [];
+    if (needle) {
+      const index = this.index ??= candidates(this.savedEntries());
+      const exact = index.filter(hit => hit.text.toLowerCase().includes(needle));
+      this.hits = exact.length ? exact.map(hit => ({ ...hit, exact: true })) : fuzzyFilter(index, query, hit => hit.text);
+    }
     const retained = !queryChanged && old ? this.hits.findIndex(hit => hit.entry.source === old.entry.source &&
       hit.entry.label === old.entry.label && hit.line === old.line && hit.text === old.text) : -1;
     this.selected = Math.max(0, retained);
     this.query = query;
-    if (queryChanged || retained < 0 || old?.entry.text !== this.hits[this.selected]?.entry.text) {
+    if (queryChanged || retained < 0 || old?.entry.text !== this.hits[this.selected]?.entry.text ||
+      old?.exact !== this.hits[this.selected]?.exact) {
       this.match(this.hits[this.selected], query);
     }
     this.tui.requestRender();
@@ -178,9 +211,6 @@ export class PanelSearch extends HStack {
       this.match(this.hits[this.selected], this.query);
     }
     this.width = width;
-    // A short counter leaves usable query space even in a 24-column panel.
-    this.entries[1].basis = Math.min(`${this.hits.length ? this.selected + 1 : 0}/${this.hits.length}`.length,
-      Math.max(3, width - 19));
     return super.render(width);
   }
 }

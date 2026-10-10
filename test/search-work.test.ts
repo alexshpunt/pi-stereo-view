@@ -1,10 +1,40 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { Text, type Component, type TUI } from "@earendil-works/pi-tui";
+import { stripTerminalSequences, Text, type Component, type TUI } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { PanelSearch, type SearchHit } from "../src/search.js";
 
 const theme = () => ({ fg: (_color: string, value: string) => value }) as Theme;
 const tui = { requestRender() {}, setFocus() {} } as unknown as TUI;
+
+test("prefers literal case-insensitive phrases across the panel and uses fuzzy only without them", () => {
+  const entries = ["r-e-a-d-y", "already READY", "ready now", "red sky"].map(text => ({
+    source: new Text("", 0, 0), label: text, text,
+  }));
+  let selected: SearchHit | undefined;
+  const bar = new PanelSearch(() => entries, tui, theme, hit => { selected = hit; }, () => {});
+  bar.input.handleInput("ReAdY");
+  expect(bar.render(45).join("\n")).toContain("1/2");
+  expect(selected?.text).toBe("ready now");
+  bar.input.handleInput("\r");
+  expect(selected?.text).toBe("already READY");
+  bar.input.handleInput("\r");
+  expect(selected?.text, "Fuzzy-only lines must not join exact results").toBe("ready now");
+  bar.input.handleInput("\x15");
+  bar.input.handleInput("rdy nw");
+  expect(selected?.text).toBe("ready now");
+  bar.input.handleInput("\x15");
+  bar.input.handleInput("ready now");
+  expect(bar.render(45).join("\n")).toContain("1/1");
+});
+
+test("frames the live field and buttons without wrapping or losing usable input width", () => {
+  const bar = new PanelSearch(() => [], tui, theme, () => {}, () => {});
+  const rows = bar.render(24);
+  expect(rows).toHaveLength(3);
+  expect(rows[0]).toBe("┌" + "─".repeat(22) + "┐");
+  expect(stripTerminalSequences(rows[1])).toMatch(/^│.*Search:.*\[↓\].*\[×\].*│$/);
+  expect(rows[2]).toBe("└" + "─".repeat(22) + "┘");
+});
 
 test("indexes an open nonempty search once, not on ordinary frames or query edits", () => {
   let reads = 0;
@@ -79,7 +109,7 @@ test("counts and visits every match beyond the old popup limit without wrapping 
   for (let index = 0; index < 249; index++) bar.input.handleInput("\r");
   expect(selected?.entry.label).toBe("0");
   expect(bar.render(45).join("\n")).toContain("250/250");
-  expect(bar.render(24)).toHaveLength(1);
+  expect(bar.render(24)).toHaveLength(3);
   expect(bar.render(24).join("\n")).toContain("[↓]");
   expect(bar.render(24).join("\n")).toContain("[×]");
   bar.input.handleInput("\r");

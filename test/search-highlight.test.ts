@@ -11,6 +11,28 @@ const colors = (highlighted: string[]): Theme => ({
 }) as unknown as Theme;
 const plain = (rows: string[]): string[] => rows.map(stripTerminalSequences);
 
+test("highlights contiguous exact text rather than earlier scattered letters", () => {
+  const rows = ["s e a r c h then SEARCH INPUT"];
+  const highlighted: string[] = [];
+  const exactHit = { ...hit(rows[0]), exact: true };
+  const after = highlightSearchRows(rows, exactHit, "search input", colors(highlighted));
+  expect(highlighted.join("")).toBe("SEARCH INPUT");
+  expect(after[0].startsWith("s e a r c h then ")).toBe(true);
+  expect(plain(after)).toEqual(rows);
+});
+test("highlights every literal occurrence in the selected line, including punctuation", () => {
+  const rows = ["a/b and A/B"];
+  const highlighted: string[] = [];
+  highlightSearchRows(rows, { ...hit(rows[0]), exact: true }, "/", colors(highlighted));
+  expect(highlighted.join("")).toBe("//");
+});
+
+test("keeps exact highlight offsets after a case fold expands an earlier character", () => {
+  const rows = ["İ then SEARCH"];
+  const highlighted: string[] = [];
+  highlightSearchRows(rows, { ...hit(rows[0]), exact: true }, "search", colors(highlighted));
+  expect(highlighted.join("")).toBe("SEARCH");
+});
 const checkText = (before: string[], after: string[]): void => {
   expect(plain(after)).toEqual(plain(before));
   expect(after.map(visibleWidth)).toEqual(before.map(visibleWidth));

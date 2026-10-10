@@ -84,6 +84,11 @@ export default function searchControls(pi: ExtensionAPI): void {
       // Releasing a native selection copies it once; do not request a second copy.
       tui.resetTextSelection();
     } finally { tui.copyTextToClipboard = copy; }
+    await input("\x15");
+    await input("DEPLOYMENT RUNTIME");
+    frames.exact = await capture();
+    await input("\x15");
+    await input("dplyrntm");
     await input("\x06");
     frames.refocused = await capture();
     await input("\r");

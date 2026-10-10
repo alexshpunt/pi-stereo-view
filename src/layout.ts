@@ -7,7 +7,7 @@ import {
 import { NativeDocument, type Pane } from "./native.js";
 import type { Preferences } from "./preferences.js";
 import type { TranscriptTimestamps } from "./timestamps.js";
-import { PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.js";
+import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.js";
 
 type NativeTui = TUI & {
   layoutRoot?: Container;
@@ -205,7 +205,7 @@ export class TranscriptLayout {
         if (this.search === search) search.bar.reposition();
       });
       this.automaticHeight = Math.max(MIN_ROWS, Math.floor(historyHeight / 2));
-      const searchRows = this.search ? 1 : 0;
+      const searchRows = this.search ? PANEL_SEARCH_ROWS : 0;
       const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= MIN_ROWS + searchRows :
         this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= MIN_ROWS + searchRows :
           width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1 + searchRows;
@@ -222,9 +222,9 @@ export class TranscriptLayout {
         this.chat?.setScrollbar(scroll.scrollbar);
         columns.sizeConversation(chatPane, this.preferences.chatWidth ?? this.defaultWidth(width));
         // Keep short Conversation intact; shrink Activity first when history fills up.
-        const chatSearchRow = this.search?.pane === "chat" ? 1 : 0;
+        const chatSearchRow = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
         const chatMinimum = MIN_ROWS + chatSearchRow;
-        const activityMinimum = MIN_ROWS + (this.search?.pane === "activity" ? 1 : 0);
+        const activityMinimum = MIN_ROWS + (this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0);
         rows.limitConversation(chatPane, Math.max(chatMinimum,
           Math.min((this.preferences.chatHeight ?? this.automaticHeight) + chatSearchRow,
             historyHeight - activityMinimum - 1)), chatMinimum, activityMinimum);

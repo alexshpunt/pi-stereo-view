@@ -47,7 +47,7 @@ export default function searchResizeControls(pi: ExtensionAPI): void {
       }
       await capture();
       frames.zoom = await capture();
-      process.stdout.rows = 12;
+      process.stdout.rows = 14;
       process.stdout.emit("resize");
       await capture();
       frames.shortZoom = await capture();
