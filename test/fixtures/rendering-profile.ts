@@ -8,7 +8,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, type Component, type TUI } from "@earendil-works/pi-tui";
 
 type Host = TUI & { layoutRoot?: Container; getScreenLines(): string[]; handleTerminalInput(data: string): void };
-interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; paneRows: number; panePreviewCharacters: number; previewScrollRows: number; bytes: number; nativeMs: number; compactMs: number; documentMs: number }
+interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; paneRows: number; panePreviewCharacters: number; previewScrollRows: number; visibleScrollbars: number; bytes: number; nativeMs: number; compactMs: number; documentMs: number }
 
 /** Measure real native frame emission and capture V8 profiles without changing Pi source. */
 export default function renderingProfile(pi: ExtensionAPI): void {
@@ -104,6 +104,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       if (data.includes("\x1b[?2026l")) frame?.();
     };
     const inspector = new Session();
+    let profileViews: ScrollView[] = [];
     const measure = async (name: string, action: () => void): Promise<void> => {
       paneRows = 0;
       panePreviewCharacters = 0;
@@ -115,7 +116,8 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       const usage = process.cpuUsage(cpu);
       samples.push({ action: name, emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000,
         documents: documents - before.documents, timestampIndexes: timestampIndexes - before.timestampIndexes,
-        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, paneRows, panePreviewCharacters, previewScrollRows, bytes: bytes - before.bytes,
+        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, paneRows, panePreviewCharacters, previewScrollRows,
+        visibleScrollbars: profileViews.filter(view => view.isScrollbarVisible).length, bytes: bytes - before.bytes,
         nativeMs: nativeMs - before.nativeMs, compactMs: compactMs - before.compactMs, documentMs: documentMs - before.documentMs });
     };
     const phases: Record<string, string[]> = {};
@@ -161,6 +163,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         restoreCounters.push(() => { index.prepare = prepare; });
       }
       const allViews = mounted.filter((component): component is ScrollView => component instanceof ScrollView);
+      profileViews = allViews;
       const combined = allViews.find(view => Reflect.get(view.children[0], "pane") === "combined");
       const nativeRoot = (combined ? Reflect.get(combined.children[0], "source") : allViews[0]?.children[0]) as Container;
       const messages = (nativeRoot?.children[2] as Container)?.children;
@@ -262,6 +265,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
           frameP95: percentile(group.map(sample => sample.emittedFrameMs), 0.95), cpuP50: percentile(group.map(sample => sample.cpuMs), 0.5),
           cpuP95: percentile(group.map(sample => sample.cpuMs), 0.95), documents: group.map(sample => sample.documents),
           timestampIndexes: group.map(sample => sample.timestampIndexes), sourceInvalidations: group.map(sample => sample.sourceInvalidations), paneRows: group.map(sample => sample.paneRows), panePreviewCharacters: group.map(sample => sample.panePreviewCharacters), previewScrollRows: group.map(sample => sample.previewScrollRows),
+          visibleScrollbars: group.map(sample => sample.visibleScrollbars),
           nativeP50: percentile(group.map(sample => sample.nativeMs), 0.5), compactP50: percentile(group.map(sample => sample.compactMs), 0.5),
           documentP50: percentile(group.map(sample => sample.documentMs), 0.5) }];
       }));
