@@ -187,7 +187,7 @@ export class CompactMessage extends Container {
   private leadingRows = 0;
   private prepared?: { width: number; content: string[]; lines: string[] };
   private readonly nativeCache: NativeRenderCache;
-  private formatted?: { width: number; time: string; gutter: number; theme: Theme; content: string[]; top: number; lines: string[] };
+  private formatted?: { width: number; time: string; gutter: number; theme: Theme; version: number; top: number; lines: string[] };
 
   constructor(private readonly component: Component, private readonly label: () => string,
     private readonly theme: () => Theme, private readonly gutter: () => number,
@@ -224,7 +224,7 @@ export class CompactMessage extends Container {
     this.contentHeight = content.length;
     const cached = this.formatted;
     if (cached?.width === width && cached.time === time && cached.gutter === gutter && cached.theme === theme &&
-      cached.content.length === content.length && content.every((line, index) => line === cached.content[index])) {
+      cached.version === this.nativeCache.version) {
       this.top = cached.top;
       return cached.lines;
     }
@@ -250,7 +250,7 @@ export class CompactMessage extends Container {
         " ".repeat(Math.max(1, width - gutter - time.length - visibleWidth(lines[0]))) +
         theme.fg("dim", time);
     }
-    this.formatted = { width, time, gutter, theme, content: content.slice(), top: this.top, lines };
+    this.formatted = { width, time, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
     return lines;
   }
 
