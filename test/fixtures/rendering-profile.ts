@@ -127,20 +127,18 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         const render = pane.render;
         const view = pane.children[1] as ScrollView;
         const scrollRender = view.render;
-        let previewing = false;
+        // Count all pane ScrollView.render calls, including native VStack measurement.
+        // Native painting lays out its child directly and must not need this full copy.
         view.render = width => {
           const lines = scrollRender.call(view, width);
-          if (previewing) previewScrollRows += lines.length;
+          previewScrollRows += lines.length;
           return lines;
         };
         pane.render = width => {
-          previewing = true;
-          try {
-            const lines = render.call(pane, width);
-            paneRows = Math.max(paneRows, lines.length);
-            panePreviewCharacters += lines.reduce((total, line) => total + line.length, 0);
-            return lines;
-          } finally { previewing = false; }
+          const lines = render.call(pane, width);
+          paneRows = Math.max(paneRows, lines.length);
+          panePreviewCharacters += lines.reduce((total, line) => total + line.length, 0);
+          return lines;
         };
         restoreCounters.push(() => { pane.render = render; view.render = scrollRender; });
       }
