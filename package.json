@@ -15,6 +15,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "profile": "vitest run --config vitest.profile.config.ts",
     "check": "npm run typecheck && npm test"
   },
   "peerDependencies": {
