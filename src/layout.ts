@@ -2,7 +2,7 @@ import { setImmediate } from "node:timers/promises";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, VStack,
-  type Color, type Component, type ScrollViewOptions, type TUI, type TuiMouseEvent,
+  type Color, type Component, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
 import type { Preferences } from "./preferences.js";
@@ -41,6 +41,16 @@ class TranscriptRows extends VStack {
   }
 }
 
+class TranscriptRoot extends VStack {
+  constructor(children: StackChild[], private readonly source: Container, private readonly nativeScroll: ScrollView) { super(children); }
+
+  override invalidate(): void {
+    // The same history is projected into several visible and hidden layout entries.
+    // After guarded fallback the native ScrollView already owns that invalidation.
+    if (this.nativeScroll.children[0] !== this.source) this.source.invalidate();
+    super.invalidate();
+  }
+}
 /** Own only guarded fullscreen history controls; never replace the input dock. */
 export class TranscriptLayout {
   private host?: NativeTui;
@@ -120,11 +130,12 @@ export class TranscriptLayout {
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("activity"));
+      () => this.activate("activity"), false);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("chat"));
+      () => this.activate("chat"), false);
     this.documents = { activity: activityDocument, chat: chatDocument };
-    const combinedDocument = new NativeDocument(document, "combined", this.timestamps, this.theme, timestampGutter, showTimestamps);
+    const combinedDocument = new NativeDocument(document, "combined", this.timestamps, this.theme, timestampGutter, showTimestamps,
+      undefined, false);
     // Keep the native combined ScrollView, including its selection and scroll state.
     owner.child = combinedDocument;
     owner.children[0] = combinedDocument;
@@ -290,7 +301,7 @@ export class TranscriptLayout {
       }
     };
     this.rebuild();
-    const mounted = new VStack([
+    const mounted = new TranscriptRoot([
       { component: toolbar, basis: 1, shrink: 0, visible: () => {
         // Root visibility is evaluated once at the start of each native layout pass.
         this.timestamps.beginFrame();
@@ -309,7 +320,7 @@ export class TranscriptLayout {
         visible: viewport => shown(viewport) && this.preferences.zoom === "chat" },
       { component: transcript, basis: 0, grow: 1, minSize: 1, visible: viewport => !shown(viewport) },
       { component: dock, basis: "auto", shrink: 0, minSize: 1 },
-    ]);
+    ], document, scroll);
     this.mounted = mounted;
     host.setLayoutRoot(mounted);
     host.requestRender();

@@ -41,6 +41,7 @@ function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
  * Project the live native component tree, not messages or renderer strings.
  * Assistant shells keep the native render method and original content components.
  * Their separate children and mouse layout leave the combined tree untouched.
+ * Set invalidatesSource to false only when a shared root owns source invalidation.
  */
 export class NativeDocument extends Container {
   private readonly views = new WeakMap<NativeAssistant, Container>();
@@ -62,6 +63,7 @@ export class NativeDocument extends Container {
     private readonly timestampGutter: () => number,
     private readonly showTimestamps: () => boolean,
     private readonly interact: () => void = () => {},
+    private readonly invalidatesSource = true,
   ) {
     super();
   }
@@ -267,6 +269,6 @@ export class NativeDocument extends Container {
     this.frameWidth = undefined;
     this.checked = false;
     // Theme changes must rebuild native parents, including collapsed thinking text.
-    this.source.invalidate();
+    if (this.invalidatesSource) this.source.invalidate();
   }
 }

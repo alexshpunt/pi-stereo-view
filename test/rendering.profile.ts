@@ -80,6 +80,10 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     expect(measurements.syntheticOnly).toBe(true);
     expect(measurements.runtime.savedToolBlocks, "The synthetic history must not be compacted before measurement").toBe(size);
     expect(measurements.samples).not.toHaveLength(0);
+    expect(measurements.samples.find((sample: { action: string }) => sample.action === "cold").sourceInvalidations,
+      "A root invalidation must refresh the shared native history exactly once").toBe(1);
+    expect(measurements.markers.some((line: string) => line.includes("SYNTHETIC TOOL UPDATE")),
+      "The updated native tool must be visible in the emitted final frame").toBe(true);
     expect(measurements.draft).toBe("SYNTHETIC PROFILE DRAFT ");
     console.log(JSON.stringify({ mode, summary: measurements.summary }));
   } finally {
