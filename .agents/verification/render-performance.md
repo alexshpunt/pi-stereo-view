@@ -172,6 +172,18 @@ Warm Rows is faster in this control, and Columns typing median remains improved.
 
 The user chose to continue to full parity in ask `188fbcf2-89a3-4434-9df3-cc4087b31138` / `performance_next_stage`, with the explicit note: “мержим в девелоп, чтобы я мог этим пользоваться, затем продолжаешь работу”. This authorizes merging the verified checkpoint into develop now and continuing the residual work; it is not parity acceptance or permission to close LPT-718. Search acceptance stays paused. The performance branch and worktree remain active after this intermediate merge.
 
+## Merged checkpoint and refreshed live verification
+
+As explicitly requested, checkpoint `c18a154` was fast-forwarded into develop and pushed. The performance branch and worktree remain active for the unfinished parity stage. Published and installed `@alexshp/pi-agent-transcript@0.0.0-dev.1791636688` from that merged commit; installed index/layout/native/timestamps/render-cache match source. The clean direct IDE v0.8.0 source `1922570b9882c023f284b85ac45d3bad4be46550` was fetched and verified against origin/develop before reload.
+
+Mandatory reload completed. Two short native Bash calls emitted MERGED CACHE CHECK ONE and TWO, and assistant commentary contained two paragraphs. Exact human viewport capture `w3SR:p3`, 274x108 cells, live bottom, revision95 shows inline clocks, one blank row between the two native tool blocks, preserved assistant paragraph spacing and the full-width input dock/footer below intact columns. No stray escape codes, overlapping panes or extension clipping were seen. Current user-selected settings are split/columns, width67, height15, sideleft, zoomnull, clocks on and native auto scrollbars; none were reset. Runtime metadata is recorded in `tmp/test-runs/merged-checkpoint-runtime.json`. No personal history benchmark or agent-controlled Herdr input was used; the screenshot itself is not stored in Git.
+
+This verifies the merged behavioral checkpoint, not stock performance parity. LPT-718 remains open, and search acceptance remains paused while residual optimization continues.
+
+## Cache lookup cost experiment
+
+The current warm CPU profiles retain substantial self time in `NativeRenderCache.matches`. This experiment replaces repeated Reflect.get calls in that hot loop with ordinary property access. It keeps the same tracked keys, getter receivers, shell/tree checks and background validation; no missing-field filtering or invalidation checks are removed. All20 related cache/compact/native-work cases, typecheck and diff checks pass (`shell:8fe14bec5f62`). This is not an established speed improvement yet. Matched large native-auto profiling is next; the installed merged checkpoint remains unchanged while this candidate is measured.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
