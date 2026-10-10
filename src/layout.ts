@@ -81,6 +81,7 @@ export class TranscriptLayout {
   private activity?: ScrollView;
   private chat?: ScrollView;
   private documents?: Record<Pane, NativeDocument>;
+  private disposeDocuments?: () => void;
   private activePane: Pane = "chat";
   private readonly searchShortcut = new PanelSearchShortcut();
   private drag?: { position: number; size: number };
@@ -158,6 +159,11 @@ export class TranscriptLayout {
     this.documents = { activity: activityDocument, chat: chatDocument };
     const combinedDocument = new NativeDocument(document, "combined", this.timestamps, this.theme, timestampGutter, showTimestamps,
       undefined, false);
+    this.disposeDocuments = () => {
+      activityDocument.dispose();
+      chatDocument.dispose();
+      combinedDocument.dispose();
+    };
     // Keep the native combined ScrollView, including its selection and scroll state.
     owner.child = combinedDocument;
     owner.children[0] = combinedDocument;
@@ -199,6 +205,7 @@ export class TranscriptLayout {
         this.failed = true;
         this.searchShortcut.dispose();
         this.restoreDocument();
+        this.disposeDocuments?.();
         queueMicrotask(() => this.warn("Transcript split disabled: " + (error as Error).message));
         return false;
       }
@@ -475,6 +482,8 @@ export class TranscriptLayout {
   dispose(): void {
     this.searchShortcut.dispose();
     this.restoreDocument();
+    this.disposeDocuments?.();
+    this.disposeDocuments = undefined;
     this.restoreDocument = () => {};
     const host = this.host;
     this.activity?.setScrollbar("hidden");

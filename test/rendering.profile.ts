@@ -64,7 +64,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       testName: mode, artifactsDir: output, cwd,
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: ide, PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
-        PROFILE_MODE: mode, PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines) },
+        PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines) },
       rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
       extensions: [...(mode === "stock" ? [] : [path.resolve("src/index.ts")]), path.resolve("test/fixtures/rendering-profile.ts")],
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],
@@ -78,6 +78,8 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     expect(git("rev-parse", "HEAD")).toBe(sourceCommit);
     expect(git("diff", "HEAD"), "IDE source changed during the workload; results are not comparable").toBe(sourceDiff);
     expect(measurements.syntheticOnly).toBe(true);
+    expect(measurements.initialDisplay.emittedFrameMs).toBeGreaterThan(0);
+    expect(measurements.initialDisplay.cpuMs).toBeGreaterThan(0);
     expect(measurements.runtime.savedToolBlocks, "The synthetic history must not be compacted before measurement").toBe(size);
     expect(measurements.samples).not.toHaveLength(0);
     expect(measurements.samples.find((sample: { action: string }) => sample.action === "cold").sourceInvalidations,

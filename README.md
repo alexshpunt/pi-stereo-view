@@ -85,6 +85,9 @@ Clocks work in split, expanded, and combined fullscreen history. They do not dec
 
 Use `≡` or `/transcript settings` to hide or show clocks. Hiding also removes the clock gutter or extra clock rows. The setting survives restart; tool-start times are still collected and return unchanged when clocks are shown again.
 
+## Rendering contract
+
+Split history reuses unchanged native blocks between frames. Custom renderers must invalidate changed components before requesting a render, as required by Pi's component API. Native text setters, history rebuilds, streaming, tool updates, expansion, width and theme changes refresh the affected output. Image placement blocks are never retained in this cache. Detaching the layout removes its invalidation observers.
 ## Development
 
 ```sh

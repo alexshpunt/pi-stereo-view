@@ -46,6 +46,7 @@ function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
 export class NativeDocument extends Container {
   private readonly views = new WeakMap<NativeAssistant, Container>();
   private readonly stamped = new WeakMap<Component, Component>();
+  private readonly compactBlocks = new Map<Component, CompactMessage>();
   private readonly positions = new Map<Component, { row: number; lines: string[]; excerptRow?: number }>();
   private excerpt?: SearchHit;
   private searchAnchor?: SearchHit;
@@ -72,6 +73,13 @@ export class NativeDocument extends Container {
   beginFrame(): void {
     this.frameActive = true;
     this.frameWidth = undefined;
+    if (this.compactBlocks.size) {
+      const present = new Set((this.source.children[2] as Container | undefined)?.children ?? []);
+      for (const [component, block] of this.compactBlocks) if (!present.has(component)) {
+        block.dispose();
+        this.compactBlocks.delete(component);
+      }
+    }
     this.checked = false;
   }
   check(): void {
@@ -177,6 +185,13 @@ export class NativeDocument extends Container {
     return undefined;
   }
 
+  /** Stop native observers when the layout is detached or falls back. */
+  dispose(): void {
+    for (const block of this.compactBlocks.values()) block.dispose();
+    this.compactBlocks.clear();
+    this.frameWidth = undefined;
+    this.frameLines = undefined;
+  }
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
     if (event.type === "wheel" || (event.type === "press" && event.button === "left")) this.interact();
     return super.handleMouse(event);
@@ -212,7 +227,10 @@ export class NativeDocument extends Container {
             Object.assign(view, { children: [content], contentContainer: content });
             this.views.set(native, view);
           }
-          (view.children[0] as Container).children = parts;
+          const content = view.children[0] as Container;
+          if (content.children.length !== parts.length || parts.some((part, index) => part !== content.children[index])) {
+            content.children = parts;
+          }
           routed = view;
         }
       } else {
@@ -232,6 +250,7 @@ export class NativeDocument extends Container {
             this.stamped.set(routed, stamped);
           }
           if (stamped instanceof CompactMessage) {
+            this.compactBlocks.set(component, stamped);
             visibleBlock = stamped.prepare(width, visibleBlock) || visibleBlock;
             result.push(stamped);
           } else result.push(...spacing, stamped);

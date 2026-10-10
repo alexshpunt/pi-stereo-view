@@ -24,6 +24,8 @@ export default function renderingProfile(pi: ExtensionAPI): void {
   let documentMs = 0;
   let bytes = 0;
   let frame: (() => void) | undefined;
+  let initialDisplay: { emittedFrameMs: number; cpuMs: number } | undefined;
+  let restoreStartupWrite: (() => void) | undefined;
   const count = Math.max(3, Number(process.env.PROFILE_SAMPLES ?? 12));
   const capture = async (): Promise<string[]> => {
     tui.requestRender(true);
@@ -53,8 +55,30 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       finish = done;
       return new Text("", 0, 0);
     }, { overlay: true, overlayOptions: { visible: () => false, nonCapturing: true }, onHandle: () => finish() });
+    // Initial history is constructed after session_start handlers finish.
+    // Include that construction and remaining native initialization, not module loading.
+    const start = performance.now();
+    const cpu = process.cpuUsage();
+    const write = tui.terminal.write;
+    let output = "";
+    restoreStartupWrite = () => { tui.terminal.write = write; };
+    tui.terminal.write = data => {
+      write.call(tui.terminal, data);
+      output += data;
+      if (!data.includes("\x1b[?2026l")) return;
+      if (stripTerminalSequences(output).includes("SYNTHETIC TOOL " + (Number(process.env.PROFILE_HISTORY) - 1) + " line")) {
+        const usage = process.cpuUsage(cpu);
+        initialDisplay = { emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000 };
+        restoreStartupWrite?.();
+        restoreStartupWrite = undefined;
+      }
+      output = "";
+    };
   });
   pi.on("agent_before_settle", async (_event, ctx) => {
+    restoreStartupWrite?.();
+    restoreStartupWrite = undefined;
+    if (!initialDisplay) throw new Error("The restored synthetic history was not observed before setup");
     const write = tui.terminal.write;
     const restoreCounters: (() => void)[] = [];
     tui.terminal.write = data => {
@@ -215,11 +239,12 @@ export default function renderingProfile(pi: ExtensionAPI): void {
           documentP50: percentile(group.map(sample => sample.documentMs), 0.5) }];
       }));
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
-        samples, summary, frames: phases, runtime: { node: process.version, pid: process.pid,
+        samples, summary, initialDisplay, frames: phases, runtime: { node: process.version, pid: process.pid,
           mode: process.env.PROFILE_MODE, nativeComponents: components.length, samples: count,
           savedToolBlocks: messages.filter(component => component.constructor.name === "ToolExecutionComponent").length },
         draft: ctx.ui.getEditorText(), syntheticOnly: true,
         frameDefinition: "Action to synchronized terminal-frame emission, not compositor presentation; process CPU delta includes scheduling background work.",
+        initialDisplayDefinition: "End of profiling session_start handler to first emitted frame containing restored history, including native history construction and remaining initialization; excludes module loading and precedes the scripted setup turn.",
         toolTarget: "Latest saved native tool, visible in Activity while following the end.",
         markers: phases.finished.map(stripTerminalSequences).filter(line => line.includes("SYNTHETIC")),
       }, null, 2));

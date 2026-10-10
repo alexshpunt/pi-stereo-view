@@ -1,0 +1,1068 @@
+{
+  "samples": [
+    {
+      "action": "cold",
+      "emittedFrameMs": 1112.7143000000005,
+      "cpuMs": 1340.06,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 383.50506400000086,
+      "cpuMs": 501.649,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 358.50562999999966,
+      "cpuMs": 443.7,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 307.2832190000008,
+      "cpuMs": 366.658,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 321.391427999999,
+      "cpuMs": 414.174,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 402.03062800000043,
+      "cpuMs": 477.014,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 436.004825,
+      "cpuMs": 506.454,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 452.8402279999991,
+      "cpuMs": 526.283,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 468.3637610000005,
+      "cpuMs": 535.428,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 468.62703500000134,
+      "cpuMs": 544.456,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 500.22504500000105,
+      "cpuMs": 567.285,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 405.2272430000012,
+      "cpuMs": 473.384,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 444.1307730000008,
+      "cpuMs": 520.319,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 529.5466410000008,
+      "cpuMs": 838.751,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 451.5846679999995,
+      "cpuMs": 528.43,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 382.43360100000064,
+      "cpuMs": 446.569,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 392.77360899999985,
+      "cpuMs": 457.042,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9505
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 367.50796400000036,
+      "cpuMs": 428.707,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 376.29154500000004,
+      "cpuMs": 434.056,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 385.38101599999936,
+      "cpuMs": 450.679,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 365.0096760000015,
+      "cpuMs": 422.695,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 342.00228699999934,
+      "cpuMs": 405.361,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 353.5978780000005,
+      "cpuMs": 415.606,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 366.8564060000026,
+      "cpuMs": 422.889,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 339.2744590000002,
+      "cpuMs": 399.02,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 368.0243129999981,
+      "cpuMs": 426.037,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 328.59161099999983,
+      "cpuMs": 387.39,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 351.13759500000015,
+      "cpuMs": 411.329,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 459.6456299999991,
+      "cpuMs": 530.765,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 382.40396500000134,
+      "cpuMs": 449.119,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 392.1650730000001,
+      "cpuMs": 464.282,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 337.51270099999965,
+      "cpuMs": 399.824,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 393.04157100000157,
+      "cpuMs": 460.835,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 179
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 462.1769420000019,
+      "cpuMs": 726.345,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5608
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 378.8814170000005,
+      "cpuMs": 446.257,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5627
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 369.43833900000027,
+      "cpuMs": 444.767,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5608
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 398.57262099999934,
+      "cpuMs": 462.284,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5627
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 368.46831699999893,
+      "cpuMs": 432.444,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5608
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 388.97773700000107,
+      "cpuMs": 459.188,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5627
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 431.70330099999774,
+      "cpuMs": 505.738,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5608
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 379.3218249999991,
+      "cpuMs": 453.9,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5627
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 422.4079350000029,
+      "cpuMs": 496.577,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5608
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 437.60446199999933,
+      "cpuMs": 511.435,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5627
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 423.5766560000011,
+      "cpuMs": 492.815,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5608
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 367.33884399999806,
+      "cpuMs": 427.309,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5627
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 331.078591999998,
+      "cpuMs": 384.443,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5608
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 351.91745100000117,
+      "cpuMs": 416.22,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5627
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 363.2122130000025,
+      "cpuMs": 425.604,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5608
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 354.38410400000066,
+      "cpuMs": 393.237,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 5627
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 542.5579560000006,
+      "cpuMs": 673.303,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9342
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 587.7088309999999,
+      "cpuMs": 722.327,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9506
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 545.881824,
+      "cpuMs": 669.263,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9342
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 625.0241139999998,
+      "cpuMs": 948.831,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9506
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 563.8978769999994,
+      "cpuMs": 707.668,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9342
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 629.2752790000013,
+      "cpuMs": 773.393,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 9506
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 351.32278499999666,
+      "cpuMs": 421.803,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 6183
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 340.35876099999587,
+      "cpuMs": 402.106,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 350.1813899999979,
+      "cpuMs": 442.596,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 408.69092600000295,
+      "cpuMs": 491.408,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 349.18498199999885,
+      "cpuMs": 416.759,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 384.4879560000045,
+      "cpuMs": 450.852,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 431.51940900000045,
+      "cpuMs": 519.058,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 405.58317700000043,
+      "cpuMs": 477.939,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 349.4527799999996,
+      "cpuMs": 431.686,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 376.0601220000026,
+      "cpuMs": 444.03,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 364.86558800000057,
+      "cpuMs": 428.994,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 339.178270000004,
+      "cpuMs": 402.928,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 373.9792430000016,
+      "cpuMs": 627.809,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 431.24137899999914,
+      "cpuMs": 510.585,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 409.37818900000275,
+      "cpuMs": 507.183,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 374.7741690000039,
+      "cpuMs": 445.653,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 284
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 493.6386710000006,
+      "cpuMs": 595.432,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 6610
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 490.1002470000021,
+      "cpuMs": 598.899,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 396.6297909999994,
+      "cpuMs": 470.462,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 324.3297999999995,
+      "cpuMs": 400.177,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 301.625463999997,
+      "cpuMs": 354.836,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 351.9367409999977,
+      "cpuMs": 417.232,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 366.07717299999786,
+      "cpuMs": 443.412,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 355.39270899999974,
+      "cpuMs": 424.979,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 335.14977799999906,
+      "cpuMs": 398.835,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 349.85304599999654,
+      "cpuMs": 413.823,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 410.798569999999,
+      "cpuMs": 482.867,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 379.55758900000365,
+      "cpuMs": 460.068,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 390.42431999999826,
+      "cpuMs": 452.724,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 570.324400999998,
+      "cpuMs": 634.556,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 524.1219239999991,
+      "cpuMs": 594.348,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 567.2599289999998,
+      "cpuMs": 865.704,
+      "documents": 6,
+      "timestampIndexes": 6,
+      "bytes": 30
+    }
+  ],
+  "summary": {
+    "cold": {
+      "count": 1,
+      "frameP50": 1112.7143000000005,
+      "frameP95": 1112.7143000000005,
+      "cpuP50": 1340.06,
+      "cpuP95": 1340.06,
+      "documents": [
+        6
+      ],
+      "timestampIndexes": [
+        6
+      ]
+    },
+    "frame": {
+      "count": 16,
+      "frameP50": 405.2272430000012,
+      "frameP95": 529.5466410000008,
+      "cpuP50": 501.649,
+      "cpuP95": 838.751,
+      "documents": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "timestampIndexes": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "typing": {
+      "count": 16,
+      "frameP50": 366.8564060000026,
+      "frameP95": 459.6456299999991,
+      "cpuP50": 422.889,
+      "cpuP95": 530.765,
+      "documents": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "timestampIndexes": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "scroll": {
+      "count": 16,
+      "frameP50": 378.8814170000005,
+      "frameP95": 462.1769420000019,
+      "cpuP50": 446.257,
+      "cpuP95": 726.345,
+      "documents": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "timestampIndexes": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "resize": {
+      "count": 6,
+      "frameP50": 563.8978769999994,
+      "frameP95": 629.2752790000013,
+      "cpuP50": 707.668,
+      "cpuP95": 948.831,
+      "documents": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "timestampIndexes": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "stream": {
+      "count": 16,
+      "frameP50": 373.9792430000016,
+      "frameP95": 431.51940900000045,
+      "cpuP50": 444.03,
+      "cpuP95": 627.809,
+      "documents": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "timestampIndexes": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "tool": {
+      "count": 16,
+      "frameP50": 379.55758900000365,
+      "frameP95": 570.324400999998,
+      "cpuP50": 452.724,
+      "cpuP95": 865.704,
+      "documents": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "timestampIndexes": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ]
+    }
+  },
+  "frames": {
+    "initial": [
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ▣ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ▤ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ↔ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ≡ ]\u001b[0m\u001b]8;;\u0007                                                                                                 \u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;2;0;74;100m─────────────────────────────────────────\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[38;2;0;63;144m──────────────────────────────────────────────────────────────────────────────\u001b[0m\u001b]8;;\u0007\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;24;17m● Conversation                 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;24;17m[ ⌕ ]\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;24;17m[ ↗ ]\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[38;2;204;207;222m\u001b[48;2;16;23;29m Activity                                                           \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;23;29m[ ⌕ ]\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;23;29m[ ↗ ]\u001b[0m\u001b]8;;\u0007\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;2;0;74;100m─────────────────────────────────────────\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[38;2;0;63;144m──────────────────────────────────────────────────────────────────────────────\u001b[0m\u001b]8;;\u0007\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 55 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 A paragraph with \u001b[38;5;5minline code\u001b[39m,          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 56 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[1mbold text\u001b[22m and a \u001b]8;;https://example.invalid/\u001b\\\u001b[38;5;4m\u001b[4mlocal label\u001b[24m\u001b[39m\u001b]8;;\u001b\\.           \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 57 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 58 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[38;5;5m- \u001b[39mFirst item                           \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 59 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[38;5;5m- \u001b[39mSecond item                          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 60 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 61 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mSYNTHETIC USER 599\u001b[39m            \u001b[49m\u001b[0m\u001b]8;;\u0007 \u001b[39m\u001b[2m11:00:00\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 62 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mExplain the recorded          \u001b[49m         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 63 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m operation and preserve the    \u001b[49m         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 64 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m next paragraph.               \u001b[49m         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 65 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m                               \u001b[49m         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 66 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mAnother paragraph.            \u001b[49m\u001b]133;B\u0007\u001b]133;C\u0007         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 67 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 68 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 SYNTHETIC ASSISTANT 599       \u001b[0m\u001b]8;;\u0007 \u001b[39m\u001b[2m11:00:00\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 69 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 70 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 A paragraph with \u001b[38;5;5minline code\u001b[39m,          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 71 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[1mbold text\u001b[22m and a \u001b]8;;https://example.invalid/\u001b\\\u001b[38;5;4m\u001b[4mlocal label\u001b[24m\u001b[39m\u001b]8;;\u001b\\.           \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 72 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 73 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[38;5;5m- \u001b[39mFirst item                           \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 74 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[38;5;5m- \u001b[39mSecond item                          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 75 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 76 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mSYNTHETIC PROFILE SETUP       \u001b[49m\u001b]133;B\u0007\u001b]133;C\u0007\u001b[0m\u001b]8;;\u0007 \u001b[39m\u001b[2m11:36:53\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 77 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 78 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 SYNTHETIC PROFILE READY       \u001b[0m\u001b]8;;\u0007 \u001b[39m\u001b[2m11:36:53\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 79 predictable result data\u001b[22;39m                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[7m \u001b[0m                                                                                                                       \u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m~/.herdr/worktrees/pi-agent-transcript/perf-lpt-718-rendering/tmp/render-profile-2sWRN6 (perf/lpt-718-rendering)\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m\u001b[38;5;1m515.7%/128k\u001b[39m\u001b[22;39m\u001b[39m\u001b[2m                                                                                               scripted-model\u001b[22;39m\u001b[0m\u001b]8;;\u0007"
+    ],
+    "finished": [
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ▣ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ▤ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ↔ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ≡ ]\u001b[0m\u001b]8;;\u0007                                                                                                 \u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;2;0;74;100m─────────────────────────────────────────\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[38;2;0;63;144m──────────────────────────────────────────────────────────────────────────────\u001b[0m\u001b]8;;\u0007\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;24;17m● Conversation                 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;24;17m[ ⌕ ]\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;24;17m[ ↗ ]\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[38;2;204;207;222m\u001b[48;2;16;23;29m Activity                                                           \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;23;29m[ ⌕ ]\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m\u001b[48;2;16;23;29m[ ↗ ]\u001b[0m\u001b]8;;\u0007\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;2;0;74;100m─────────────────────────────────────────\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[38;2;0;63;144m──────────────────────────────────────────────────────────────────────────────\u001b[0m\u001b]8;;\u0007\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 55 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 A paragraph with \u001b[38;5;5minline code\u001b[39m,          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 56 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[1mbold text\u001b[22m and a \u001b]8;;https://example.invalid/\u001b\\\u001b[38;5;4m\u001b[4mlocal label\u001b[24m\u001b[39m\u001b]8;;\u001b\\.           \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 57 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 58 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[38;5;5m- \u001b[39mFirst item                           \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 59 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[38;5;5m- \u001b[39mSecond item                          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 60 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 61 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mSYNTHETIC USER 599\u001b[39m            \u001b[49m\u001b[0m\u001b]8;;\u0007 \u001b[39m\u001b[2m11:00:00\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 62 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mExplain the recorded          \u001b[49m         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 63 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m operation and preserve the    \u001b[49m         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 64 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m next paragraph.               \u001b[49m         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 65 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m                               \u001b[49m         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 66 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mAnother paragraph.            \u001b[49m\u001b]133;B\u0007\u001b]133;C\u0007         \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 67 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 68 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 SYNTHETIC ASSISTANT 599       \u001b[0m\u001b]8;;\u0007 \u001b[39m\u001b[2m11:00:00\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 69 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 70 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 A paragraph with \u001b[38;5;5minline code\u001b[39m,          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 71 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[1mbold text\u001b[22m and a \u001b]8;;https://example.invalid/\u001b\\\u001b[38;5;4m\u001b[4mlocal label\u001b[24m\u001b[39m\u001b]8;;\u001b\\.           \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 72 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 73 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[38;5;5m- \u001b[39mFirst item                           \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 74 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 \u001b[38;5;5m- \u001b[39mSecond item                          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 75 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 76 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mSYNTHETIC PROFILE SETUP       \u001b[49m\u001b]133;B\u0007\u001b]133;C\u0007\u001b[0m\u001b]8;;\u0007 \u001b[39m\u001b[2m11:36:53\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 77 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                        \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 78 predictable result data                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 SYNTHETIC PROFILE READY       \u001b[0m\u001b]8;;\u0007 \u001b[39m\u001b[2m11:36:53\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m║\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 79 predictable result data\u001b[22;39m                \u001b[49m          \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "SYNTHETIC PROFILE DRAFT \u001b[7m \u001b[0m                                                                                               \u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m~/.herdr/worktrees/pi-agent-transcript/perf-lpt-718-rendering/tmp/render-profile-2sWRN6 (perf/lpt-718-rendering)\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m\u001b[38;5;1m515.7%/128k\u001b[39m\u001b[22;39m\u001b[39m\u001b[2m                                                                                               scripted-model\u001b[22;39m\u001b[0m\u001b]8;;\u0007"
+    ]
+  },
+  "runtime": {
+    "node": "v24.20.0",
+    "pid": 546634,
+    "mode": "columns",
+    "nativeComponents": 6031,
+    "samples": 16,
+    "savedToolBlocks": 600
+  },
+  "draft": "SYNTHETIC PROFILE DRAFT ",
+  "syntheticOnly": true,
+  "frameDefinition": "Action to synchronized terminal-frame emission, not compositor presentation; process CPU delta includes scheduling background work.",
+  "markers": [
+    "                                        │║ SYNTHETIC TOOL 599 line 55 predictable result data                          │",
+    " A paragraph with inline code,          │║ SYNTHETIC TOOL 599 line 56 predictable result data                          │",
+    " bold text and a local label.           │║ SYNTHETIC TOOL 599 line 57 predictable result data                          │",
+    "                                        │║ SYNTHETIC TOOL 599 line 58 predictable result data                          │",
+    " - First item                           │║ SYNTHETIC TOOL 599 line 59 predictable result data                          │",
+    " - Second item                          │║ SYNTHETIC TOOL 599 line 60 predictable result data                          │",
+    "                                        │║ SYNTHETIC TOOL 599 line 61 predictable result data                          │",
+    " SYNTHETIC USER 599             11:00:00│║ SYNTHETIC TOOL 599 line 62 predictable result data                          │",
+    " Explain the recorded                   │║ SYNTHETIC TOOL 599 line 63 predictable result data                          │",
+    " operation and preserve the             │║ SYNTHETIC TOOL 599 line 64 predictable result data                          │",
+    " next paragraph.                        │║ SYNTHETIC TOOL 599 line 65 predictable result data                          │",
+    "                                        │║ SYNTHETIC TOOL 599 line 66 predictable result data                          │",
+    " Another paragraph.                     │║ SYNTHETIC TOOL 599 line 67 predictable result data                          │",
+    "                                        │║ SYNTHETIC TOOL 599 line 68 predictable result data                          │",
+    " SYNTHETIC ASSISTANT 599        11:00:00│║ SYNTHETIC TOOL 599 line 69 predictable result data                          │",
+    "                                        │║ SYNTHETIC TOOL 599 line 70 predictable result data                          │",
+    " A paragraph with inline code,          │║ SYNTHETIC TOOL 599 line 71 predictable result data                          │",
+    " bold text and a local label.           │║ SYNTHETIC TOOL 599 line 72 predictable result data                          │",
+    "                                        │║ SYNTHETIC TOOL 599 line 73 predictable result data                          │",
+    " - First item                           │║ SYNTHETIC TOOL 599 line 74 predictable result data                          │",
+    " - Second item                          │║ SYNTHETIC TOOL 599 line 75 predictable result data                          │",
+    "                                        │║ SYNTHETIC TOOL 599 line 76 predictable result data                          │",
+    " SYNTHETIC PROFILE SETUP        11:36:53│║ SYNTHETIC TOOL 599 line 77 predictable result data                          │",
+    "                                        ┃║ SYNTHETIC TOOL 599 line 78 predictable result data                          ┃",
+    " SYNTHETIC PROFILE READY        11:36:53┃║ SYNTHETIC TOOL 599 line 79 predictable result data                          ┃",
+    "SYNTHETIC PROFILE DRAFT                                                                                                 "
+  ]
+}

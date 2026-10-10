@@ -4,6 +4,7 @@ import {
   type Component, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 
+import { NativeRenderCache } from "./render-cache.js";
 type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
 type UserSlot = { kind: string; text?: string; time: unknown };
@@ -185,6 +186,7 @@ export class CompactMessage extends Container {
   private contentHeight = 0;
   private leadingRows = 0;
   private prepared?: { width: number; content: string[]; lines: string[] };
+  private readonly nativeCache: NativeRenderCache;
   private formatted?: { width: number; time: string; gutter: number; theme: Theme; content: string[]; top: number; lines: string[] };
 
   constructor(private readonly component: Component, private readonly label: () => string,
@@ -192,6 +194,7 @@ export class CompactMessage extends Container {
     private readonly show: () => boolean) {
     super();
     this.addChild(component);
+    this.nativeCache = new NativeRenderCache(component);
   }
 
   /** Prepare one visible block and its separator once per document render. */
@@ -217,7 +220,7 @@ export class CompactMessage extends Container {
     const theme = this.theme();
     const time = width > label.length + gutter + 1 ? label : "";
     this.contentWidth = Math.max(1, width - (time ? time.length + 1 + gutter : 0));
-    const content = this.component.render(this.contentWidth);
+    const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
     const cached = this.formatted;
     if (cached?.width === width && cached.time === time && cached.gutter === gutter && cached.theme === theme &&
@@ -258,6 +261,12 @@ export class CompactMessage extends Container {
     });
   }
 
+  /** Release native invalidation subscriptions without changing the source document. */
+  dispose(): void {
+    this.nativeCache.dispose();
+    this.prepared = undefined;
+    this.formatted = undefined;
+  }
   override invalidate(): void {
     this.prepared = undefined;
     this.formatted = undefined;

@@ -1,0 +1,1062 @@
+{
+  "samples": [
+    {
+      "action": "cold",
+      "emittedFrameMs": 1044.336459000001,
+      "cpuMs": 1240.961,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 108.40425099999993,
+      "cpuMs": 130.418,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 120.54986199999985,
+      "cpuMs": 130.624,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 92.7839810000005,
+      "cpuMs": 121.404,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 129.72250600000007,
+      "cpuMs": 143.607,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 138.79010199999902,
+      "cpuMs": 154.328,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 163.30311599999914,
+      "cpuMs": 192.161,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 144.59968599999956,
+      "cpuMs": 159.987,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 120.15640900000108,
+      "cpuMs": 129.946,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 130.25808099999995,
+      "cpuMs": 144.298,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 133.95381699999962,
+      "cpuMs": 144.591,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 114.01313900000059,
+      "cpuMs": 137.093,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 107.99463099999957,
+      "cpuMs": 126.241,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 119.3015319999995,
+      "cpuMs": 138.769,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 119.26838599999974,
+      "cpuMs": 180.541,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 142.27760999999919,
+      "cpuMs": 176.3,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "frame",
+      "emittedFrameMs": 150.24688700000115,
+      "cpuMs": 203.107,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6838
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 117.48440499999924,
+      "cpuMs": 161.618,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 92.598344,
+      "cpuMs": 102.417,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 98.50771600000007,
+      "cpuMs": 108.974,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 80.5166709999994,
+      "cpuMs": 84.494,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 76.28195400000004,
+      "cpuMs": 83.701,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 95.32442099999935,
+      "cpuMs": 105.745,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 88.46298099999876,
+      "cpuMs": 98.534,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 92.21896899999956,
+      "cpuMs": 102.101,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 77.88912399999936,
+      "cpuMs": 91.817,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 76.3699689999994,
+      "cpuMs": 82.889,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 95.43964799999958,
+      "cpuMs": 105.502,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 75.51830999999947,
+      "cpuMs": 83,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 94.10936000000038,
+      "cpuMs": 104.831,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 97.20196099999885,
+      "cpuMs": 109.526,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 66.13871400000062,
+      "cpuMs": 77.218,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "typing",
+      "emittedFrameMs": 65.6882940000014,
+      "cpuMs": 68.746,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 179
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 88.93730700000015,
+      "cpuMs": 158.025,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5309
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 84.88686299999972,
+      "cpuMs": 92.529,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 83.15038299999833,
+      "cpuMs": 92.318,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5309
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 62.6133890000001,
+      "cpuMs": 69.182,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 65.27771399999983,
+      "cpuMs": 74.572,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5309
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 82.35784700000113,
+      "cpuMs": 90.556,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 89.37322499999937,
+      "cpuMs": 97.975,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5309
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 96.64353400000073,
+      "cpuMs": 106.125,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 92.38699900000029,
+      "cpuMs": 101.723,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5309
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 73.62552699999833,
+      "cpuMs": 80.674,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 75.760311,
+      "cpuMs": 83.917,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5309
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 94.9508220000007,
+      "cpuMs": 103.919,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 84.76465000000098,
+      "cpuMs": 93.58,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5309
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 91.09757499999978,
+      "cpuMs": 101.564,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 84.5098309999994,
+      "cpuMs": 94.525,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5309
+    },
+    {
+      "action": "scroll",
+      "emittedFrameMs": 84.42386299999998,
+      "cpuMs": 93.059,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 305.1813239999992,
+      "cpuMs": 377.476,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6691
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 397.512111,
+      "cpuMs": 523.089,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6839
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 366.3816110000007,
+      "cpuMs": 468.147,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6691
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 359.8146859999997,
+      "cpuMs": 451.676,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6839
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 328.1082230000011,
+      "cpuMs": 416.891,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6691
+    },
+    {
+      "action": "resize",
+      "emittedFrameMs": 379.5774110000002,
+      "cpuMs": 467.557,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 6839
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 114.45207599999958,
+      "cpuMs": 308.859,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5062
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 72.45746900000086,
+      "cpuMs": 83.912,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 95.9932779999981,
+      "cpuMs": 110.288,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 78.04278599999816,
+      "cpuMs": 88.439,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 86.44972599999892,
+      "cpuMs": 99.02,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 96.11626700000124,
+      "cpuMs": 102.886,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 90.36067299999922,
+      "cpuMs": 100.844,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 88.65647799999715,
+      "cpuMs": 98.084,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 86.8164910000014,
+      "cpuMs": 94.616,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 120.35329099999944,
+      "cpuMs": 142.345,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 89.75706899999932,
+      "cpuMs": 114.237,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 80.2718590000004,
+      "cpuMs": 88.928,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 109.32395499999984,
+      "cpuMs": 120.145,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 88.86234999999942,
+      "cpuMs": 98.835,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 108.81802700000117,
+      "cpuMs": 120.505,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "stream",
+      "emittedFrameMs": 108.02910300000076,
+      "cpuMs": 119.365,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 210
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 129.91280899999765,
+      "cpuMs": 147.612,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 5266
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 127.75504300000102,
+      "cpuMs": 171.371,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 114.33825699999943,
+      "cpuMs": 125.15,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 115.14760700000261,
+      "cpuMs": 135.318,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 110.57272599999851,
+      "cpuMs": 120.322,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 118.21181400000205,
+      "cpuMs": 125.55,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 111.20701499999996,
+      "cpuMs": 118.334,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 104.97442700000101,
+      "cpuMs": 121.162,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 91.65908599999966,
+      "cpuMs": 98.34,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 85.91376299999683,
+      "cpuMs": 92.524,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 101.74459299999944,
+      "cpuMs": 108.682,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 122.27615000000151,
+      "cpuMs": 131.218,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 118.6859209999966,
+      "cpuMs": 126.76,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 137.34480100000292,
+      "cpuMs": 147.808,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 137.48408299999937,
+      "cpuMs": 153.101,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    },
+    {
+      "action": "tool",
+      "emittedFrameMs": 100.6339850000004,
+      "cpuMs": 111.262,
+      "documents": 1,
+      "timestampIndexes": 1,
+      "bytes": 30
+    }
+  ],
+  "summary": {
+    "cold": {
+      "count": 1,
+      "frameP50": 1044.336459000001,
+      "frameP95": 1044.336459000001,
+      "cpuP50": 1240.961,
+      "cpuP95": 1240.961,
+      "documents": [
+        1
+      ],
+      "timestampIndexes": [
+        1
+      ]
+    },
+    "frame": {
+      "count": 16,
+      "frameP50": 120.54986199999985,
+      "frameP95": 163.30311599999914,
+      "cpuP50": 143.607,
+      "cpuP95": 203.107,
+      "documents": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "timestampIndexes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "typing": {
+      "count": 16,
+      "frameP50": 88.46298099999876,
+      "frameP95": 117.48440499999924,
+      "cpuP50": 98.534,
+      "cpuP95": 161.618,
+      "documents": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "timestampIndexes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "scroll": {
+      "count": 16,
+      "frameP50": 84.5098309999994,
+      "frameP95": 96.64353400000073,
+      "cpuP50": 93.059,
+      "cpuP95": 158.025,
+      "documents": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "timestampIndexes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "resize": {
+      "count": 6,
+      "frameP50": 359.8146859999997,
+      "frameP95": 397.512111,
+      "cpuP50": 451.676,
+      "cpuP95": 523.089,
+      "documents": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "timestampIndexes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "stream": {
+      "count": 16,
+      "frameP50": 89.75706899999932,
+      "frameP95": 120.35329099999944,
+      "cpuP50": 100.844,
+      "cpuP95": 308.859,
+      "documents": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "timestampIndexes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "tool": {
+      "count": 16,
+      "frameP50": 114.33825699999943,
+      "frameP95": 137.48408299999937,
+      "cpuP50": 125.15,
+      "cpuP95": 171.371,
+      "documents": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "timestampIndexes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "frames": {
+    "initial": [
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ◫ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ▤ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m[ ↔ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ≡ ]\u001b[0m\u001b]8;;\u0007                                                                                                 \u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 63 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 64 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 65 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 66 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 67 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 68 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 69 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 70 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 71 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 72 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 73 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 74 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 75 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 76 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 77 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 78 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 79 predictable result data\u001b[22;39m                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m                                                                                                               11:36:16\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mSYNTHETIC PROFILE SETUP                                                                                               \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m                                                                                                               11:36:16\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 SYNTHETIC PROFILE READY                                                                                               \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[7m \u001b[0m                                                                                                                       \u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m~/.herdr/worktrees/pi-agent-transcript/perf-lpt-718-rendering/tmp/render-profile-HkLwoi (perf/lpt-718-rendering)\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m\u001b[38;5;1m515.7%/128k\u001b[39m\u001b[22;39m\u001b[39m\u001b[2m                                                                                               scripted-model\u001b[22;39m\u001b[0m\u001b]8;;\u0007"
+    ],
+    "finished": [
+      "\u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ◫ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ▤ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m[ ↔ ]\u001b[0m\u001b]8;;\u0007 \u001b[0m\u001b]8;;\u0007\u001b[38;5;5m[ ≡ ]\u001b[0m\u001b]8;;\u0007                                                                                                 \u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 63 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 64 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 65 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 66 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 67 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 68 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 69 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 70 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 71 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 72 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 73 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 74 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 75 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 76 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 77 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 78 predictable result data                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[2mSYNTHETIC TOOL 599 line 79 predictable result data\u001b[22;39m                                                                    \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m                                                                                                               11:36:16\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m \u001b[39mSYNTHETIC PROFILE SETUP                                                                                               \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[49m                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m                                                                                                               11:36:16\u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m│\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007                                                                                                                       \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007 SYNTHETIC PROFILE READY                                                                                               \u001b[0m\u001b]8;;\u0007\u001b[39m\u001b[2m┃\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "SYNTHETIC PROFILE DRAFT \u001b[7m \u001b[0m                                                                                               \u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m~/.herdr/worktrees/pi-agent-transcript/perf-lpt-718-rendering/tmp/render-profile-HkLwoi (perf/lpt-718-rendering)\u001b[22;39m\u001b[0m\u001b]8;;\u0007",
+      "\u001b[39m\u001b[2m\u001b[38;5;1m515.7%/128k\u001b[39m\u001b[22;39m\u001b[39m\u001b[2m                                                                                               scripted-model\u001b[22;39m\u001b[0m\u001b]8;;\u0007"
+    ]
+  },
+  "runtime": {
+    "node": "v24.20.0",
+    "pid": 539170,
+    "mode": "combined",
+    "nativeComponents": 4231,
+    "samples": 16,
+    "savedToolBlocks": 600
+  },
+  "draft": "SYNTHETIC PROFILE DRAFT ",
+  "syntheticOnly": true,
+  "frameDefinition": "Action to synchronized terminal-frame emission, not compositor presentation; process CPU delta includes scheduling background work.",
+  "markers": [
+    " SYNTHETIC TOOL 599 line 63 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 64 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 65 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 66 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 67 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 68 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 69 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 70 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 71 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 72 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 73 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 74 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 75 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 76 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 77 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 78 predictable result data                                                                    │",
+    " SYNTHETIC TOOL 599 line 79 predictable result data                                                                    │",
+    " SYNTHETIC PROFILE SETUP                                                                                               │",
+    " SYNTHETIC PROFILE READY                                                                                               ┃",
+    "SYNTHETIC PROFILE DRAFT                                                                                                 "
+  ]
+}
