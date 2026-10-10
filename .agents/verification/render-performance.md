@@ -117,6 +117,16 @@ The ten-file non-search suite passed all 46 cases against production source thro
 
 Raw large-window evidence from `fill-pane-large-1` is archived in `.agents/verification/rendering/checkpoint-02a0e24-large/`. All four cases passed. Columns typing median/p95 is 81.9/123.5 ms against Stock74.4/103.5 ms; Rows69.0/88.0 ms. Rows initial display and resize still trail Stock. There was no hidden-copy counter activity after the numeric pane basis change, but this alone did not eliminate the remaining painting cost.
 
+## Intermediate installation and live observation
+
+The user approved installing the passing checkpoint in ask `7e204620-67c9-4df6-8b12-83bcedd41f8f` / `intermediate_install`, while leaving LPT-718 open. Installed `@alexshp/pi-agent-transcript@0.0.0-dev.1791633675` from `22a319b`; index/layout/native/timestamps/render-cache files match source. The latest direct IDE v0.8.0 checkout was fetched and verified clean at `1922570b9882c023f284b85ac45d3bad4be46550` before reload. No duplicate npm IDE was used.
+
+After explaining that scrollbars are not the divider, the user chose native auto mode in follow-up `53c05873-c5c5-4551-92e3-1cd0b6643658` / `scrollbar_direction_clarified`. Only global Pi `fullscreenScrollbar` changed from always to auto. Existing panel widths, height, order and clock selection were preserved. This changes scrollbar visibility in both Combined and split; it is not a custom scrollbar or removal of native scrolling.
+
+Mandatory reload completed. Real human-pane capture `w3SR:p1`, 158x57 cells, revision448 shows Combined and a full-width input dock without visible rendering errors. After the user switched to split, revision455 shows intact Conversation/Activity columns, the saved width67 Conversation, separated message blocks, and the full-width input dock. Clocks remain off as selected; none were injected for this check. No visible escape codes, overlapping columns or detached padding were seen. The user reported: “кстати теперь ощущается достаточно быстро, яб сказал нативно”. This is valuable live feedback, not a measured latency comparison or formal stock-parity acceptance. No agent-controlled Herdr input or personal-history benchmark was used.
+
+The hidden-scrollbar diagnostic passed three modes at `tmp/profiling/hidden-scrollbar-large-1`: typing median/p95 Stock48.6/65.0ms, Columns44.6/78.7ms, Rows30.3/34.9ms. It informed the visibility choice but is not acceptance for auto mode, especially during scrolling when bars are visible. Matched auto-mode controls remain needed. Runtime and viewport metadata are recorded in `tmp/test-runs/intermediate-live-runtime.json`. Search acceptance remains paused.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
