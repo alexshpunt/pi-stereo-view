@@ -46,6 +46,8 @@ export class TranscriptTimestamps {
   private owners = new Map<string, unknown>();
   private readonly liveCalls = new Set<string>();
   private pendingUser?: { source: TimedSource; before: number; ended: boolean };
+  private frameActive = false;
+  private preparedComponents?: Component[];
 
   constructor(private readonly session: ExtensionContext["sessionManager"]) {}
 
@@ -58,6 +60,7 @@ export class TranscriptTimestamps {
 
   /** Include the current unpersisted user and streamed tool IDs before UI delivery. */
   observe(message: Message, ended = false): void {
+    this.preparedComponents = undefined;
     if (message.role === "user") {
       if (!ended) {
         this.pendingUser = {
@@ -78,6 +81,7 @@ export class TranscriptTimestamps {
 
   /** Forget ephemeral identities when the selected history changes. */
   reset(): void {
+    this.preparedComponents = undefined;
     this.pendingUser = undefined;
     this.liveCalls.clear();
     this.orderedLabels = new WeakMap();
@@ -86,8 +90,15 @@ export class TranscriptTimestamps {
     this.owners.clear();
   }
 
+  /** Share one history correlation across the panels measured in a native frame. */
+  beginFrame(): void {
+    this.frameActive = true;
+    this.preparedComponents = undefined;
+  }
   /** Rebuild from the current branch, never abandoned entries elsewhere in the file. */
   prepare(components: Component[]): void {
+    if (this.frameActive && this.preparedComponents === components) return;
+    this.preparedComponents = components;
     const sources = this.sources();
     this.messageTimes = new WeakMap(sources.map(source => [source.message, source.time]));
     const users = sources.filter(source => source.message.role === "user");
@@ -174,6 +185,7 @@ export class CompactMessage extends Container {
   private contentHeight = 0;
   private leadingRows = 0;
   private prepared?: { width: number; lines: string[] };
+  private formatted?: { width: number; time: string; gutter: number; theme: Theme; content: string[]; top: number; lines: string[] };
 
   constructor(private readonly component: Component, private readonly label: () => string,
     private readonly theme: () => Theme, private readonly gutter: () => number,
@@ -198,14 +210,23 @@ export class CompactMessage extends Container {
 
   private renderContent(width: number): string[] {
     const label = this.show() ? this.label() : "";
-    const time = width > label.length + this.gutter() + 1 ? label : "";
-    this.contentWidth = Math.max(1, width - (time ? time.length + 1 + this.gutter() : 0));
+    const gutter = this.gutter();
+    const theme = this.theme();
+    const time = width > label.length + gutter + 1 ? label : "";
+    this.contentWidth = Math.max(1, width - (time ? time.length + 1 + gutter : 0));
     const content = this.component.render(this.contentWidth);
     this.contentHeight = content.length;
+    const cached = this.formatted;
+    if (cached?.width === width && cached.time === time && cached.gutter === gutter && cached.theme === theme &&
+      cached.content.length === content.length && content.every((line, index) => line === cached.content[index])) {
+      this.top = cached.top;
+      return cached.lines;
+    }
+    this.formatted = undefined;
     // Image protocols need every placement row. Keep their native block intact.
     if (content.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="))) {
       this.top = time ? -1 : 0;
-      return time ? [this.theme().fg("dim", time.padStart(width - this.gutter())), ...content] : content;
+      return time ? [theme.fg("dim", time.padStart(width - gutter)), ...content] : content;
     }
     const blank = (line: string): boolean => stripTerminalSequences(line).trim().length === 0;
     this.top = 0;
@@ -220,9 +241,10 @@ export class CompactMessage extends Container {
     lines[lines.length - 1] += zones(content.slice(end));
     if (time) {
       lines[0] += "\x1b[0m\x1b]8;;\x07" +
-        " ".repeat(Math.max(1, width - this.gutter() - time.length - visibleWidth(lines[0]))) +
-        this.theme().fg("dim", time);
+        " ".repeat(Math.max(1, width - gutter - time.length - visibleWidth(lines[0]))) +
+        theme.fg("dim", time);
     }
+    this.formatted = { width, time, gutter, theme, content: content.slice(), top: this.top, lines };
     return lines;
   }
 
@@ -235,6 +257,7 @@ export class CompactMessage extends Container {
 
   override invalidate(): void {
     this.prepared = undefined;
+    this.formatted = undefined;
     this.component.invalidate();
   }
 }

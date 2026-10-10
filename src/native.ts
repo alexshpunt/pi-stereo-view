@@ -49,6 +49,9 @@ export class NativeDocument extends Container {
   private excerpt?: SearchHit;
   private searchAnchor?: SearchHit;
   private lastWidth = 1;
+  private frameActive = false;
+  private frameWidth?: number;
+  private checked = false;
 
   constructor(
     private readonly source: Container,
@@ -62,7 +65,14 @@ export class NativeDocument extends Container {
     super();
   }
 
+  /** Start a native frame; only repeated measurements within that frame may reuse routing. */
+  beginFrame(): void {
+    this.frameActive = true;
+    this.frameWidth = undefined;
+    this.checked = false;
+  }
   check(): void {
+    if (this.frameActive && this.checked) return;
     const chat = this.source.children[2] as Container;
     if (!Array.isArray(chat?.children)) throw new Error("Pi's history document is not supported");
     for (const component of chat.children) {
@@ -70,6 +80,7 @@ export class NativeDocument extends Container {
       const native = assistant(component);
       if (native) assistantParts(native, this.pane === "combined" ? "activity" : this.pane);
     }
+    this.checked = true;
   }
 
   /** Read full saved text from the current native branch, including collapsed blocks. */
@@ -168,6 +179,7 @@ export class NativeDocument extends Container {
     return super.handleMouse(event);
   }
   override render(width: number): string[] {
+    if (this.frameActive && this.frameWidth === width) return super.render(width);
     const chat = this.source.children[2] as Container;
     this.timestamps.prepare(chat.children);
     this.lastWidth = width;
@@ -244,10 +256,13 @@ export class NativeDocument extends Container {
     // Native follow-end guidance overlays the bottom row. Keep the selected last line above it.
     if (this.pane !== "combined" && this.searchAnchor) result.push(new Spacer(1));
     this.children = result;
+    this.frameWidth = width;
     return super.render(width);
   }
 
   override invalidate(): void {
+    this.frameWidth = undefined;
+    this.checked = false;
     // Theme changes must rebuild native parents, including collapsed thinking text.
     this.source.invalidate();
   }
