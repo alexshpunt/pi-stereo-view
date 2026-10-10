@@ -101,20 +101,18 @@ function snapshot(root: Component, nodes: Component[]): State {
 }
 
 function matches(root: Component, state: State): boolean {
-  const rootFields = root as unknown as Record<string, unknown>;
   for (let index = 0; index < shellInputs.length; index++) {
-    if (rootFields[shellInputs[index]] !== state.shell[index]) return false;
+    if (Reflect.get(root, shellInputs[index]) !== state.shell[index]) return false;
   }
   for (const node of state.nodes) {
     const { component } = node;
-    const fields = component as unknown as Record<string, unknown>;
     if (component.render !== node.render || component.invalidate !== subscriptions.get(component)?.wrapped ||
-      fields.child !== node.child || fields.component !== node.wrapped ||
+      Reflect.get(component, "child") !== node.child || Reflect.get(component, "component") !== node.wrapped ||
       (node.box && background(component) !== node.background)) return false;
     for (let index = 0; index < inputs.length; index++) {
-      if (fields[inputs[index]] !== node.values[index]) return false;
+      if (Reflect.get(component, inputs[index]) !== node.values[index]) return false;
     }
-    const children = fields.children as Component[] | undefined;
+    const children = Reflect.get(component, "children") as Component[] | undefined;
     if (children !== node.children) return false;
     if (Array.isArray(children)) {
       if (children.length !== node.members.length) return false;
