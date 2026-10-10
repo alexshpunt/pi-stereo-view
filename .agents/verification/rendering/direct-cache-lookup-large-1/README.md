@@ -40,3 +40,5 @@ Stock and unchanged Combined also vary materially between matrices. One run does
 Raw measurements retain samples, counters and synthetic frames. CPU includes scheduled process work; latency is terminal-frame emission, not compositor presentation. One cold sample and six resizes cannot establish robust tails. rendering.cpuprofile covers warm interactions and resize, not initial display/cold rendering.
 
 Installed version remains0.0.0-dev.1791636688 from merged developc18a154. No update, reinstall or reload happened during this experiment. The performance branch and task remain open; search acceptance stays paused.
+
+Evidence was committed and pushed in e7c1b2e. Updating the remote Workpad is pending: its fresh Read returned LINEAR_AXI_FAILED, so no remote edit or task-status change was attempted. Resume from this report and comparison.json; the direct-lookup candidate remains unpromoted.
