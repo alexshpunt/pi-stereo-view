@@ -24,10 +24,10 @@ Safe extension fixes remove duplicate work and cache unchanged observable blocks
 
 This is a justified boundary of the chosen architecture, not proof that no future optimization exists. Do not promise exact stock parity if initial/cold/resize or output tails still differ. The user's latest instruction allows completion at this evidence-backed practical boundary, with measured gaps and rejected experiments stated plainly.
 
-## Pending final gates
+## Completed delivery gates
 
-- Full non-search regressions at final source.
-- Repeated forward/reverse normal120x35 and large274x108 synthetic controls with native auto scrollbars.
-- Review bounded blank parsing and watch lifecycle, retain only justified changes.
-- Publish/update the passing package, verify installed source and current IDE, reload Pi and inspect the actual human pane.
-- Record final Result and merge/push develop, then clean only owned performance worktree/branch. Search acceptance remains paused.
+- Full57-case non-search run and related29-case rerun verify all58 current contracts; typecheck/diff pass.
+- All16 forward/reverse normal120x35 and large274x108 native-auto profile cases pass, with raw controls and method limits retained.
+- Bounded blank parsing and watch lifecycle received read-only review; shared-child replacement is covered without a production change.
+- Final package installed/source-compared/reloaded; exact real viewport verified and metadata retained.
+- Feature f447cd2 merged/pushed to develop. Scenario Result and Workpad saved/read back; the task resolves to Done under the later practical-limit approval, not strict parity. Only owned performance temporary files/worktree/branch are eligible for cleanup. Search acceptance stays paused.

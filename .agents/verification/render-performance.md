@@ -246,6 +246,6 @@ Two short native Bash calls emitted FINAL CACHE CHECK ONE/TWO (shell:7ed887b3a1d
 - [x] All57 non-search behavior cases, typecheck and diff checks pass at final production source.
 - [x] Final installed source and exact real viewport verified after reload.
 - [x] Practical-limit decision supported by measured gaps, rejected experiment and public native API constraints.
-- [ ] Develop merge/push and final Linear delivery checkpoint follow this verified source. Search stays open/paused.
+- [x] Feature commit f447cd22c48e0c35f1ebb2b7501317d23c7c49db was fast-forwarded into develop and pushed (shell:40941f784ed2). Installed production files still match. The final Scenario Result and Workpad were saved/read back; completion comment5c0c9a21-8758-49ed-b40a-3fc87c6cf2d0 was read back, and task status Done/type completed was verified. Search remains Ideas/open/paused; no search acceptance or source change was made.
 
 Completion is under the user's later explicit practical-limit approval, not original strict parity. Remaining initial/cold, large Rows resize and some Columns tails are documented; no claim that all future optimization is impossible.

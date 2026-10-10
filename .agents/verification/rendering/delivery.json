@@ -1,0 +1,37 @@
+{
+  "featureCommit": "f447cd22c48e0c35f1ebb2b7501317d23c7c49db",
+  "deliveredBranch": "develop",
+  "pushed": true,
+  "mergeTerminal": "shell:40941f784ed2",
+  "productionSource": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+  "installedVersion": "0.0.0-dev.1791642798",
+  "installedPackageSource": "b612163",
+  "installedProductionMatchesDevelop": true,
+  "totalNonSearchContractsVerified": 58,
+  "fullRunPassed": 57,
+  "finalRelatedRunPassed": 29,
+  "finalProfileCasesPassed": 16,
+  "live": {
+    "pane": "w3SR:p3",
+    "columns": 274,
+    "rows": 108,
+    "revision": 371,
+    "verifiedAfterReload": true
+  },
+  "task": {
+    "id": "LPT-718",
+    "uuid": "dc1d6594-68b2-4b05-ac8f-c265eb569214",
+    "verifiedStatus": "Done",
+    "verifiedStatusType": "completed",
+    "completionComment": "5c0c9a21-8758-49ed-b40a-3fc87c6cf2d0"
+  },
+  "acceptance": "User-approved practical limit. Strict stock parity not established; cold/initial, large Rows resize and some Columns tails remain.",
+  "pausedSearch": {
+    "id": "LPT-717",
+    "status": "Ideas",
+    "closed": false,
+    "tested": false,
+    "worktreePreserved": true
+  },
+  "cleanupScope": "Only owned performance temporary artifacts, resource2051b6c8-0a93-48be-a0cf-62797440405f and merged perf/lpt-718-rendering branch."
+}
