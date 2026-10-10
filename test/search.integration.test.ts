@@ -46,7 +46,11 @@ test.each(["columns", "rows"] as const)("searches Conversation with keyboard and
   await writeFile(path.resolve("tmp/test-runs", "search-" + layout, "search-frames.json"), JSON.stringify(observation));
   const header = clean(frames.keyboard).findIndex(line => line.includes("Conversation") && line.includes("[ ⌕ ]"));
   const search = clean(frames.keyboard).findIndex(line => line.includes("Search:") && line.includes("[↓]"));
-  expect(search, "Search must be under its own panel header, not a popup").toBe(header + 2);
+  expect(search, "Search must be under its own panel header, not a popup").toBe(header + 3);
+  expect(clean(frames.keyboard)[search - 1]).toMatch(/┌─+┐/);
+  expect(clean(frames.keyboard)[search]).toMatch(/│.*Search:.*\[↓\].*\[×\].*│/);
+  expect(clean(frames.keyboard)[search + 1]).toMatch(/└─+┘/);
+  expect(clean(frames.exact).join("\n")).toContain("1/2");
   expect(clean(frames.keyboard).join("\n")).not.toContain("Search Conversation");
   expect(clean(frames.query).join("\n")).toContain("deployment runtime ready");
   expect(clean(frames.query).join("\n")).toContain("1/2");
