@@ -1,5 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { Container, type Component } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { searchText, type SearchEntry, type SearchHit } from "./search.js";
 import { CompactMessage, TimestampedMessage, type TranscriptTimestamps } from "./timestamps.js";
 
 export type Pane = "activity" | "chat";
@@ -44,6 +45,10 @@ function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
 export class NativeDocument extends Container {
   private readonly views = new WeakMap<NativeAssistant, Container>();
   private readonly stamped = new WeakMap<Component, Component>();
+  private readonly positions = new Map<Component, { row: number; lines: string[]; excerptRow?: number }>();
+  private excerpt?: SearchHit;
+  private searchAnchor?: SearchHit;
+  private lastWidth = 1;
 
   constructor(
     private readonly source: Container,
@@ -52,6 +57,7 @@ export class NativeDocument extends Container {
     private readonly theme: () => Theme,
     private readonly timestampGutter: () => number,
     private readonly showTimestamps: () => boolean,
+    private readonly interact: () => void = () => {},
   ) {
     super();
   }
@@ -66,10 +72,110 @@ export class NativeDocument extends Container {
     }
   }
 
+  /** Read full saved text from the current native branch, including collapsed blocks. */
+  searchEntries(): SearchEntry[] {
+    if (this.pane === "combined") return [];
+    const entries: SearchEntry[] = [];
+    const add = (source: Component, label: string, text: string, reveal?: () => void): void => {
+      if (text.trim()) entries.push({ source, label, text, reveal });
+    };
+    const contentText = (content: unknown): string => typeof content === "string" ? content :
+      Array.isArray(content) ? content.filter(block => block?.type === "text" && typeof block.text === "string")
+        .map(block => block.text).join("\n") : "";
+    for (const component of (this.source.children[2] as Container).children) {
+      const name = nameOf(component);
+      const native = component as Component & {
+        text?: string; lastMessage?: { content: { type: string; text?: string; thinking?: string }[] };
+        toolName?: string; args?: unknown; result?: { content?: unknown };
+        command?: string; outputLines?: string[]; message?: { content?: unknown; summary?: string };
+        setExpanded?: (expanded: boolean) => void; setHideThinkingBlock?: (hide: boolean) => void;
+      };
+      if (name === "UserMessageComponent" && this.pane === "chat") {
+        if (typeof native.text !== "string") throw new Error("Pi's user search text is not supported");
+        add(component, "User", native.text);
+      } else if (name === "AssistantMessageComponent") {
+        if (!Array.isArray(native.lastMessage?.content)) throw new Error("Pi's assistant search text is not supported");
+        const kind = this.pane === "chat" ? "text" : "thinking";
+        const text = native.lastMessage?.content.filter(block => block.type === kind)
+          .map(block => kind === "text" ? block.text ?? "" : block.thinking ?? "").join("\n\n") ?? "";
+        add(component, kind === "text" ? "Assistant" : "Thinking", text, kind === "thinking" ? () => {
+          if (typeof native.setHideThinkingBlock !== "function") throw new Error("Pi's thinking reveal is not supported");
+          native.setHideThinkingBlock(false);
+        } : undefined);
+      } else if (this.pane === "activity" && name === "ToolExecutionComponent") {
+        if (typeof native.toolName !== "string") throw new Error("Pi's tool search text is not supported");
+        add(component, native.toolName, [native.toolName, JSON.stringify(native.args, null, 2), contentText(native.result?.content)]
+          .filter(Boolean).join("\n"), () => {
+            if (typeof native.setExpanded !== "function") throw new Error("Pi's tool reveal is not supported");
+            native.setExpanded(true);
+          });
+      } else if (this.pane === "activity" && name === "BashExecutionComponent") {
+        if (typeof native.command !== "string" || !Array.isArray(native.outputLines)) {
+          throw new Error("Pi's shell search text is not supported");
+        }
+        add(component, "Shell", [native.command, ...native.outputLines].join("\n"), () => native.setExpanded?.(true));
+      } else if (this.pane === "activity" && name !== "Spacer" && name !== "Image" && name !== "UserMessageComponent") {
+        add(component, name.replace(/(?:Message)?Component$/, ""),
+          contentText(native.message?.content) || native.message?.summary || searchText(component.render(this.lastWidth).join("\n")));
+      }
+    }
+    return entries;
+  }
+
+  /** Reject hits whose native owner was removed by a branch change or history rebuild. */
+  containsSearchHit(hit: SearchHit): boolean {
+    return (this.source.children[2] as Container).children.includes(hit.entry.source);
+  }
+  /** Reveal one selected block without replacing its native renderer. */
+  reveal(hit: SearchHit): boolean {
+    if (!this.containsSearchHit(hit)) return false;
+    this.excerpt = undefined;
+    this.searchAnchor = hit;
+    hit.entry.reveal?.();
+    return true;
+  }
+
+  /** Add a temporary fragment when the renderer does not display the saved matching text. */
+  showSearchExcerpt(hit: SearchHit): void { this.excerpt = hit; }
+
+  /** Locate the selected occurrence after native wrapping, padding and timestamp decoration. */
+  searchRow(hit: SearchHit): number | undefined {
+    const block = this.positions.get(hit.entry.source);
+    if (!block) return undefined;
+    if (block.excerptRow !== undefined) return block.excerptRow;
+    const normalize = (text: string): string => searchText(text).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+    const wanted = normalize(hit.text);
+    if (!wanted) return block.row;
+    const rows: number[] = [];
+    const text = block.lines.map((line, row) => {
+      const plain = normalize(searchText(line).replace(/\s+(?:~?\d{2}:\d{2}:\d{2}|--:--:--)\s*[┃│]?$/, ""));
+      rows.push(...Array.from({ length: plain.length }, () => row));
+      return plain;
+    }).join("");
+    let occurrence = searchText(hit.entry.text).split("\n").slice(0, hit.line).filter(line => normalize(line) === wanted).length;
+    let start = 0;
+    while (start <= text.length) {
+      const index = text.indexOf(wanted, start);
+      if (index < 0) return undefined;
+      if (occurrence-- === 0) return block.row + rows[index];
+      start = index + wanted.length;
+    }
+    return undefined;
+  }
+
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+    if (event.type === "wheel" || (event.type === "press" && event.button === "left")) this.interact();
+    return super.handleMouse(event);
+  }
   override render(width: number): string[] {
     const chat = this.source.children[2] as Container;
     this.timestamps.prepare(chat.children);
+    this.lastWidth = width;
+    this.positions.clear();
+    if (this.excerpt && !chat.children.includes(this.excerpt.entry.source)) this.excerpt = undefined;
+    if (this.searchAnchor && !chat.children.includes(this.searchAnchor.entry.source)) this.searchAnchor = undefined;
     const result: Component[] = this.pane !== "chat" ? this.source.children.slice(0, 2) : [];
+    let row = this.pane === "combined" ? 0 : result.reduce((count, child) => count + child.render(width).length, 0);
     let spacing: Component[] = [];
     let visibleBlock = false;
     for (const component of chat.children) {
@@ -98,6 +204,8 @@ export class NativeDocument extends Container {
         if (target === this.pane || this.pane === "combined") routed = component;
       }
       if (routed) {
+        const start = result.length;
+        const wasVisible = visibleBlock;
         // Empty native assistant shells do not need a detached timestamp row.
         if (native && native.contentContainer.children.length === 0) result.push(...spacing, routed);
         else {
@@ -112,10 +220,29 @@ export class NativeDocument extends Container {
             result.push(stamped);
           } else result.push(...spacing, stamped);
         }
+        if (this.pane !== "combined") {
+          const lines = result.slice(start).flatMap(child => child.render(width));
+          let excerptRow: number | undefined;
+          if (this.excerpt?.entry.source === component) {
+            const fragment = new Text(this.theme().fg("accent", "Search match: ") + searchText(this.excerpt.text), 1, 0);
+            if (!lines.length && wasVisible) {
+              result.push(new Spacer(1));
+              lines.push("");
+            }
+            excerptRow = row + lines.length;
+            result.push(fragment);
+            lines.push(...fragment.render(width));
+            visibleBlock = true;
+          }
+          this.positions.set(component, { row, lines, excerptRow });
+          row += lines.length;
+        }
       }
       spacing = [];
     }
     if (this.pane === "combined") result.push(...spacing);
+    // Native follow-end guidance overlays the bottom row. Keep the selected last line above it.
+    if (this.pane !== "combined" && this.searchAnchor) result.push(new Spacer(1));
     this.children = result;
     return super.render(width);
   }

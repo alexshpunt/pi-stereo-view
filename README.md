@@ -37,6 +37,7 @@ Click the history toolbar to switch layouts, swap panels, or return to combined 
 | `↕` / `↔` | Swap top/bottom or left/right |
 | `↗` / `↙` | Expand / restore the panel |
 | `≡` | Transcript settings |
+| `⌕` | Search this panel |
 
 The toolbar stays visible in combined mode. Expansion hides the other history panel; the native input dock stays full width. Run `/transcript help` for the icon legend.
 
@@ -64,6 +65,16 @@ Conversation headers have a soft green fill; Activity headers have a soft blue f
 
 Mode, layout, panel order, both sizes, the expanded panel, and timestamp visibility are saved in `transcript.json` in Pi's agent directory. Existing width and side settings are kept on upgrade. Too little space temporarily shows combined history without losing the requested arrangement. Regular mode keeps native combined history. Unknown fullscreen layouts are left untouched with a warning.
 
+## Search history
+
+Press **Ctrl+F** to search the last clicked or scrolled panel. A dot in its header shows which panel is active; Conversation is the initial choice. The `⌕` button always searches its own panel. Both open the same fuzzy picker, including in an expanded panel.
+
+Type a query, choose a fragment with the arrow keys and press Enter to jump. Queries ignore letter case and support Russian and English; letters do not have to be next to each other. The picker searches the whole current branch, including off-screen messages, hidden thinking and collapsed tool text. It does not read other branches, sessions, attachments or files.
+
+Enter reveals the matching native block without moving the other panel. If a custom tool renderer omits the saved matching text, a temporary **Search match:** fragment appears next to that tool instead. Escape closes the picker without changing the draft or scroll. After jumping to older history, fresh output does not pull you away; use native Jump to latest or Ctrl+End to resume following.
+
+Combined history, regular mode and small-window fallback keep Pi's native keyboard behavior.
+
 ## Message times
 
 Conversation and Activity show a dim local `HH:mm:ss` clock on the first line of each text block, aligned to the right. A small right gutter keeps text clear of the clock. One blank row separates messages and tool calls; paragraph breaks and tool formatting inside blocks stay intact. Invisible tool blocks do not add spacing. Image blocks keep their native placement rows and use a separate clock row. Combined history keeps its existing clock rows. Assistant text and thinking share their original message time. Native content and tool renderers stay unchanged.
@@ -86,5 +97,6 @@ The tests launch real Pi with scripted responses, custom tool renderers, native 
 - [Scope and acceptance: LPT-688](https://linear.app/alexshpunt/issue/LPT-688/separate-conversation-and-agent-activity-in-pi-history)
 - [Layout controls: LPT-691](https://linear.app/alexshpunt/issue/LPT-691/control-transcript-panels-with-buttons-and-two-layouts)
 - [Message times: LPT-693](https://linear.app/alexshpunt/issue/LPT-693/show-message-and-tool-start-timestamps-in-transcript-history)
+- [Panel search: LPT-717](https://linear.app/alexshpunt/issue/LPT-717/find-transcript-history-with-fuzzy-search-in-the-selected-panel)
 
 The Linear task owns the scope and acceptance checks.

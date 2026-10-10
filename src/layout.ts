@@ -1,11 +1,13 @@
+import { setImmediate } from "node:timers/promises";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
-  Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, VStack,
-  type Color, type Component, type TUI,
+  Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, VStack,
+  type Color, type Component, type ScrollViewOptions, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
 import type { Preferences } from "./preferences.js";
 import type { TranscriptTimestamps } from "./timestamps.js";
+import { PanelSearchShortcut, type SearchEntry, type SearchHit } from "./search.js";
 
 type NativeTui = TUI & { layoutRoot?: Container; setLayoutRoot(component: Component | undefined): void };
 const MIN_CHAT = 24;
@@ -13,6 +15,16 @@ const MIN_ACTIVITY = 40;
 const MIN_ROWS = 4;
 const BUTTON_WIDTH = 5;
 
+class PanelScrollView extends ScrollView {
+  constructor(component: Component, options: ScrollViewOptions, private readonly interact: () => void) {
+    super(component, options);
+  }
+
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+    if (event.type === "wheel" || (event.type === "press" && event.button === "left")) this.interact();
+    return super.handleMouse(event);
+  }
+}
 class TranscriptColumns extends HStack {
   /** Reserve a fixed width for Conversation, independent of its content. */
   sizeConversation(component: Component, width: number): void {
@@ -36,6 +48,9 @@ export class TranscriptLayout {
   private mounted?: Component;
   private activity?: ScrollView;
   private chat?: ScrollView;
+  private documents?: Record<Pane, NativeDocument>;
+  private activePane: Pane = "chat";
+  private readonly searchShortcut = new PanelSearchShortcut();
   private drag?: { position: number; size: number };
   private failed = false;
   private fallback = false;
@@ -51,6 +66,7 @@ export class TranscriptLayout {
     private readonly save: () => void,
     private readonly timestamps: TranscriptTimestamps,
     private readonly openSettings: () => void,
+    private readonly openSearch: (pane: Pane) => void,
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
@@ -103,8 +119,11 @@ export class TranscriptLayout {
     // Auto scrollbars overlay one native content column; keep clocks outside it.
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
-    const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps);
-    const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps);
+    const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
+      () => this.activate("activity"));
+    const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
+      () => this.activate("chat"));
+    this.documents = { activity: activityDocument, chat: chatDocument };
     const combinedDocument = new NativeDocument(document, "combined", this.timestamps, this.theme, timestampGutter, showTimestamps);
     // Keep the native combined ScrollView, including its selection and scroll state.
     owner.child = combinedDocument;
@@ -120,8 +139,8 @@ export class TranscriptLayout {
       scrollbarTrackStyle: scroll.scrollbarTrackStyle,
       scrollbarThumbStyle: scroll.scrollbarThumbStyle,
     };
-    this.activity = new ScrollView(activityDocument, { ...scrollOptions, primary: true });
-    this.chat = new ScrollView(chatDocument, scrollOptions);
+    this.activity = new PanelScrollView(activityDocument, { ...scrollOptions, primary: true }, () => this.activate("activity"));
+    this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"));
     let historyHeight = 0;
     const shown = ({ width, height }: { width: number; height: number }): boolean => {
       historyHeight = Math.max(0, height - dock.render(width).length - 1);
@@ -130,6 +149,7 @@ export class TranscriptLayout {
         this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= MIN_ROWS :
           width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1;
       this.fallback = this.preferences.mode === "split" && !fits;
+      this.searchShortcut.sync(!this.failed && this.preferences.mode === "split" && fits);
       if (this.failed) return false;
       try {
         activityDocument.check();
@@ -144,6 +164,7 @@ export class TranscriptLayout {
         return true;
       } catch (error) {
         this.failed = true;
+        this.searchShortcut.dispose();
         this.restoreDocument();
         queueMicrotask(() => this.warn("Transcript split disabled: " + (error as Error).message));
         return false;
@@ -179,12 +200,22 @@ export class TranscriptLayout {
         invalidate() {},
       };
       const label = new HStack([
-        { component: {
-          render: width => new Text(this.theme().style((" " + title).padEnd(width), {
-            fg: palette().text, bg: palette().fill,
+        { component: new MouseRegion({
+          render: width => new Text(this.theme().style(truncateToWidth((this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
+            fg: this.searchPane() === target ? "accent" : palette().text, bg: palette().fill,
           }), 0, 0).render(width),
           invalidate() {},
-        }, basis: 0, grow: 1, minSize: 1 },
+        }, event => {
+          if (event.button === "left" && (event.type === "press" || event.type === "click")) {
+            this.activate(target);
+            return { handled: true, render: true };
+          }
+          return undefined;
+        }), basis: 0, grow: 1, minSize: 1 },
+        { component: this.button(() => "⌕", () => {
+          this.activate(target);
+          this.openSearch(target);
+        }, () => true, () => palette().fill), basis: BUTTON_WIDTH, shrink: 0 },
         { component: this.button(
           () => this.preferences.zoom === target ? "↙" : "↗",
           () => this.maximize(target), () => true, () => palette().fill,
@@ -277,7 +308,48 @@ export class TranscriptLayout {
     host.requestRender();
   }
 
+  private activate(pane: Pane): void {
+    if (this.activePane === pane) return;
+    this.activePane = pane;
+    this.host?.requestRender();
+  }
+
+  /** Choose the last interacted pane only while a supported split is mounted. */
+  searchPane(): Pane | undefined {
+    if (!this.host || this.host.layoutRoot !== this.mounted || this.failed || this.fallback ||
+      this.preferences.mode !== "split") return undefined;
+    return this.preferences.zoom ?? this.activePane;
+  }
+
+  /** Read search text from the selected pane's current native branch. */
+  searchEntries(pane: Pane): SearchEntry[] { return this.documents?.[pane].searchEntries() ?? []; }
+
+  /** Reveal and scroll one current result, leaving the other pane and follow state alone. */
+  async jumpToSearch(pane: Pane, hit: SearchHit): Promise<void> {
+    const document = this.documents?.[pane];
+    const view = pane === "chat" ? this.chat : this.activity;
+    if (!document || !view || !this.searchPane() || !document.reveal(hit)) return;
+    this.activate(pane);
+    this.host?.requestRender(true);
+    await setImmediate();
+    if (this.documents?.[pane] !== document || !this.searchPane() || !document.containsSearchHit(hit)) return;
+    let row = document.searchRow(hit);
+    if (row === undefined) {
+      document.showSearchExcerpt(hit);
+      this.host?.requestRender(true);
+      await setImmediate();
+      if (this.documents?.[pane] !== document || !this.searchPane() || !document.containsSearchHit(hit)) return;
+      row = document.searchRow(hit);
+    }
+    if (row === undefined) {
+      this.warn("The selected search result is no longer in the current history.");
+      return;
+    }
+    view.scrollTo(Math.max(0, row - 2), { disableFollow: true });
+    this.host?.requestRender(true);
+  }
   private changed(persist = true): void {
+    this.searchShortcut.sync(Boolean(this.searchPane()));
     this.rebuild();
     this.host?.requestRender();
     if (persist) this.save();
@@ -335,6 +407,7 @@ export class TranscriptLayout {
 
   /** Expand or restore one panel while retaining its requested split arrangement. */
   maximize(pane: Pane): void {
+    this.activate(pane);
     this.preferences.mode = "split";
     this.preferences.zoom = this.preferences.zoom === pane ? null : pane;
     this.changed();
@@ -363,6 +436,7 @@ export class TranscriptLayout {
 
   /** Release owned views and restore the original tree only if still mounted. */
   dispose(): void {
+    this.searchShortcut.dispose();
     this.restoreDocument();
     this.restoreDocument = () => {};
     const host = this.host;
@@ -375,6 +449,7 @@ export class TranscriptLayout {
     this.original = undefined;
     this.activity = undefined;
     this.chat = undefined;
+    this.documents = undefined;
     this.drag = undefined;
     this.rebuild = () => {};
   }

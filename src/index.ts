@@ -1,6 +1,8 @@
 import path from "node:path";
 import { getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Box, Container, SettingsList, Text, type TUI } from "@earendil-works/pi-tui";
+import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type TUI } from "@earendil-works/pi-tui";
+import { PanelSearch, type SearchHit } from "./search.js";
+import type { Pane } from "./native.js";
 import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
@@ -16,11 +18,46 @@ export default function transcript(pi: ExtensionAPI): void {
   const file = path.join(getAgentDir(), "transcript.json");
 
   let settingsOpen = false;
+  let searchGeneration = 0;
+  let cancelSearch: (() => void) | undefined;
+  let searchTask: Promise<void> | undefined;
+
+  const closeSearch = (): void => {
+    searchGeneration++;
+    cancelSearch?.();
+    cancelSearch = undefined;
+  };
+
+  const openSearch = async (ctx: ExtensionContext, pane: Pane): Promise<void> => {
+    if (settingsOpen || !layout?.searchPane()) return;
+    closeSearch();
+    const generation = searchGeneration;
+    await searchTask?.catch(() => {});
+    if (generation !== searchGeneration || !layout?.searchPane()) return;
+    const task = (async () => {
+      const hit = await ctx.ui.custom<SearchHit | undefined>((tui, _theme, _keys, done) => {
+        cancelSearch = () => done(undefined);
+        return new PanelSearch("Search " + (pane === "chat" ? "Conversation" : "Activity"),
+          () => layout?.searchEntries(pane) ?? [], tui, ctx.ui.theme, done);
+      }, { overlay: true, overlayOptions: () => ({ width: Math.min(110, Math.floor((host?.terminal.columns ?? 80) * 0.8)), margin: 1 }) });
+      if (generation !== searchGeneration) return;
+      cancelSearch = undefined;
+      if (hit) await layout?.jumpToSearch(pane, hit);
+    })();
+    searchTask = task;
+    try { await task; }
+    finally {
+      if (searchTask === task) searchTask = undefined;
+      if (generation === searchGeneration) cancelSearch = undefined;
+    }
+  };
 
   const openSettings = async (ctx: ExtensionContext): Promise<void> => {
     if (settingsOpen) return;
     settingsOpen = true;
+    closeSearch();
     try {
+      await searchTask?.catch(() => {});
       await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
         const list = new SettingsList([{
           id: "timestamps", label: "Show timestamps",
@@ -71,6 +108,7 @@ export default function transcript(pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
+    closeSearch();
     layout?.dispose();
     unsubscribeInput?.();
     timestamps = new TranscriptTimestamps(ctx.sessionManager);
@@ -86,7 +124,8 @@ export default function transcript(pi: ExtensionAPI): void {
       finish = done;
       layout = new TranscriptLayout(preferences, () => ctx.ui.theme,
         message => ctx.ui.notify(message, "warning"), () => persist(ctx), timestamps!,
-        () => { void openSettings(ctx).catch(error => ctx.ui.notify(String(error), "error")); });
+        () => { void openSettings(ctx).catch(error => ctx.ui.notify(String(error), "error")); },
+        pane => { void openSearch(ctx, pane).catch(error => ctx.ui.notify(String(error), "error")); });
       ensureLayout();
       return new Text("", 0, 0);
     }, {
@@ -94,8 +133,15 @@ export default function transcript(pi: ExtensionAPI): void {
       overlayOptions: { visible: () => false, nonCapturing: true },
       onHandle: () => finish(),
     });
-    unsubscribeInput = ctx.ui.onTerminalInput(() => {
+    unsubscribeInput = ctx.ui.onTerminalInput(data => {
       ensureLayout();
+      const pane = layout?.searchPane();
+      if (pane && !settingsOpen && matchesKey(data, "ctrl+f")) {
+        if (!isKeyRelease(data) && !cancelSearch) {
+          void openSearch(ctx, pane).catch(error => ctx.ui.notify(String(error), "error"));
+        }
+        return { consume: true };
+      }
       return undefined;
     });
   });
@@ -110,9 +156,10 @@ export default function transcript(pi: ExtensionAPI): void {
     pi.appendEntry(TOOL_START_ENTRY, { toolCallId: event.toolCallId, time: Date.now() });
     host?.requestRender();
   });
-  pi.on("session_tree", () => timestamps?.reset());
-  pi.on("session_compact", () => timestamps?.reset());
+  pi.on("session_tree", () => { closeSearch(); timestamps?.reset(); });
+  pi.on("session_compact", () => { closeSearch(); timestamps?.reset(); });
   pi.on("session_shutdown", async () => {
+    closeSearch();
     unsubscribeInput?.();
     unsubscribeInput = undefined;
     layout?.dispose();
@@ -137,7 +184,7 @@ export default function transcript(pi: ExtensionAPI): void {
       if (action === "toggle" || action === "") toggle();
       else if (action === "settings") await openSettings(ctx);
       else if (action === "help") {
-        ctx.ui.notify("Transcript icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ≡ settings. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("Transcript icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ≡ settings. Ctrl+F searches the active panel. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);

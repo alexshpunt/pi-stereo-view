@@ -57,6 +57,12 @@ export default function searchControls(pi: ExtensionAPI): void {
     for (const character of "dplyrntm") await input(character);
     await input("\r");
     frames.jumped = await capture();
+    await input("\x06");
+    for (const character of "dplyrntm") await input(character);
+    await capture();
+    await input("\x1b[B");
+    await input("\r");
+    frames.older = await capture();
     await writeFile(file, JSON.stringify({ frames, draft: ctx.ui.getEditorText() }));
   });
 }
