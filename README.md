@@ -67,13 +67,15 @@ Mode, layout, panel order, both sizes, the expanded panel, and timestamp visibil
 
 ## Search history
 
-Press **Ctrl+F** to search the last clicked or scrolled panel. A dot in its header shows which panel is active; Conversation is the initial choice. The `⌕` button always searches its own panel. Both open the same fuzzy picker, including in an expanded panel.
+Press **Ctrl+F** to search the last clicked or scrolled panel. A dot in its header shows which panel is active; Conversation is the initial choice. The `⌕` button always searches its own panel. Both open the same small search row below that panel's header, including in an expanded panel.
 
-Type a query, choose a fragment with the arrow keys and press Enter to jump. Queries ignore letter case and support Russian and English; letters do not have to be next to each other. The picker searches the whole current branch, including off-screen messages, hidden thinking and collapsed tool text. It does not read other branches, sessions, attachments or files.
+Typing moves to the first fuzzy match and highlights matching characters in the native text. Enter or `[↓]` moves to the next match; Shift+Enter moves to the previous one. The counter shows the current match and total, with no limit on matching history lines. Ctrl+F focuses the existing search row without clearing the query.
 
-Enter reveals the matching native block without moving the other panel. If a custom tool renderer omits the saved matching text, a temporary **Search match:** fragment appears next to that tool instead. Escape closes the picker without changing the draft or scroll. After jumping to older history, fresh output does not pull you away; use native Jump to latest or Ctrl+End to resume following.
+Queries ignore letter case and support Russian and English; letters do not have to be next to each other. Search covers the whole current branch, including off-screen messages, hidden thinking and collapsed tool text. It does not read other branches, sessions, attachments or files.
 
-Combined history, regular mode and small-window fallback keep Pi's native keyboard behavior.
+Matches reveal the native block without moving the other panel. If a custom tool renderer omits the saved matching text, a temporary **Search match:** fragment appears next to that tool instead. Native selection and copy keep the original text, without highlight codes. Image placement rows are not highlighted.
+
+Escape or `[×]` closes the row and restores the panel's pre-search scroll position and follow-latest state. The main draft stays unchanged. Reload, branch changes and small-window fallback discard the open search. Combined history, regular mode and small-window fallback keep Pi's native keyboard behavior.
 
 ## Message times
 

@@ -196,6 +196,7 @@ export class CompactMessage extends Container {
   private top = 0;
   private contentWidth = 0;
   private contentHeight = 0;
+  private hasClock = false;
   private leadingRows = 0;
   private prepared?: { width: number; content: string[]; lines: string[] };
   private readonly nativeCache: NativeRenderCache;
@@ -226,11 +227,16 @@ export class CompactMessage extends Container {
     return this.renderContent(width);
   }
 
+  /** Report only the clock actually inserted into the prepared block's rows. */
+  searchClock(): { row: number; column: number } | undefined {
+    return this.hasClock ? { row: this.leadingRows, column: this.nativeCache.hasImagePlacement ? 0 : this.contentWidth } : undefined;
+  }
   private renderContent(width: number): string[] {
     const label = this.show() ? this.label() : "";
     const gutter = this.gutter();
     const theme = this.theme();
     const time = width > label.length + gutter + 1 ? label : "";
+    this.hasClock = Boolean(time);
     this.contentWidth = Math.max(1, width - (time ? time.length + 1 + gutter : 0));
     const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
@@ -251,7 +257,10 @@ export class CompactMessage extends Container {
     while (this.top < end && blank(content[this.top])) this.top++;
     while (end > this.top && blank(content[end - 1])) end--;
     const lines = content.slice(this.top, end);
-    if (!lines.length) return lines;
+    if (!lines.length) {
+      this.hasClock = false;
+      return lines;
+    }
     // User message zones live on native padding rows. Keep those shell markers.
     const zones = (rows: string[]): string => rows.join("").match(/\x1b\]133;[ABC](?:\x07|\x1b\\)/g)?.join("") ?? "";
     lines[0] = zones(content.slice(0, this.top)) + lines[0];

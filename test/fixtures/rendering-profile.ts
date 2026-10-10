@@ -258,6 +258,25 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       const { profile } = await inspector.post("Profiler.stop");
       await writeFile(path.join(ctx.cwd, "rendering.cpuprofile"), JSON.stringify(profile));
       phases.finished = await capture();
+      if (split && process.env.PROFILE_SEARCH === "1") {
+        await measure("search-open", () => tui.handleTerminalInput("\x06"));
+        phases.searchOpened = await capture();
+        const query = "SYNTHETIC USER";
+        for (const character of query) {
+          await measure("search-typing", () => tui.handleTerminalInput(character));
+          // Matching emits a feedback frame, then positions the selected native result.
+          await capture();
+        }
+        phases.searchQuery = await capture();
+        for (let index = 0; index < count; index++) {
+          await measure("search-next", () => tui.handleTerminalInput("\r"));
+          await capture();
+        }
+        phases.searchNext = await capture();
+        await measure("search-close", () => tui.handleTerminalInput("\x1b"));
+        await capture();
+        phases.searchClosed = await capture();
+      }
       const percentile = (values: number[], fraction: number): number => values.slice().sort((a, b) => a - b)[Math.ceil(values.length * fraction) - 1];
       const summary = Object.fromEntries([...new Set(samples.map(sample => sample.action))].map(action => {
         const group = samples.filter(sample => sample.action === action);
@@ -271,7 +290,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       }));
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
         samples, summary, initialDisplay, frames: phases, runtime: { node: process.version, pid: process.pid,
-          profileStartup,
+          profileStartup, profileSearch: process.env.PROFILE_SEARCH === "1",
           mode: process.env.PROFILE_MODE, nativeComponents: components.length, samples: count,
           savedToolBlocks: messages.filter(component => component.constructor.name === "ToolExecutionComponent").length },
         draft: ctx.ui.getEditorText(), syntheticOnly: true,

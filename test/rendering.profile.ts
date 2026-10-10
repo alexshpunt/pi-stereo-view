@@ -15,6 +15,8 @@ const scrollbar = process.env.PROFILE_SCROLLBAR ?? "always";
 if (!["always", "auto", "hidden"].includes(scrollbar)) throw new Error("Unknown profile scrollbar: " + scrollbar);
 const output = path.resolve(process.env.PROFILE_OUTPUT ?? "tmp/profiling/baseline");
 const ide = "/root/dev/pi/pi-agent-ide";
+const transcript = path.resolve(process.env.PROFILE_TRANSCRIPT_PATH ?? ".");
+const profileSearch = process.env.PROFILE_SEARCH === "1";
 const git = (...args: string[]): string => execFileSync("git", ["-C", ide, ...args], { encoding: "utf8" }).trim();
 
 const savedAssistant = (content: AssistantMessage["content"]): AssistantMessage => ({
@@ -33,7 +35,9 @@ test.each(modes)("profiles native rendering in %s", async mode => {
   const workingTree = git("status", "--porcelain");
   const sourceDiff = git("diff", "HEAD");
   const version = JSON.parse(await readFile(path.join(ide, "package.json"), "utf8")).version;
-  const transcriptCommit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const transcriptGit = (...args: string[]): string => execFileSync("git", ["-C", transcript, ...args], { encoding: "utf8" }).trim();
+  const transcriptCommit = transcriptGit("rev-parse", "HEAD");
+  const transcriptDiff = transcriptGit("diff", "HEAD");
   await mkdir(output, { recursive: true });
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/render-profile-"));
@@ -58,7 +62,8 @@ test.each(modes)("profiles native rendering in %s", async mode => {
         content: [{ type: "text", text: Array.from({ length: toolLines }, (_, row) => "SYNTHETIC TOOL " + index + " line " + row + " predictable result data").join("\n") }], timestamp: at + index });
     }
     const runtime = { ide: { path: ide, version, sourceCommit, workingTree }, transcriptCommit, pi: execFileSync("pi", ["--version"], { encoding: "utf8" }).trim(),
-      profileStartup: process.env.PROFILE_STARTUP === "1",
+      transcript: { path: transcript, sourceCommit: transcriptCommit, workingTree: transcriptGit("status", "--porcelain") },
+      profileStartup: process.env.PROFILE_STARTUP === "1", profileSearch,
       workload: { exchanges: size, toolLines, width, height, scrollbar, syntheticOnly: true },
       provider: "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.", mode };
     await mkdir(artifact, { recursive: true });
@@ -68,9 +73,9 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: ide, PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines),
-        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0" },
+        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_SEARCH: profileSearch ? "1" : "0" },
       rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
-      extensions: [...(mode === "stock" ? [] : [path.resolve("src/index.ts")]), path.resolve("test/fixtures/rendering-profile.ts")],
+      extensions: [...(mode === "stock" ? [] : [path.join(transcript, "src/index.ts")]), path.resolve("test/fixtures/rendering-profile.ts")],
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],
     }).run("SYNTHETIC PROFILE SETUP");
     expect(result.providerRequests).toHaveLength(1);
@@ -86,6 +91,13 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     }
     expect(git("rev-parse", "HEAD")).toBe(sourceCommit);
     expect(git("diff", "HEAD"), "IDE source changed during the workload; results are not comparable").toBe(sourceDiff);
+    expect(transcriptGit("rev-parse", "HEAD"), "The loaded transcript source changed during measurement").toBe(transcriptCommit);
+    expect(transcriptGit("diff", "HEAD"), "The loaded transcript changes must stay fixed during measurement").toBe(transcriptDiff);
+    if (profileSearch && (mode === "columns" || mode === "rows")) {
+      expect(measurements.frames.searchQuery.join("\n")).toContain("Search:");
+      expect(measurements.frames.searchClosed.join("\n")).not.toContain("Search:");
+      expect(measurements.samples.some((sample: { action: string }) => sample.action === "search-typing")).toBe(true);
+    }
     expect(measurements.syntheticOnly).toBe(true);
     expect(measurements.initialDisplay.emittedFrameMs).toBeGreaterThan(0);
     expect(measurements.initialDisplay.cpuMs).toBeGreaterThan(0);

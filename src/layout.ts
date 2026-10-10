@@ -7,9 +7,13 @@ import {
 import { NativeDocument, type Pane } from "./native.js";
 import type { Preferences } from "./preferences.js";
 import type { TranscriptTimestamps } from "./timestamps.js";
-import { PanelSearchShortcut, type SearchEntry, type SearchHit } from "./search.js";
+import { PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.js";
 
-type NativeTui = TUI & { layoutRoot?: Container; setLayoutRoot(component: Component | undefined): void };
+type NativeTui = TUI & {
+  layoutRoot?: Container;
+  setLayoutRoot(component: Component | undefined): void;
+  getFocusedComponent(): Component | null;
+};
 const MIN_CHAT = 24;
 const MIN_ACTIVITY = 40;
 const MIN_ROWS = 4;
@@ -35,9 +39,13 @@ class TranscriptColumns extends HStack {
 
 class TranscriptRows extends VStack {
   /** Limit Conversation while leaving at least one Activity content row. */
-  limitConversation(component: Component, height: number): void {
-    const entry = this.entries.find(entry => entry.component === component);
-    if (entry) entry.maxSize = height;
+  limitConversation(component: Component, height: number, chatMinimum: number, activityMinimum: number): void {
+    for (const entry of this.entries) {
+      if (entry.component === component) {
+        entry.maxSize = height;
+        entry.minSize = chatMinimum;
+      } else if (entry.minSize !== undefined) entry.minSize = activityMinimum;
+    }
   }
 }
 
@@ -80,6 +88,14 @@ export class TranscriptLayout {
   private disposeDocuments?: () => void;
   private activePane: Pane = "chat";
   private readonly searchShortcut = new PanelSearchShortcut();
+  private readonly searchRows: Record<Pane, VStack> = { chat: new VStack(), activity: new VStack() };
+  private search?: {
+    pane: Pane; bar: PanelSearch; document: NativeDocument; view: ScrollView;
+    top: number; following: boolean; focus: Component | null;
+  };
+  private searchVersion = 0;
+  private restoreVersion = 0;
+  private readonly retiredSearchFocus = new WeakMap<Component, Component | null>();
   private drag?: { position: number; size: number };
   private failed = false;
   private fallback = false;
@@ -95,7 +111,6 @@ export class TranscriptLayout {
     private readonly save: () => void,
     private readonly timestamps: TranscriptTimestamps,
     private readonly openSettings: () => void,
-    private readonly openSearch: (pane: Pane) => void,
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
@@ -121,7 +136,11 @@ export class TranscriptLayout {
       this.dispose();
       return;
     }
-    const host = tui as NativeTui;
+    const host = tui as unknown as NativeTui;
+    if (typeof host.getFocusedComponent !== "function") {
+      this.warn("Transcript split is unavailable: Pi's focus API is not supported.");
+      return;
+    }
     if (host.layoutRoot === this.mounted && this.host) return;
     const root = host.layoutRoot;
     if (this.host) this.dispose();
@@ -178,12 +197,25 @@ export class TranscriptLayout {
     this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"));
     let historyHeight = 0;
     const shown = ({ width, height }: { width: number; height: number }): boolean => {
+      const focused = host.getFocusedComponent();
+      if (focused && this.retiredSearchFocus.has(focused)) {
+        host.setFocus(this.retiredSearchFocus.get(focused) ?? null);
+        this.retiredSearchFocus.delete(focused);
+      }
+      const previousHeight = historyHeight;
       historyHeight = Math.max(0, height - dock.render(width).length - 1);
+      const search = this.search;
+      if (search && previousHeight !== historyHeight) queueMicrotask(() => {
+        if (this.search === search) search.bar.reposition();
+      });
       this.automaticHeight = Math.max(MIN_ROWS, Math.floor(historyHeight / 2));
-      const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= MIN_ROWS :
-        this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= MIN_ROWS :
-          width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1;
+      const searchRows = this.search ? 1 : 0;
+      const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= MIN_ROWS + searchRows :
+        this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= MIN_ROWS + searchRows :
+          width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1 + searchRows;
       this.fallback = this.preferences.mode === "split" && !fits;
+      if (this.search && (this.fallback || this.failed || this.preferences.mode !== "split" ||
+        (this.preferences.zoom && this.preferences.zoom !== this.search.pane))) this.closeSearch(false);
       this.searchShortcut.sync(!this.failed && this.preferences.mode === "split" && fits);
       if (this.failed) return false;
       try {
@@ -194,8 +226,12 @@ export class TranscriptLayout {
         this.chat?.setScrollbar(scroll.scrollbar);
         columns.sizeConversation(chatPane, this.preferences.chatWidth ?? this.defaultWidth(width));
         // Keep short Conversation intact; shrink Activity first when history fills up.
-        rows.limitConversation(chatPane, Math.max(MIN_ROWS,
-          Math.min(this.preferences.chatHeight ?? this.automaticHeight, historyHeight - MIN_ROWS - 1)));
+        const chatSearchRow = this.search?.pane === "chat" ? 1 : 0;
+        const chatMinimum = MIN_ROWS + chatSearchRow;
+        const activityMinimum = MIN_ROWS + (this.search?.pane === "activity" ? 1 : 0);
+        rows.limitConversation(chatPane, Math.max(chatMinimum,
+          Math.min((this.preferences.chatHeight ?? this.automaticHeight) + chatSearchRow,
+            historyHeight - activityMinimum - 1)), chatMinimum, activityMinimum);
         return true;
       } catch (error) {
         this.failed = true;
@@ -263,6 +299,8 @@ export class TranscriptLayout {
           (this.preferences.side === "left" ? target === "chat" : target === "activity") },
         { component: label, basis: 1, shrink: 0 },
         { component: line, basis: 1, shrink: 0 },
+        { component: this.searchRows[target], basis: "auto", shrink: 0,
+          visible: () => this.search?.pane === target },
       ]);
       return new TranscriptPane(header, view, () => historyHeight);
     };
@@ -361,32 +399,88 @@ export class TranscriptLayout {
     return this.preferences.zoom ?? this.activePane;
   }
 
-  /** Read search text from the selected pane's current native branch. */
-  searchEntries(pane: Pane): SearchEntry[] { return this.documents?.[pane].searchEntries() ?? []; }
-
-  /** Reveal and scroll one current result, leaving the other pane and follow state alone. */
-  async jumpToSearch(pane: Pane, hit: SearchHit): Promise<void> {
+  /** Open or focus the compact search row below this panel's header. */
+  openSearch(pane: Pane): void {
+    const host = this.host;
     const document = this.documents?.[pane];
     const view = pane === "chat" ? this.chat : this.activity;
-    if (!document || !view || !this.searchPane() || !document.reveal(hit)) return;
+    if (!host || !document || !view || !this.searchPane()) return;
+    if (this.search?.pane === pane) {
+      this.search.bar.focus();
+      host.requestRender();
+      return;
+    }
+    this.closeSearch();
     this.activate(pane);
-    this.host?.requestRender(true);
+    const bar = new PanelSearch(() => document.searchEntries(), host, this.theme, (hit, query) => {
+      const version = ++this.searchVersion;
+      if (!hit) {
+        document.clearSearch();
+        host.requestRender();
+        return;
+      }
+      void this.jumpToSearch(pane, hit, query, () => this.search?.bar === bar && this.searchVersion === version)
+        .catch(error => this.warn("Could not navigate search: " + String(error)));
+    }, () => this.closeSearch());
+    this.search = { pane, bar, document, view, top: view.scrollTop, following: view.isFollowingEnd,
+      focus: host.getFocusedComponent() };
+    this.searchRows[pane].addChild(bar);
+    bar.focus();
+    host.requestRender();
+  }
+
+  /** Rebuild the open search index only after saved history changes. */
+  refreshSearch(): void { this.search?.bar.markDirty(); }
+
+  /** Remove transient search state and optionally restore pre-search scrolling. */
+  closeSearch(restore = true): void {
+    if (!restore) this.restoreVersion++;
+    const restoreVersion = this.restoreVersion;
+    const search = this.search;
+    const host = this.host;
+    if (!search || !host) return;
+    this.search = undefined;
+    this.searchVersion++;
+    this.searchRows[search.pane].clear();
+    search.document.clearSearch();
+    if (host.getFocusedComponent() === search.bar.input) host.setFocus(search.focus);
+    // An unrelated overlay may later restore its old focus to this removed Input.
+    else this.retiredSearchFocus.set(search.bar.input, search.focus);
+    host.requestRender();
+    if (!restore) return;
+    // Removing the row changes viewport height. Restore after native layout settles.
+    void setImmediate().then(() => {
+      if (this.restoreVersion !== restoreVersion || this.host !== host ||
+        this.documents?.[search.pane] !== search.document || this.search?.pane === search.pane) return;
+      if (search.following) search.view.scrollToEnd();
+      else search.view.scrollTo(search.top, { disableFollow: true });
+      host.requestRender();
+    });
+  }
+
+  /** Reveal and scroll one current result, leaving the other panel alone. */
+  async jumpToSearch(pane: Pane, hit: SearchHit, query = "", current = (): boolean => true): Promise<void> {
+    const document = this.documents?.[pane];
+    const view = pane === "chat" ? this.chat : this.activity;
+    if (!document || !view || !this.searchPane() || !current() || !document.reveal(hit, query)) return;
+    this.activate(pane);
+    this.host?.requestRender();
     await setImmediate();
-    if (this.documents?.[pane] !== document || !this.searchPane() || !document.containsSearchHit(hit)) return;
+    if (!current() || this.documents?.[pane] !== document || !this.searchPane() || !document.containsSearchHit(hit)) return;
     let row = document.searchRow(hit);
     if (row === undefined) {
       document.showSearchExcerpt(hit);
-      this.host?.requestRender(true);
+      this.host?.requestRender();
       await setImmediate();
-      if (this.documents?.[pane] !== document || !this.searchPane() || !document.containsSearchHit(hit)) return;
+      if (!current() || this.documents?.[pane] !== document || !this.searchPane() || !document.containsSearchHit(hit)) return;
       row = document.searchRow(hit);
     }
     if (row === undefined) {
       this.warn("The selected search result is no longer in the current history.");
       return;
     }
-    view.scrollTo(Math.max(0, row - 2), { disableFollow: true });
-    this.host?.requestRender(true);
+    view.scrollTo(Math.max(0, row - Math.min(2, Math.max(0, view.viewportHeight - 1))), { disableFollow: true });
+    this.host?.requestRender();
   }
   private changed(persist = true): void {
     this.searchShortcut.sync(Boolean(this.searchPane()));
@@ -476,6 +570,7 @@ export class TranscriptLayout {
 
   /** Release owned views and restore the original tree only if still mounted. */
   dispose(): void {
+    this.closeSearch(false);
     this.searchShortcut.dispose();
     this.restoreDocument();
     this.disposeDocuments?.();

@@ -1,8 +1,6 @@
 import path from "node:path";
 import { getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type TUI } from "@earendil-works/pi-tui";
-import { PanelSearch, type SearchHit } from "./search.js";
-import type { Pane } from "./native.js";
 import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
@@ -18,46 +16,13 @@ export default function transcript(pi: ExtensionAPI): void {
   const file = path.join(getAgentDir(), "transcript.json");
 
   let settingsOpen = false;
-  let searchGeneration = 0;
-  let cancelSearch: (() => void) | undefined;
-  let searchTask: Promise<void> | undefined;
-
-  const closeSearch = (): void => {
-    searchGeneration++;
-    cancelSearch?.();
-    cancelSearch = undefined;
-  };
-
-  const openSearch = async (ctx: ExtensionContext, pane: Pane): Promise<void> => {
-    if (settingsOpen || !layout?.searchPane()) return;
-    closeSearch();
-    const generation = searchGeneration;
-    await searchTask?.catch(() => {});
-    if (generation !== searchGeneration || !layout?.searchPane()) return;
-    const task = (async () => {
-      const hit = await ctx.ui.custom<SearchHit | undefined>((tui, _theme, _keys, done) => {
-        cancelSearch = () => done(undefined);
-        return new PanelSearch("Search " + (pane === "chat" ? "Conversation" : "Activity"),
-          () => layout?.searchEntries(pane) ?? [], tui, ctx.ui.theme, done);
-      }, { overlay: true, overlayOptions: () => ({ width: Math.min(110, Math.floor((host?.terminal.columns ?? 80) * 0.8)), margin: 1 }) });
-      if (generation !== searchGeneration) return;
-      cancelSearch = undefined;
-      if (hit) await layout?.jumpToSearch(pane, hit);
-    })();
-    searchTask = task;
-    try { await task; }
-    finally {
-      if (searchTask === task) searchTask = undefined;
-      if (generation === searchGeneration) cancelSearch = undefined;
-    }
-  };
+  const closeSearch = (): void => { layout?.closeSearch(false); };
 
   const openSettings = async (ctx: ExtensionContext): Promise<void> => {
     if (settingsOpen) return;
     settingsOpen = true;
     closeSearch();
     try {
-      await searchTask?.catch(() => {});
       await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
         const list = new SettingsList([{
           id: "timestamps", label: "Show timestamps",
@@ -124,8 +89,7 @@ export default function transcript(pi: ExtensionAPI): void {
       finish = done;
       layout = new TranscriptLayout(preferences, () => ctx.ui.theme,
         message => ctx.ui.notify(message, "warning"), () => persist(ctx), timestamps!,
-        () => { void openSettings(ctx).catch(error => ctx.ui.notify(String(error), "error")); },
-        pane => { void openSearch(ctx, pane).catch(error => ctx.ui.notify(String(error), "error")); });
+        () => { void openSettings(ctx).catch(error => ctx.ui.notify(String(error), "error")); });
       ensureLayout();
       return new Text("", 0, 0);
     }, {
@@ -137,20 +101,27 @@ export default function transcript(pi: ExtensionAPI): void {
       ensureLayout();
       const pane = layout?.searchPane();
       if (pane && !settingsOpen && matchesKey(data, "ctrl+f")) {
-        if (!isKeyRelease(data) && !cancelSearch) {
-          void openSearch(ctx, pane).catch(error => ctx.ui.notify(String(error), "error"));
-        }
+        if (!isKeyRelease(data)) layout?.openSearch(pane);
         return { consume: true };
       }
       return undefined;
     });
   });
-  pi.on("message_start", event => timestamps?.observe(event.message));
+  pi.on("message_start", event => {
+    timestamps?.observe(event.message);
+    layout?.refreshSearch();
+  });
   pi.on("message_update", event => {
     timestamps?.observe(event.message);
+    layout?.refreshSearch();
     ensureLayout();
   });
-  pi.on("message_end", event => timestamps?.observe(event.message, true));
+  pi.on("message_end", event => {
+    timestamps?.observe(event.message, true);
+    layout?.refreshSearch();
+  });
+  pi.on("tool_execution_update", () => layout?.refreshSearch());
+  pi.on("tool_execution_end", () => layout?.refreshSearch());
   pi.on("tool_execution_start", event => {
     if (!timestamps || event.parentToolCallId) return;
     pi.appendEntry(TOOL_START_ENTRY, { toolCallId: event.toolCallId, time: Date.now() });

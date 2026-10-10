@@ -7,7 +7,7 @@ import { Type } from "typebox";
 
 type Host = TUI & { getScreenLines(): string[]; handleTerminalInput(data: string): void; layoutRoot?: Container };
 
-/** Exercise saved and hidden Activity text through the real picker and native renderers. */
+/** Exercise saved and hidden Activity text through inline search and native renderers. */
 export default function searchActivityControls(pi: ExtensionAPI): void {
   let tui: Host;
   const capture = async (): Promise<string[]> => {
@@ -86,6 +86,7 @@ export default function searchActivityControls(pi: ExtensionAPI): void {
       await capture();
       frames[name] = await capture();
       snapshot(name);
+      if (choose) await input("\x1b");
     };
     await search("tool", "rstrtwrkr");
     await search("thinking", "скртйрсскй");

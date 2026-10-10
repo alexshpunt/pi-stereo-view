@@ -97,6 +97,7 @@ export default function searchLifecycleControls(pi: ExtensionAPI): void {
     await streaming;
     observation.frames.finished = await capture();
     observation.following = chatView()?.isFollowingEnd;
+    await input("\x1b");
     await input("\x06");
     await input("STREAM COMPLETE MARKER");
     observation.frames.completeQuery = await capture();
