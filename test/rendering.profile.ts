@@ -56,6 +56,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
         content: [{ type: "text", text: Array.from({ length: toolLines }, (_, row) => "SYNTHETIC TOOL " + index + " line " + row + " predictable result data").join("\n") }], timestamp: at + index });
     }
     const runtime = { ide: { path: ide, version, sourceCommit, workingTree }, transcriptCommit, pi: execFileSync("pi", ["--version"], { encoding: "utf8" }).trim(),
+      profileStartup: process.env.PROFILE_STARTUP === "1",
       workload: { exchanges: size, toolLines, width, height, syntheticOnly: true },
       provider: "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.", mode };
     await mkdir(artifact, { recursive: true });
@@ -64,7 +65,8 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       testName: mode, artifactsDir: output, cwd,
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: ide, PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
-        PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines) },
+        PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines),
+        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0" },
       rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
       extensions: [...(mode === "stock" ? [] : [path.resolve("src/index.ts")]), path.resolve("test/fixtures/rendering-profile.ts")],
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],
@@ -75,6 +77,11 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     const measurements = JSON.parse(await readFile(path.join(cwd, "rendering-measurements.json"), "utf8"));
     await writeFile(path.join(artifact, "measurements.json"), JSON.stringify(measurements, null, 2));
     await writeFile(path.join(artifact, "rendering.cpuprofile"), await readFile(path.join(cwd, "rendering.cpuprofile")));
+    if (process.env.PROFILE_STARTUP === "1") {
+      for (const phase of ["initial", "cold"]) {
+        await writeFile(path.join(artifact, phase + ".cpuprofile"), await readFile(path.join(cwd, phase + ".cpuprofile")));
+      }
+    }
     expect(git("rev-parse", "HEAD")).toBe(sourceCommit);
     expect(git("diff", "HEAD"), "IDE source changed during the workload; results are not comparable").toBe(sourceDiff);
     expect(measurements.syntheticOnly).toBe(true);

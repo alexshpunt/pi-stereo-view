@@ -27,6 +27,9 @@ export default function renderingProfile(pi: ExtensionAPI): void {
   let frame: (() => void) | undefined;
   let initialDisplay: { emittedFrameMs: number; cpuMs: number } | undefined;
   let restoreStartupWrite: (() => void) | undefined;
+  const profileStartup = process.env.PROFILE_STARTUP === "1";
+  let startupInspector: Session | undefined;
+  let startupProfile: Promise<void> | undefined;
   const count = Math.max(3, Number(process.env.PROFILE_SAMPLES ?? 12));
   const capture = async (): Promise<string[]> => {
     tui.requestRender(true);
@@ -56,6 +59,12 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       finish = done;
       return new Text("", 0, 0);
     }, { overlay: true, overlayOptions: { visible: () => false, nonCapturing: true }, onHandle: () => finish() });
+    if (profileStartup) {
+      startupInspector = new Session();
+      startupInspector.connect();
+      await startupInspector.post("Profiler.enable");
+      await startupInspector.post("Profiler.start");
+    }
     // Initial history is constructed after session_start handlers finish.
     // Include that construction and remaining native initialization, not module loading.
     const start = performance.now();
@@ -70,6 +79,12 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       if (stripTerminalSequences(output).includes("SYNTHETIC TOOL " + (Number(process.env.PROFILE_HISTORY) - 1) + " line")) {
         const usage = process.cpuUsage(cpu);
         initialDisplay = { emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000 };
+        if (startupInspector) {
+          const session = startupInspector;
+          startupProfile = session.post("Profiler.stop").then(async ({ profile }) => {
+            await writeFile(path.join(ctx.cwd, "initial.cpuprofile"), JSON.stringify(profile));
+          }).finally(() => session.disconnect());
+        }
         restoreStartupWrite?.();
         restoreStartupWrite = undefined;
       }
@@ -80,6 +95,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     restoreStartupWrite?.();
     restoreStartupWrite = undefined;
     if (!initialDisplay) throw new Error("The restored synthetic history was not observed before setup");
+    await startupProfile;
     const write = tui.terminal.write;
     const restoreCounters: (() => void)[] = [];
     tui.terminal.write = data => {
@@ -180,8 +196,17 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       for (const component of messages) if (component.constructor.name === "ToolExecutionComponent") {
         Reflect.get(component, "setExpanded").call(component, true);
       }
+      // Optional diagnostic profiles add overhead; keep them off for acceptance timing.
+      if (profileStartup) {
+        await inspector.post("Profiler.enable");
+        await inspector.post("Profiler.start");
+      }
       // First invalidated frame exposes cold text/layout work, separately from warmed interaction.
       await measure("cold", () => { tui.layoutRoot?.invalidate(); tui.requestRender(true); });
+      if (profileStartup) {
+        const { profile } = await inspector.post("Profiler.stop");
+        await writeFile(path.join(ctx.cwd, "cold.cpuprofile"), JSON.stringify(profile));
+      }
       phases.initial = await capture();
       for (let index = 0; index < 3; index++) await paint(() => tui.requestRender(true));
       await inspector.post("Profiler.enable");
@@ -244,6 +269,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       }));
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
         samples, summary, initialDisplay, frames: phases, runtime: { node: process.version, pid: process.pid,
+          profileStartup,
           mode: process.env.PROFILE_MODE, nativeComponents: components.length, samples: count,
           savedToolBlocks: messages.filter(component => component.constructor.name === "ToolExecutionComponent").length },
         draft: ctx.ui.getEditorText(), syntheticOnly: true,
