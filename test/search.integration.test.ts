@@ -58,10 +58,13 @@ test.each(["columns", "rows"] as const)("searches Conversation with keyboard and
   expect(clean(frames.closed).join("\n")).not.toContain("Search:");
   expect(observation.draft).toBe("UNSENT SEARCH DRAFT");
   const extra = observation as typeof observation & { editedDraft: string; highlighted: boolean; copied: string[];
-    overlayKeptFocus: boolean; overlayValue: string; focusAfterOverlayDraft: string };
+    overlayKeptFocus: boolean; overlayValue: string; focusAfterOverlayDraft: string;
+    openedOverOverlay: boolean; focusAfterBlockedOverlayDraft: string };
   expect(extra.editedDraft).toBe("UNSENT SEARCH DRAFTx");
   expect(extra.highlighted, "The selected native text must contain the theme's search highlight").toBe(true);
   expect(extra.copied).toEqual(["deployment runtime ready"]);
+  expect(extra.openedOverOverlay, "Transcript search must not take input away from another active overlay").toBe(false);
+  expect(extra.focusAfterBlockedOverlayDraft).toBe("UNSENT SEARCH DRAFTx");
   expect(extra.overlayKeptFocus, "Closing search must not steal focus from another overlay").toBe(true);
   expect(extra.overlayValue).toBe("z");
   expect(extra.focusAfterOverlayDraft, "Dismissing the other overlay must not restore a detached search input").toBe("UNSENT SEARCH DRAFTx");

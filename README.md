@@ -75,7 +75,7 @@ Queries ignore letter case and support Russian and English; letters do not have 
 
 Matches reveal the native block without moving the other panel. If a custom tool renderer omits the saved matching text, a temporary **Search match:** fragment appears next to that tool instead. Native selection and copy keep the original text, without highlight codes. Image placement rows are not highlighted.
 
-Escape or `[×]` closes the row and restores the panel's pre-search scroll position and follow-latest state. The main draft stays unchanged. Reload, branch changes and small-window fallback discard the open search. Combined history, regular mode and small-window fallback keep Pi's native keyboard behavior.
+Escape or `[×]` closes the row and restores the panel's pre-search scroll position and follow-latest state. The main draft stays unchanged. Reload, branch changes and small-window fallback discard the open search. Other open interfaces keep their own keyboard focus; close them before starting panel search. Combined history, regular mode and small-window fallback keep Pi's native keyboard behavior.
 
 ## Message times
 

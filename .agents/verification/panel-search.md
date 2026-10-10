@@ -28,10 +28,28 @@ Full `npm run check` with the current IDE passed 37 of 39 tests. The two failure
 
 The earlier check without an explicit IDE runner path was interrupted before results. Its exit code is not verification evidence.
 
-## Paused live verification
+## Earlier pause before performance work
 
 The user stopped this feature to prioritize a severe split-render performance problem. Search testing and acceptance are paused; LPT-717 must stay open. The user requested preserving and merging the implementation, not accepting the feature as complete.
 
 Pi was reloaded with the installed package. `inspect_tui` captured the actual human pane `w3SQ:p1`, 274×108 cells, live bottom, revision 134. Both panel magnifiers and the Conversation active marker are visible. Inline clocks, block gaps and the full-width input dock are intact. The search picker itself was not opened or visually accepted. This header capture is not evidence that live search works.
 
 Existing personal panel settings were preserved (Columns, width 67, saved height 15). Search remains available as requested, but testing and acceptance must not resume without the user's decision. Performance is tracked separately in LPT-718.
+
+## Resumed inline search
+
+The user resumed LPT-717 after rendering delivery and rejected the popup. Revised Task and Scenario were approved in `pn-0faf70`. Typing now navigates in place; Enter/next advances; Escape/close restores pre-search scroll and follow state. The user also chose all matching history lines, not the old 200-result limit (`f7825eb8-4eec-4f90-b0ea-b2cc696933c8`).
+
+Implementation checkpoint: `cb3467e33efff142659920ba5b451e2414ed976c`. The native Input, counter and two buttons occupy one row below the selected panel header. There is no search popup or result list. Selected native text gets ANSI-only highlighting; copy preserves its original characters.
+
+The new popup-to-inline test first failed in both layouts. Further meaningful red cases found and fixed minimum-height clipping, standalone matches after earlier substring collisions, genuine trailing saved times, and focus restoration after an unrelated overlay closes. The copy fixture initially copied twice: native mouse release already copies, so its explicit duplicate request was removed rather than changing production copy behavior.
+
+All 27 focused cases pass across four files, including real-Pi Conversation/Activity, keyboard/header/button use, live match movement, current-branch scope, hidden/custom text, Russian, reload/streaming, exact scroll/follow restoration, native highlight/copy, overlay focus, minimum manual height, narrow resizing and short zoom. Atomic contracts cover lazy indexing, all-match navigation, selected occurrence mapping, ANSI/Unicode/clock/image preservation and unchanged ordinary-frame search work.
+
+Final focused runner: direct IDE `/root/dev/pi/pi-agent-ide` v0.8.0, clean `d4a67ef16841058429ae5f1742fbaca5df0d19f0`, verified against latest fetched develop; Pi 1.1.0. Earlier red/focused runs used `1922570`; final regression and matched controls use the newer checkout. The installed package is still the performance delivery `0.0.0-dev.1791642798`.
+
+The first full inline regression run passed 85 cases and failed the newly added retained-occurrence regression: an update to earlier text in the same selected block left the old saved text in the anchor. This is a real defect, not an obsolete assertion. A follow-up also checks opening search over an unrelated overlay and focus restoration after layout removal. Final regression, matched synthetic rendering/search timings, installation/reload and actual human-viewport verification remain pending. LPT-717 stays open.
+
+The retained-anchor and reverse-overlay red cases are fixed. All 29 focused cases now pass. A retired Input observes its own public `focused` field only after removal, so late native overlay focus restoration returns to the original editor even without a mounted transcript layout. Active unrelated overlays retain their input; panel search declines opening over them. This removes the ordinary-frame focus check from the earlier draft.
+
+The reusable profile runner now accepts `PROFILE_TRANSCRIPT_PATH` for a matched source control, records that checkout's commit/state and rejects source changes during measurement. `PROFILE_SEARCH=1` adds separate open/query/next/close timings; `PROFILE_SEARCH_PANE=activity` covers long tool history rather than only Conversation. These are synthetic scripted measurements, not benchmarks of the user's history.

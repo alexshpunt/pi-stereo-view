@@ -104,6 +104,23 @@ export default function searchControls(pi: ExtensionAPI): void {
     await click("[×]", "Search:");
     frames.closed = await capture();
     snapshot("closed");
+    const blockedInput = new Input({ prompt: "OTHER FIRST: " });
+    let dismissBlocked = (): void => {};
+    const blockedOverlay = ctx.ui.custom<void>((_host, _theme, _keys, done) => {
+      dismissBlocked = done;
+      return blockedInput;
+    }, { overlay: true, overlayOptions: { width: 30, maxHeight: 1 } });
+    await capture();
+    await input("\x06");
+    await click("[ ⌕ ]", "Conversation");
+    const openedOverOverlay = (await capture()).some(line => stripTerminalSequences(line).includes("Search:"));
+    dismissBlocked();
+    await blockedOverlay;
+    await capture();
+    if (openedOverOverlay) await input("\x1b");
+    await input("x");
+    const focusAfterBlockedOverlayDraft = ctx.ui.getEditorText();
+    ctx.ui.setEditorText("UNSENT SEARCH DRAFT");
     await input("\x06");
     await capture();
     const overlayInput = new Input({ prompt: "OTHER: " });
@@ -125,6 +142,6 @@ export default function searchControls(pi: ExtensionAPI): void {
     const focusAfterOverlayDraft = ctx.ui.getEditorText();
     ctx.ui.setEditorText("UNSENT SEARCH DRAFT");
     await writeFile(file, JSON.stringify({ frames, draft: ctx.ui.getEditorText(), editedDraft, highlighted, copied, states,
-      overlayKeptFocus, overlayValue, focusAfterOverlayDraft }));
+      overlayKeptFocus, overlayValue, focusAfterOverlayDraft, openedOverOverlay, focusAfterBlockedOverlayDraft }));
   });
 }
