@@ -38,32 +38,51 @@ function subscribe(component: Component, changed: () => void): (() => void) | un
 }
 
 // Native setters can rebuild children or clear Text/Markdown caches without calling invalidate.
-// These inputs describe that native shell; custom renderer state follows invalidate instead.
-const inputs = ["text", "paddingX", "paddingY", "customBgFn", "bgFn", "theme", "lastMessage",
-  "args", "result", "isPartial", "expanded", "outputPad", "hideComponent", "showImages", "imageWidthCells"];
+// Custom renderer state follows invalidate instead.
+const inputs = ["text", "paddingX", "paddingY", "customBgFn", "bgFn", "theme"];
+const shellInputs = ["lastMessage", "args", "result", "isPartial", "expanded", "outputPad",
+  "hideComponent", "showImages", "imageWidthCells"];
+interface NodeState {
+  component: Component;
+  render: Component["render"];
+  values: unknown[];
+  children?: Component[];
+  members: Component[];
+  child?: Component;
+  wrapped?: Component;
+}
+interface State { nodes: NodeState[]; shell: unknown[] }
 
-function snapshot(root: Component): { nodes: Set<Component>; values: unknown[] } {
-  const nodes = new Set<Component>();
-  const values: unknown[] = [];
+function snapshot(root: Component): State {
+  const seen = new Set<Component>();
+  const nodes: NodeState[] = [];
   const visit = (component: Component): void => {
-    if (nodes.has(component)) return;
-    nodes.add(component);
-    values.push(component, component.render);
-    for (const key of inputs) values.push(Reflect.get(component, key));
-    const children = Reflect.get(component, "children") as unknown;
-    if (Array.isArray(children)) {
-      values.push(children, children.length, ...children);
-      for (const child of children) if (child && typeof child.render === "function") visit(child);
-    }
-    // MouseRegion and native framing wrappers own one child outside Container.children.
-    for (const key of ["child", "component"]) {
-      const child = Reflect.get(component, key) as Component | undefined;
-      values.push(child);
-      if (child && typeof child.render === "function") visit(child);
-    }
+    if (seen.has(component)) return;
+    seen.add(component);
+    const children = Reflect.get(component, "children") as Component[] | undefined;
+    const child = Reflect.get(component, "child") as Component | undefined;
+    const wrapped = Reflect.get(component, "component") as Component | undefined;
+    const members = Array.isArray(children) ? children.slice() : [];
+    nodes.push({ component, render: component.render, values: inputs.map(key => Reflect.get(component, key)),
+      children, members, child, wrapped });
+    for (const next of [...members, child, wrapped]) if (next && typeof next.render === "function") visit(next);
   };
   visit(root);
-  return { nodes, values };
+  return { nodes, shell: shellInputs.map(key => Reflect.get(root, key)) };
+}
+
+function matches(root: Component, state: State): boolean {
+  if (shellInputs.some((key, index) => Reflect.get(root, key) !== state.shell[index])) return false;
+  for (const node of state.nodes) {
+    const { component } = node;
+    if (component.render !== node.render || component.invalidate !== subscriptions.get(component)?.wrapped ||
+      inputs.some((key, index) => Reflect.get(component, key) !== node.values[index]) ||
+      Reflect.get(component, "child") !== node.child || Reflect.get(component, "component") !== node.wrapped) return false;
+    const children = Reflect.get(component, "children") as Component[] | undefined;
+    if (children !== node.children || (Array.isArray(children) && (children.length !== node.members.length ||
+      children.some((child, index) => child !== node.members[index])))) return false;
+  }
+  return true;
 }
 
 /**
@@ -75,17 +94,18 @@ export class NativeRenderCache {
   private revision = 0;
   private readonly changed = (): void => { this.revision++; this.cached = undefined; };
   private readonly watched = new Map<Component, () => void>();
-  private cached?: { width: number; theme: object; values: unknown[]; lines: string[] };
+  private cached?: { width: number; theme: object; state: State; lines: string[] };
 
   constructor(private readonly component: Component) {}
 
-  private watch(nodes: Set<Component>): boolean {
-    for (const [component, stop] of this.watched) if (!nodes.has(component)) {
+  private watch(nodes: NodeState[]): boolean {
+    const present = new Set(nodes.map(node => node.component));
+    for (const [component, stop] of this.watched) if (!present.has(component)) {
       stop();
       this.watched.delete(component);
     }
     let observable = true;
-    for (const component of nodes) {
+    for (const component of present) {
       if (!this.watched.has(component)) {
         const stop = subscribe(component, this.changed);
         if (stop) this.watched.set(component, stop);
@@ -97,20 +117,16 @@ export class NativeRenderCache {
 
   /** Render current native state, or reuse only an unchanged, observable block. */
   render(width: number, theme: object): string[] {
-    const state = snapshot(this.component);
-    const observable = this.watch(state.nodes);
     const cached = this.cached;
-    if (observable && cached?.width === width && cached.theme === theme &&
-      cached.values.length === state.values.length && state.values.every((value, index) => value === cached.values[index])) {
-      return cached.lines;
-    }
+    if (cached?.width === width && cached.theme === theme && matches(this.component, cached.state)) return cached.lines;
     this.cached = undefined;
+    this.watch(snapshot(this.component).nodes);
     const before = this.revision;
     const lines = this.component.render(width);
     const after = snapshot(this.component);
     if (this.watch(after.nodes) && this.revision === before &&
       !lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="))) {
-      this.cached = { width, theme, values: after.values, lines };
+      this.cached = { width, theme, state: after, lines };
     }
     return lines;
   }
