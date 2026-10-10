@@ -152,8 +152,8 @@ export class TranscriptLayout {
       this.searchShortcut.sync(!this.failed && this.preferences.mode === "split" && fits);
       if (this.failed) return false;
       try {
+        // Both panels project the same native history and supported content kinds.
         activityDocument.check();
-        chatDocument.check();
         if (this.preferences.mode !== "split" || !fits) return false;
         this.activity?.setScrollbar(scroll.scrollbar);
         this.chat?.setScrollbar(scroll.scrollbar);

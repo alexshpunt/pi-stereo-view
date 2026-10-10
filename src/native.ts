@@ -188,7 +188,8 @@ export class NativeDocument extends Container {
     if (this.excerpt && !chat.children.includes(this.excerpt.entry.source)) this.excerpt = undefined;
     if (this.searchAnchor && !chat.children.includes(this.searchAnchor.entry.source)) this.searchAnchor = undefined;
     const result: Component[] = this.pane !== "chat" ? this.source.children.slice(0, 2) : [];
-    let row = this.pane === "combined" ? 0 : result.reduce((count, child) => count + child.render(width).length, 0);
+    const locateMatch = this.pane !== "combined" && (this.searchAnchor !== undefined || this.excerpt !== undefined);
+    let row = locateMatch ? result.reduce((count, child) => count + child.render(width).length, 0) : 0;
     let spacing: Component[] = [];
     let visibleBlock = false;
     for (const component of chat.children) {
@@ -233,7 +234,7 @@ export class NativeDocument extends Container {
             result.push(stamped);
           } else result.push(...spacing, stamped);
         }
-        if (this.pane !== "combined") {
+        if (locateMatch) {
           const lines = result.slice(start).flatMap(child => child.render(width));
           let excerptRow: number | undefined;
           if (this.excerpt?.entry.source === component) {
