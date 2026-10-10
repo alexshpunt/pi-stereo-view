@@ -92,6 +92,8 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       "Pane height measurement must not assemble more than a window of history rows").toBe(true);
     expect(measurements.samples.every((sample: { previewScrollRows: number }) => sample.previewScrollRows <= height),
       "Intrinsic pane measurement must not pad the full scrollback for a scrollbar").toBe(true);
+    expect(measurements.samples.every((sample: { panePreviewCharacters: number }) => sample.panePreviewCharacters === 0),
+      "Intrinsic pane height measurement must not composite native text").toBe(true);
     expect(measurements.draft).toBe("SYNTHETIC PROFILE DRAFT ");
     console.log(JSON.stringify({ mode, summary: measurements.summary }));
   } finally {
