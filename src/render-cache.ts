@@ -67,36 +67,59 @@ function background(component: Component): unknown {
   return color?.("test");
 }
 
-function snapshot(root: Component): State {
+function components(root: Component): Component[] {
   const seen = new Set<Component>();
-  const nodes: NodeState[] = [];
+  const nodes: Component[] = [];
   const visit = (component: Component): void => {
     if (seen.has(component)) return;
     seen.add(component);
+    nodes.push(component);
     const children = Reflect.get(component, "children") as Component[] | undefined;
-    const child = Reflect.get(component, "child") as Component | undefined;
-    const wrapped = Reflect.get(component, "component") as Component | undefined;
-    const members = Array.isArray(children) ? children.slice() : [];
-    const box = isBox(component);
-    nodes.push({ component, render: component.render, values: inputs.map(key => Reflect.get(component, key)),
-      box, background: box ? background(component) : undefined, children, members, child, wrapped });
-    for (const next of [...members, child, wrapped]) if (next && typeof next.render === "function") visit(next);
+    if (Array.isArray(children)) for (const child of children) if (child && typeof child.render === "function") visit(child);
+    for (const key of ["child", "component"]) {
+      const child = Reflect.get(component, key) as Component | undefined;
+      if (child && typeof child.render === "function") visit(child);
+    }
   };
   visit(root);
-  return { nodes, shell: shellInputs.map(key => Reflect.get(root, key)) };
+  return nodes;
+}
+
+function snapshot(root: Component, nodes: Component[]): State {
+  return {
+    nodes: nodes.map(component => {
+      const children = Reflect.get(component, "children") as Component[] | undefined;
+      const box = isBox(component);
+      return { component, render: component.render, values: inputs.map(key => Reflect.get(component, key)),
+        box, background: box ? background(component) : undefined, children,
+        members: Array.isArray(children) ? children.slice() : [],
+        child: Reflect.get(component, "child") as Component | undefined,
+        wrapped: Reflect.get(component, "component") as Component | undefined };
+    }),
+    shell: shellInputs.map(key => Reflect.get(root, key)),
+  };
 }
 
 function matches(root: Component, state: State): boolean {
-  if (shellInputs.some((key, index) => Reflect.get(root, key) !== state.shell[index])) return false;
+  for (let index = 0; index < shellInputs.length; index++) {
+    if (Reflect.get(root, shellInputs[index]) !== state.shell[index]) return false;
+  }
   for (const node of state.nodes) {
     const { component } = node;
     if (component.render !== node.render || component.invalidate !== subscriptions.get(component)?.wrapped ||
-      inputs.some((key, index) => Reflect.get(component, key) !== node.values[index]) ||
       Reflect.get(component, "child") !== node.child || Reflect.get(component, "component") !== node.wrapped ||
       (node.box && background(component) !== node.background)) return false;
+    for (let index = 0; index < inputs.length; index++) {
+      if (Reflect.get(component, inputs[index]) !== node.values[index]) return false;
+    }
     const children = Reflect.get(component, "children") as Component[] | undefined;
-    if (children !== node.children || (Array.isArray(children) && (children.length !== node.members.length ||
-      children.some((child, index) => child !== node.members[index])))) return false;
+    if (children !== node.children) return false;
+    if (Array.isArray(children)) {
+      if (children.length !== node.members.length) return false;
+      for (let index = 0; index < children.length; index++) {
+        if (children[index] !== node.members[index]) return false;
+      }
+    }
   }
   return true;
 }
@@ -114,8 +137,8 @@ export class NativeRenderCache {
 
   constructor(private readonly component: Component) {}
 
-  private watch(nodes: NodeState[]): boolean {
-    const present = new Set(nodes.map(node => node.component));
+  private watch(nodes: Component[]): boolean {
+    const present = new Set(nodes);
     for (const [component, stop] of this.watched) if (!present.has(component)) {
       stop();
       this.watched.delete(component);
@@ -136,17 +159,17 @@ export class NativeRenderCache {
     const cached = this.cached;
     if (cached?.width === width && cached.theme === theme && matches(this.component, cached.state)) return cached.lines;
     this.cached = undefined;
-    const initial = snapshot(this.component);
-    this.watch(initial.nodes);
+    const initial = components(this.component);
+    this.watch(initial);
     const before = this.revision;
     const lines = this.component.render(width);
-    const after = snapshot(this.component);
-    const stableGraph = initial.nodes.length === after.nodes.length &&
-      after.nodes.every((node, index) => node.component === initial.nodes[index].component);
+    const after = components(this.component);
+    const stableGraph = initial.length === after.length &&
+      after.every((component, index) => component === initial[index]);
     // A newly created child could invalidate during its first render, before observation.
-    if (this.watch(after.nodes) && stableGraph && this.revision === before &&
+    if (this.watch(after) && stableGraph && this.revision === before &&
       !lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="))) {
-      this.cached = { width, theme, state: after, lines };
+      this.cached = { width, theme, state: snapshot(this.component, after), lines };
     }
     return lines;
   }
