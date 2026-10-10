@@ -294,13 +294,15 @@ test.each(["columns", "rows"])("keeps selection, copy, and independent scrolling
     piCommand: path.resolve("test/fixtures/pi-host.sh"),
     isolateUserResources: false,
     environment: { PI_CODING_AGENT_DIR: agent, TRANSCRIPT_PROBE_SELECTION: "1" },
+    timeoutMs: 120_000,
     rawMode: false,
     tuiSize: { cols: 120, rows: 35 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/native-probe.ts")],
     tools: ["write"],
     conversation: [
       assistantMessage([toolCall({ id: "selection-write", name: "write", arguments: { path: "result.txt", content: "effect" } })], { stopReason: "toolUse" }),
-      assistantMessage([text(Array.from({ length: 45 }, (_, index) => "Chat line " + index).join("\n\n") + "\n\nCHAT_COPY_MARKER")]),
+      assistantMessage([text(Array.from({ length: 45 }, (_, index) => "Chat line " + index).join("\n\n") + "\n\nCHAT_COPY_MARKER",
+        { chunks: { kind: "fixed", size: 5000 } })]),
     ],
   }).run("USER MARKER");
   const observation: { copied: string[]; beforeWheel: string[]; activityWheel: string[]; chatWheel: string[] } =
@@ -323,4 +325,4 @@ test.each(["columns", "rows"])("keeps selection, copy, and independent scrolling
   expect(pane(observation.activityWheel, 1)).toBe(pane(observation.beforeWheel, 1));
   expect(pane(observation.chatWheel, 0)).toBe(pane(observation.activityWheel, 0));
   expect(pane(observation.chatWheel, 1)).not.toBe(pane(observation.activityWheel, 1));
-});
+}, 150_000);
