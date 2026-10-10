@@ -67,6 +67,36 @@ A separate real-Pi regression at `tmp/profiling/repeated-invalidation-red/` show
 
 This removes excess measurement copies but still does not meet stock parity. Profiles retain substantial native background formatting and compact-render work. Separate native/compact timing is being added to distinguish the remaining costs. The non-search regression suite must be rerun after this latest layout change.
 
+## Persistent native cache checkpoint
+
+The user approved persistent caching by Pi's documented component invalidation contract in ask `92fa12c3-0cc1-4f14-998d-3d7a7e991e13` (`render_cache_contract`). Changed custom state must invalidate before requesting a render. This replaces the earlier decision to call every native renderer every frame. Native shell inputs, child replacement and Text/Markdown setters are also checked because native setters can clear their own caches without invoking `invalidate`. Observers are shared, removed from abandoned trees, and restored when the layout detaches or falls back. Unobservable components and image placement output always render.
+
+`e8bdb7e` removes the remaining full-scrollback scrollbar padding during intrinsic pane measurement and reuses unchanged separator arrays. The new real-Pi copy contract failed in both split modes before the fix and passes afterward; the separator-reuse regression also failed before implementation and passes now. A 600-case matrix was interrupted by Clanker authentication during provenance checks. Stock passed; Combined, Columns and Rows were rerun separately with successful before/after source checks. These fixes alone did not establish parity.
+
+`b524b9d` adds the persistent cache and initial restored-history display measurement. All four cases passed at `tmp/profiling/native-cache-600/`, with the same verified clean IDE source. Typing medians: Stock 68.07ms, Columns 57.70ms, Rows 54.06ms. Columns typing p95 was 90.29ms versus Stock 85.33ms; Columns scroll p95 was also higher. Initial history display was Stock 767.54ms, Columns 812.64ms, Rows 810.91ms. This is promising, but one matrix is not acceptance and cannot establish equivalent initial display or tails.
+
+Initial display now means the end of the profiling `session_start` handler to the first synchronized frame containing the restored history. It includes native history construction and remaining initialization, excludes module loading, and precedes the scripted setup turn. Default-collapsed tools are retained for this startup measurement; the later invalidated `cold` phase expands tools in all modes. Do not compare the two phases as if they were the same workload.
+
+`b30dc43` validates existing cache snapshots without recreating them on every unchanged frame. Thirteen focused cases pass, including direct/nested invalidation, native text/child changes, shared observers, cleanup, width/theme, render-time invalidation, images and unobservable components. Its full non-search regression suite passed all 42 cases. Repeated normal/large-window performance controls and live verification remain pending.
+
+The valid baseline raw profiles, samples and provenance are archived in `.agents/verification/rendering/baseline-600/`. Later raw checkpoints remain in ignored `tmp/profiling` until the accepted final evidence is archived.
+
+## Cache correctness and repeated controls
+
+Read-only review found two cache gaps: native Box colors can change through a callback closure, and a newly created child can invalidate during its first render before being observed. Native Text can also clear its cache when given the same background callback. Three behavior regressions failed before `ca88815` and passed afterward. The cache now checks native cache validity and Box background output, and does not retain output from a render that changes the observed component graph. Sixteen focused cases and typecheck pass, including these regressions.
+
+The streamed-assistant assertion now checks the emitted frame before restoring the original assistant content (`b5d8381`). The following repeated controls passed with 600 exchanges, 80 lines per tool, 16 interaction samples and the same verified IDE source. Initial display and expanded invalidated history still cost more in split; these are not acceptance results.
+
+| Run | Window | Stock typing median / p95 | Columns typing median / p95 | Rows typing median / p95 | Initial display: Stock / Columns / Rows |
+| --- | --- | --- | --- | --- | --- |
+| candidate-normal-1 | 120x35 | 47.8 / 55.3 ms | 44.9 / 69.9 ms | 43.5 / 57.7 ms | 525 / 698 / 753 ms |
+| candidate-normal-2 (reverse mode order) | 120x35 | 48.9 / 55.4 ms | 44.0 / 79.0 ms | 43.8 / 56.0 ms | 572 / 795 / 1020 ms |
+| candidate-large-1 | 274x108 | 76.5 / 90.2 ms | 98.8 / 134.4 ms | 59.8 / 87.7 ms | 847 / 1008 / 1101 ms |
+
+`24c5dd6` makes intrinsic pane previews return row-count placeholders rather than composited native text. Actual native layout and painting still use the original header and ScrollView. A real-Pi contract requiring zero preview text failed before the change and passes afterward in both split modes, with streamed assistant and updated tool text visible. Its normal-window matrix (`intrinsic-count-normal-1`) passed all four cases: typing medians Stock 47.2 ms, Columns 45.0 ms, Rows 38.0 ms. Initial display was still Stock 644 ms, Columns 815 ms, Rows 832 ms; Rows resize median was 330.6 ms versus Stock 274.5 ms. Large-window measurement remains needed.
+
+`1a74939` avoids capturing unused native property snapshots before a cache miss is rendered, and removes per-node comparison callbacks on warm hits. All sixteen focused behavior cases and typecheck pass. Its performance measurement is pending. Neither change is installed in the personal Pi instance yet. Search testing remains paused.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
