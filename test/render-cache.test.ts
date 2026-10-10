@@ -1,4 +1,4 @@
-import { Container, Text, type Component } from "@earendil-works/pi-tui";
+import { Box, Container, Text, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { NativeRenderCache } from "../src/render-cache.js";
 
@@ -43,6 +43,40 @@ test("sees native text setters, child replacement and nested invalidation", () =
   root.clear();
   expect(cache.render(30, theme)).toEqual([]);
   expect(child.invalidate).toBe(original);
+  cache.dispose();
+});
+
+test.each(["text", "box"])("honors %s background refresh with the same callback", kind => {
+  let color = 41;
+  const background = (text: string) => "\x1b[" + color + "m" + text + "\x1b[0m";
+  const text = new Text("body", 0, 0, background);
+  const box = new Box(0, 0, background);
+  box.addChild(new Text("body", 0, 0));
+  const component = kind === "text" ? text : box;
+  const cache = new NativeRenderCache(component);
+  const theme = {};
+  expect(cache.render(20, theme).join("")).toContain("\x1b[41m");
+  color = 42;
+  if (kind === "text") text.setCustomBgFn(background);
+  expect(cache.render(20, theme).join("")).toContain("\x1b[42m");
+  cache.dispose();
+});
+
+test("does not retain a new child's first output before its invalidation is observable", () => {
+  let renders = 0;
+  const child: Component = {
+    render() { if (++renders === 1) this.invalidate(); return [String(renders)]; },
+    invalidate() {},
+  };
+  const root = new Container();
+  root.render = width => {
+    if (!root.children.length) root.addChild(child);
+    return child.render(width);
+  };
+  const cache = new NativeRenderCache(root);
+  const theme = {};
+  expect(cache.render(20, theme)).toEqual(["1"]);
+  expect(cache.render(20, theme)).toEqual(["2"]);
   cache.dispose();
 });
 
