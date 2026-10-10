@@ -51,6 +51,7 @@ export class NativeDocument extends Container {
   private lastWidth = 1;
   private frameActive = false;
   private frameWidth?: number;
+  private frameLines?: string[];
   private checked = false;
 
   constructor(
@@ -179,7 +180,7 @@ export class NativeDocument extends Container {
     return super.handleMouse(event);
   }
   override render(width: number): string[] {
-    if (this.frameActive && this.frameWidth === width) return super.render(width);
+    if (this.frameActive && this.frameWidth === width && this.frameLines) return this.frameLines;
     const chat = this.source.children[2] as Container;
     this.timestamps.prepare(chat.children);
     this.lastWidth = width;
@@ -257,7 +258,8 @@ export class NativeDocument extends Container {
     if (this.pane !== "combined" && this.searchAnchor) result.push(new Spacer(1));
     this.children = result;
     this.frameWidth = width;
-    return super.render(width);
+    this.frameLines = super.render(width);
+    return this.frameLines;
   }
 
   override invalidate(): void {

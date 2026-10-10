@@ -27,7 +27,7 @@ test("renders a native block once for repeated layout measurements but refreshes
   document.beginFrame();
   timestamps.beginFrame();
   const first = document.render(30);
-  expect(document.render(30)).toEqual(first);
+  expect(document.render(30)).toBe(first);
   expect(user.renders).toBe(1);
   expect(indexes).toBe(1);
   user.setText("SECOND");

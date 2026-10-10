@@ -30,15 +30,21 @@ Production baseline: develop `aebe6ef`. Profiling infrastructure for the complet
 | Stock | 64.55 / 107.04 | 72.66 | 82.64 | Native stock document, no extension counters |
 | Combined | 88.46 / 117.48 | 98.53 | 84.51 | 1 |
 | Columns | 366.86 / 459.65 | 422.89 | 378.88 | 6 |
+| Rows (separate verified baseline) | 454.11 / 575.09 | 549.03 | 452.64 | 8 |
 
 All three cases passed with before/after IDE verification and the full saved tool-block count. Raw artifacts: `tmp/profiling/baseline-600-complete/`.
 
-Rows in that matrix produced samples but failed the post-run Git provenance check: the child command reported unavailable Clanker session authentication. Its numbers are provisional, not a passing control case. A separate Rows baseline rerun is needed. A fresh parent-tool check still found the same clean IDE revision.
+Rows in that matrix produced samples but failed the post-run Git provenance check: the child command reported unavailable Clanker session authentication. Its numbers are discarded in favor of a separate successful Rows baseline, with the same verified runtime and workload, at `tmp/profiling/baseline-600-rows-verified/`. A fresh parent-tool check also found the same clean IDE revision.
 
 An earlier 600-exchange run automatically compacted the history and consumed the scripted setup response. It is discarded as performance evidence.
 
-V8 profiles and actual render counters show that Columns repeatedly prepares the history six times per emitted frame, rebuilding timestamp indexes and compact formatting. Rows provisionally shows eight passes. Large inclusive stacks run through `CompactMessage.renderContent`, native tool rendering, ANSI/background handling and trimming. These findings justify removing repeated work within a frame and reusing formatting only when native output is unchanged. They do not yet prove which optimization achieves stock parity.
+V8 profiles and actual render counters show that Columns repeatedly prepares the history six times per emitted frame, rebuilding timestamp indexes and compact formatting. The successful Rows rerun shows eight passes. Large inclusive stacks run through `CompactMessage.renderContent`, native tool rendering, ANSI/background handling and trimming. These findings justify removing repeated work within a frame and reusing formatting only when native output is unchanged. They do not yet prove which optimization achieves stock parity.
 
+## First optimization checkpoint
+
+Commit `64d1d0d` reuses routing and native block preparation for repeated measurements at the same width within one root layout frame. The next frame always refreshes the native source. Timestamp correlation is shared between panels in that frame. Compact formatting is reused only after reading and comparing current native output, clock, width, gutter and theme; image placement blocks are not retained by that formatting cache. Unknown native renderers still run on each new frame.
+
+Two deterministic work-reuse regressions failed before the change and now pass. Together with the existing compact-message tests, seven unit cases pass. Typecheck and `git diff --check` pass. The matched 600-exchange post-change matrix is running; no speedup or parity claim yet.
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
