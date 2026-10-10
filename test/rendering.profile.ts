@@ -84,6 +84,8 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       "A root invalidation must refresh the shared native history exactly once").toBe(1);
     expect(measurements.markers.some((line: string) => line.includes("SYNTHETIC TOOL UPDATE")),
       "The updated native tool must be visible in the emitted final frame").toBe(true);
+    expect(measurements.samples.every((sample: { paneRows: number }) => sample.paneRows <= height),
+      "Pane height measurement must not assemble more than a window of history rows").toBe(true);
     expect(measurements.draft).toBe("SYNTHETIC PROFILE DRAFT ");
     console.log(JSON.stringify({ mode, summary: measurements.summary }));
   } finally {
