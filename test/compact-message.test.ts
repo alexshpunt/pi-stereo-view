@@ -32,6 +32,24 @@ test("reuses compact formatting for unchanged native lines without hiding native
   expect(clocks).toBe(4);
 });
 
+test("reuses separated rows without hiding native updates on the next preparation", () => {
+  let content = ["", "same content", ""];
+  let renders = 0;
+  const native: Component = { render: () => { renders++; return [...content]; }, invalidate() {} };
+  const colors = theme();
+  const message = new CompactMessage(native, () => "12:34:56", () => colors, () => 0, () => true);
+  message.prepare(30, true);
+  const first = message.render(30);
+  message.prepare(30, true);
+  expect(message.render(30), "Unchanged history must not copy every row just to add its separator").toBe(first);
+  expect(renders).toBe(2);
+  content = ["", "changed content", ""];
+  message.prepare(30, true);
+  expect(message.render(30)).not.toBe(first);
+  expect(message.render(30).map(stripTerminalSequences).join("\n")).toContain("changed content");
+  message.prepare(30, false);
+  expect(message.render(30)[0]).not.toBe("");
+});
 test("adds one separator only for a visible block and renders native content once per preparation", () => {
   let renders = 0;
   let content = ["first", "", "second"];
