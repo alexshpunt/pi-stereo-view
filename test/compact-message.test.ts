@@ -93,6 +93,44 @@ test("adds one separator only for a visible block and renders native content onc
   expect(renders).toBe(2);
 });
 
+test("scans native output for image placement once per render, including image-to-text updates", () => {
+  let scans = 0;
+  const content = new Proxy(["body"], {
+    get(target, property, receiver) {
+      if (property === "some") return (predicate: (line: string) => boolean): boolean => {
+        scans++;
+        return target.some(predicate);
+      };
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const native: Component = { render: () => content, invalidate() {} };
+  const colors = theme();
+  const message = new CompactMessage(native, () => "12:34:56", () => colors, () => 0, () => true);
+  try {
+    message.prepare(30, false);
+    expect(scans, "Caching and compact formatting must share one image-placement scan").toBe(1);
+    scans = 0;
+    message.prepare(30, false);
+    expect(scans).toBe(0);
+    for (const image of ["\x1b_Ga=T;AAAA\x1b\\", "\x1b]1337;File=AAAA\x07"]) {
+      content[0] = image;
+      native.invalidate();
+      scans = 0;
+      message.prepare(30, false);
+      expect(scans).toBe(1);
+      expect(message.render(30)[1]).toBe(image);
+      content[0] = "updated body";
+      native.invalidate();
+      scans = 0;
+      message.prepare(30, false);
+      expect(scans).toBe(1);
+      expect(message.render(30)).toHaveLength(1);
+      expect(stripTerminalSequences(message.render(30)[0])).toMatch(/^updated body\s+12:34:56$/);
+    }
+  } finally { message.dispose(); }
+});
+
 test("does not strip image placement rows or append a clock to an image protocol", () => {
   const image = "\x1b_Ga=T,i=1;AAAA\x1b\\";
   const content = ["", "", image, ""];

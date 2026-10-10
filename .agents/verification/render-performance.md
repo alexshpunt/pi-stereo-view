@@ -153,6 +153,10 @@ Read-only review `replica-6382543c` found duplicate subscription maintenance on 
 
 All19 focused cache, compact-format and native-work cases pass, along with typecheck and diff checks (`shell:596236fa4184`). Existing tests retain render-time invalidation, new-child first-render handling, removed-child restoration, shared subscribers, native background updates, images and unobservable components. This small change is not installed yet and its latency improvement is not proven; matched large-window profiling is next. The installed intermediate version remains unchanged.
 
+The `fc03c38` large auto matrix passed all four cases (`shell:16da9feefc1b`, exit0). Typing median/p95: Stock63.8/77.5 ms, Columns38.1/62.9 ms, Rows30.0/35.0 ms. Initial display: Stock720 ms, Columns711 ms, Rows802 ms. Expanded cold frames: Stock496 ms, Columns507 ms, Rows550 ms. Resize median/maximum: Stock460/609 ms, Columns296/330 ms, Rows380/442 ms. Stock itself is slower than in the prior large matrix, so the whole observed resize improvement cannot be credited to subscription reuse. Raw evidence remains at `tmp/profiling/stable-subscriptions-large-1/`; the exact one-pass work contract is proven, stock parity is not.
+
+The same review identified a duplicate image-placement scan on formatting misses. A work regression failed with two scans (`shell:bb5dae9127b6`) before implementation. NativeRenderCache now shares the latest render's image-placement classification with CompactMessage. The regression covers unchanged text, Kitty and iTerm images, and image-to-text updates without dropping rows or retaining image placement. All20 focused cases, typecheck and diff checks pass (`shell:2b6fec308944`). Full non-search regression and another matched large control are next; neither new cache follow-up is installed yet.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
