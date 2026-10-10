@@ -153,7 +153,8 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       }));
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
         samples, summary, frames: phases, runtime: { node: process.version, pid: process.pid,
-          mode: process.env.PROFILE_MODE, nativeComponents: components.length, samples: count },
+          mode: process.env.PROFILE_MODE, nativeComponents: components.length, samples: count,
+          savedToolBlocks: messages.filter(component => component.constructor.name === "ToolExecutionComponent").length },
         draft: ctx.ui.getEditorText(), syntheticOnly: true,
         frameDefinition: "Action to synchronized terminal-frame emission, not compositor presentation; process CPU delta includes scheduling background work.",
         markers: phases.finished.map(stripTerminalSequences).filter(line => line.includes("SYNTHETIC")),
