@@ -230,7 +230,7 @@ export class CompactMessage extends Container {
     }
     this.formatted = undefined;
     // Image protocols need every placement row. Keep their native block intact.
-    if (content.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="))) {
+    if (this.nativeCache.hasImagePlacement) {
       this.top = time ? -1 : 0;
       return time ? [theme.fg("dim", time.padStart(width - gutter)), ...content] : content;
     }

@@ -132,6 +132,7 @@ function matches(root: Component, state: State): boolean {
 export class NativeRenderCache {
   private revision = 0;
   private outputVersion = 0;
+  private imagePlacement = false;
   private readonly changed = (): void => { this.revision++; this.cached = undefined; };
   private readonly watched = new Map<Component, () => void>();
   private cached?: { width: number; theme: object; state: State; lines: string[] };
@@ -140,6 +141,9 @@ export class NativeRenderCache {
 
   /** Changes after each native render, even when it reuses a mutable row array. */
   get version(): number { return this.outputVersion; }
+
+  /** Whether the latest native output contains placement-dependent image rows. */
+  get hasImagePlacement(): boolean { return this.imagePlacement; }
 
   private watch(nodes: Component[]): boolean {
     const present = new Set(nodes);
@@ -168,6 +172,7 @@ export class NativeRenderCache {
     const before = this.revision;
     const lines = this.component.render(width);
     this.outputVersion++;
+    this.imagePlacement = lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="));
     const after = components(this.component);
     const stableGraph = initial.length === after.length &&
       after.every((component, index) => component === initial[index]);
@@ -175,8 +180,7 @@ export class NativeRenderCache {
     const observable = stableGraph ? observed && after.every(component =>
       component.invalidate === subscriptions.get(component)?.wrapped) : this.watch(after);
     // A newly created child could invalidate during its first render, before observation.
-    if (observable && stableGraph && this.revision === before &&
-      !lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="))) {
+    if (observable && stableGraph && this.revision === before && !this.imagePlacement) {
       this.cached = { width, theme, state: snapshot(this.component, after), lines };
     }
     return lines;
