@@ -1,6 +1,6 @@
 # Practical limit of the current native-renderer architecture
 
-Final source9d29c78 passed57 non-search cases and16 matched normal/large native-auto profile cases in both mode orders. Full stock parity is not established. The user's later direct instruction allows completion at a justified practical boundary, with remaining costs explicit. Final installation/live verification remains a gate.
+Final source9d29c78 passed57 non-search cases and16 matched normal/large native-auto profile cases in both mode orders. Full stock parity is not established. The user's later direct instruction allows completion at a justified practical boundary, with remaining costs explicit. Final package0.0.0-dev.1791642798 was installed, source-compared, reloaded and verified in exact human viewport w3SR:p3,274x108,revision371; see final-live-runtime.json.
 
 ## What the measurements mean
 

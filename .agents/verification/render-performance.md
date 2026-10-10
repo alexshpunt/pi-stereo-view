@@ -231,10 +231,17 @@ The bounded blank cache received read-only review9270b9e3 with no concrete defec
 
 Under the latest direct approval, proceed to final install/reload/live verification and develop merge, then record the practical-limit Result honestly. Search remains open/paused and untested.
 
-## Acceptance still needed
+## Final live verification and accepted boundary
 
-- Implement and measure the fixes against matched controls, including repeated runs and a large window.
-- Measure initial history display separately from an invalidated warmed process.
-- Verify existing non-search behavior and the real human-visible viewport after reinstall/reload.
-- Preserve raw before/after evidence before cleaning ignored temporary artifacts.
-- Do not call the performance issue fixed or close it until its approved scenario passes.
+Published and installed0.0.0-dev.1791642798 from evidence commitb612163, production9d29c78. All five installed source comparisons pass before and after mandatory Pi reload. Latest clean direct IDE0.8.0 source1922570b9882c023f284b85ac45d3bad4be46550 was fetched/verified before the live run. User-selected split/columns67,height15,sideleft,clocksTRUE/nativeauto settings were preserved.
+
+Two short native Bash calls emitted FINAL CACHE CHECK ONE/TWO (shell:7ed887b3a1de andde6b0a61c6e9, both exit0), alongside two assistant paragraphs. Exact human-visible inspect_tui capture w3SR:p3,274x108,live bottom,revision371 shows both current tool outputs, right-aligned inline clocks, one blank row between tool blocks, preserved paragraphs and an intact full-width input dock/footer. No new rendering error, stray escapes, overlap or extension clipping was seen. An older remote-save failure remains honestly visible; it is not a current render defect. Capture metadata/judgment are in rendering/final-live-runtime.json. No personal screenshot/history was stored in Git or benchmarked.
+
+- [x] Matched repeated normal/large controls and raw before/after CPU/runtime evidence retained.
+- [x] Initial/cold measurements separated; diagnostic sampling not used as timing acceptance.
+- [x] All57 non-search behavior cases, typecheck and diff checks pass at final production source.
+- [x] Final installed source and exact real viewport verified after reload.
+- [x] Practical-limit decision supported by measured gaps, rejected experiment and public native API constraints.
+- [ ] Develop merge/push and final Linear delivery checkpoint follow this verified source. Search stays open/paused.
+
+Completion is under the user's later explicit practical-limit approval, not original strict parity. Remaining initial/cold, large Rows resize and some Columns tails are documented; no claim that all future optimization is impossible.

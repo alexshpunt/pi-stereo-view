@@ -1,0 +1,57 @@
+{
+  "package": "@alexshp/pi-agent-transcript",
+  "version": "0.0.0-dev.1791642798",
+  "packageSource": "b612163",
+  "productionSource": "9d29c78c0c3bb1af60e419c1570bec76441e6a37",
+  "installedSourceComparison": "index/layout/native/timestamps/render-cache cmp passed before and after reload",
+  "ide": {
+    "path": "/root/dev/pi/pi-agent-ide",
+    "version": "0.8.0",
+    "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+    "workingTree": "",
+    "latestOriginVerified": true
+  },
+  "preferences": {
+    "mode": "split",
+    "layout": "columns",
+    "chatWidth": 67,
+    "chatHeight": 15,
+    "side": "left",
+    "zoom": null,
+    "showTimestamps": true,
+    "fullscreenScrollbar": "auto"
+  },
+  "regression": {
+    "passed": 57,
+    "files": 11
+  },
+  "profiles": {
+    "passed": 16,
+    "normalAndLargeRepeated": true
+  },
+  "packageUpdate": "shell:0336ce96c566 completed exit0",
+  "liveStatus": "mandatory reload and exact human viewport passed",
+  "toolChecks": [
+    {
+      "terminal": "shell:7ed887b3a1de",
+      "output": "FINAL CACHE CHECK ONE",
+      "exitCode": 0
+    },
+    {
+      "terminal": "shell:de6b0a61c6e9",
+      "output": "FINAL CACHE CHECK TWO",
+      "exitCode": 0
+    }
+  ],
+  "viewport": {
+    "pane": "w3SR:p3",
+    "columns": 274,
+    "rows": 108,
+    "liveBottom": true,
+    "revision": 371
+  },
+  "judgment": "Both native Bash blocks show current output and inline right-aligned clocks, with one blank row between blocks. Assistant paragraph break remains. Columns, full-width input dock and footer are intact; no new rendering error, stray escapes, overlap or clipping. Earlier remote save failure is correctly shown as a failure, not hidden. This capture is visual evidence, not a latency benchmark.",
+  "userApproval": "Autonomous experiments; evidence-backed practical limit accepted; merge develop explicitly approved.",
+  "searchAcceptance": "paused; LPT-717 remains open",
+  "privacy": "No personal screenshot or history copied to tracked artifacts; metadata/judgment only."
+}
