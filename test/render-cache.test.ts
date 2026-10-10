@@ -114,6 +114,37 @@ test("a renderer that invalidates during rendering is refreshed on the next fram
   expect(cache.render(20, theme)).toEqual(["2"]);
   cache.dispose();
 });
+test("maintains stable-tree subscriptions only once when the width changes", () => {
+  const root = new Container();
+  root.addChild(new Text("body", 0, 0));
+  const cache = new NativeRenderCache(root);
+  const maintenance = cache as unknown as { watch(nodes: Component[]): boolean };
+  const watch = maintenance.watch;
+  let passes = 0;
+  maintenance.watch = function (nodes) { passes++; return watch.call(this, nodes); };
+  const theme = {};
+  try {
+    cache.render(20, theme);
+    passes = 0;
+    expect(cache.render(30, theme).join("\n")).toContain("body");
+    expect(passes, "A stable width miss must not rebuild the same subscription set twice").toBe(1);
+  } finally { cache.dispose(); }
+});
+
+test("does not cache when rendering replaces an observed invalidate method", () => {
+  let renders = 0;
+  const replacement = (): void => {};
+  const component: Component = {
+    render() { this.invalidate = replacement; return [String(++renders)]; },
+    invalidate() {},
+  };
+  const cache = new NativeRenderCache(component);
+  const theme = {};
+  expect(cache.render(20, theme)).toEqual(["1"]);
+  expect(cache.render(20, theme)).toEqual(["2"]);
+  cache.dispose();
+  expect(component.invalidate).toBe(replacement);
+});
 test("never caches image protocol placement or components that cannot be observed", () => {
   let renders = 0;
   const image: Component = { render: () => { renders++; return ["\x1b_Ga=T;AAAA\x1b\\"]; }, invalidate() {} };

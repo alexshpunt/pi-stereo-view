@@ -164,15 +164,18 @@ export class NativeRenderCache {
     if (cached?.width === width && cached.theme === theme && matches(this.component, cached.state)) return cached.lines;
     this.cached = undefined;
     const initial = components(this.component);
-    this.watch(initial);
+    const observed = this.watch(initial);
     const before = this.revision;
     const lines = this.component.render(width);
     this.outputVersion++;
     const after = components(this.component);
     const stableGraph = initial.length === after.length &&
       after.every((component, index) => component === initial[index]);
+    // Stable trees already have subscriptions; rendering can still replace a wrapper.
+    const observable = stableGraph ? observed && after.every(component =>
+      component.invalidate === subscriptions.get(component)?.wrapped) : this.watch(after);
     // A newly created child could invalidate during its first render, before observation.
-    if (this.watch(after) && stableGraph && this.revision === before &&
+    if (observable && stableGraph && this.revision === before &&
       !lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="))) {
       this.cached = { width, theme, state: snapshot(this.component, after), lines };
     }
