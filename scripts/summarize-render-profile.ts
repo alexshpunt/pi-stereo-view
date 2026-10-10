@@ -4,7 +4,7 @@ import type { Profiler } from "node:inspector";
 
 /** Summarize V8 samples without discarding the raw profile used as evidence. */
 async function summarize(directory: string): Promise<void> {
-  const profile: Profiler.Profile = JSON.parse(await readFile(path.join(directory, "rendering.cpuprofile"), "utf8"));
+  const profile: Profiler.Profile = JSON.parse(await readFile(path.join(directory, process.env.PROFILE_PHASE ? process.env.PROFILE_PHASE + ".cpuprofile" : "rendering.cpuprofile"), "utf8"));
   const measurements = JSON.parse(await readFile(path.join(directory, "measurements.json"), "utf8"));
   const nodes = new Map(profile.nodes.map(node => [node.id, node]));
   const parents = new Map<number, number>();
@@ -33,7 +33,7 @@ async function summarize(directory: string): Promise<void> {
   }
   const functions = [...times.values()];
   const bySelf = functions.sort((a, b) => b.selfMs - a.selfMs).slice(0, 20);
-  const transcript = functions.filter(frame => /\/src\/(native|timestamps|layout|search)\.ts/.test(frame.url))
+  const transcript = functions.filter(frame => /\/src\/(native|timestamps|layout|search|render-cache)\.ts/.test(frame.url))
     .sort((a, b) => b.inclusiveMs - a.inclusiveMs).slice(0, 20);
   console.log(JSON.stringify({ directory, summary: measurements.summary,
     sampledMs: (profile.timeDeltas ?? []).reduce((sum, value) => sum + value, 0) / 1000,
