@@ -5,6 +5,33 @@ import { CompactMessage } from "../src/timestamps.js";
 
 const theme = () => ({ fg: (_color: string, value: string) => value }) as Theme;
 
+test("reuses compact formatting for unchanged native lines without hiding native updates", () => {
+  let clocks = 0;
+  let renders = 0;
+  let content = ["", "old text", ""];
+  let label = "12:34:56";
+  const colors = { fg: (_color: string, value: string) => { clocks++; return value; } } as Theme;
+  const native: Component = { render: () => { renders++; return [...content]; }, invalidate() {} };
+  const message = new CompactMessage(native, () => label, () => colors, () => 0, () => true);
+  message.prepare(30, false);
+  const first = message.render(30);
+  message.prepare(30, true);
+  expect(message.render(30).slice(1)).toEqual(first);
+  expect(renders).toBe(2);
+  expect(clocks, "Unchanged history must not repeat clock and line formatting on each layout pass").toBe(1);
+  content = ["", "new text", ""];
+  message.prepare(30, false);
+  expect(message.render(30).join("\n")).toContain("new text");
+  expect(clocks).toBe(2);
+  label = "12:35:00";
+  message.prepare(30, false);
+  expect(message.render(30).join("\n")).toContain(label);
+  expect(clocks).toBe(3);
+  message.invalidate();
+  message.prepare(30, false);
+  expect(clocks).toBe(4);
+});
+
 test("adds one separator only for a visible block and renders native content once per preparation", () => {
   let renders = 0;
   let content = ["first", "", "second"];

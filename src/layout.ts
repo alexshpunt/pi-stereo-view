@@ -291,7 +291,14 @@ export class TranscriptLayout {
     };
     this.rebuild();
     const mounted = new VStack([
-      { component: toolbar, basis: 1, shrink: 0 },
+      { component: toolbar, basis: 1, shrink: 0, visible: () => {
+        // Root visibility is evaluated once at the start of each native layout pass.
+        this.timestamps.beginFrame();
+        activityDocument.beginFrame();
+        chatDocument.beginFrame();
+        combinedDocument.beginFrame();
+        return true;
+      } },
       { component: columns, basis: 0, grow: 1, minSize: 1,
         visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "columns" },
       { component: rows, basis: "auto", minSize: 1,
