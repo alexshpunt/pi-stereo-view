@@ -182,6 +182,47 @@ test.each(["child", "component"] as const)("refreshes changed %s links captured 
     expect(cache.render(20, theme)).toEqual(["updated"]);
   } finally { cache.dispose(); }
 });
+test("does not sweep unchanged subscriptions during a width miss", () => {
+  const child = new Text("body", 0, 0);
+  const original = child.invalidate;
+  const root = new Container();
+  root.addChild(child);
+  const cache = new NativeRenderCache(root);
+  const theme = {};
+  const watched = (cache as unknown as { watched: Map<Component, () => void> }).watched;
+  const iterate = watched[Symbol.iterator];
+  let visits = 0;
+  try {
+    cache.render(20, theme);
+    Object.defineProperty(watched, Symbol.iterator, { value: function* () {
+      for (const entry of iterate.call(watched)) { visits++; yield entry; }
+    } });
+    expect(cache.render(30, theme).join("\n")).toContain("body");
+    expect(visits, "An unchanged subscription set must not scan for removed children").toBe(0);
+    root.clear();
+    expect(cache.render(30, theme)).toEqual([]);
+    expect(child.invalidate).toBe(original);
+    expect(visits).toBeGreaterThan(0);
+  } finally { cache.dispose(); }
+});
+
+test("prunes an old observer when an unobservable child takes its place", () => {
+  const child: Component = { render: () => ["first"], invalidate() {} };
+  const original = child.invalidate;
+  let renders = 0;
+  const replacement = Object.freeze({ render: () => [String(++renders)], invalidate() {} });
+  const root = new Container();
+  root.addChild(child);
+  const cache = new NativeRenderCache(root);
+  const theme = {};
+  try {
+    cache.render(20, theme);
+    root.children = [replacement];
+    expect(cache.render(20, theme)).toEqual(["1"]);
+    expect(child.invalidate).toBe(original);
+    expect(cache.render(20, theme)).toEqual(["2"]);
+  } finally { cache.dispose(); }
+});
 test("does not cache when rendering replaces an observed invalidate method", () => {
   let renders = 0;
   const replacement = (): void => {};
