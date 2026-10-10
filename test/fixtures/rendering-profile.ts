@@ -6,8 +6,6 @@ import { setImmediate } from "node:timers/promises";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, type TUI } from "@earendil-works/pi-tui";
-import { NativeDocument } from "../../src/native.js";
-import { TranscriptTimestamps } from "../../src/timestamps.js";
 
 type Host = TUI & { layoutRoot?: Container; getScreenLines(): string[]; handleTerminalInput(data: string): void };
 interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; bytes: number }
@@ -52,15 +50,12 @@ export default function renderingProfile(pi: ExtensionAPI): void {
   });
   pi.on("agent_before_settle", async (_event, ctx) => {
     const write = tui.terminal.write;
-    const render = NativeDocument.prototype.render;
-    const prepare = TranscriptTimestamps.prototype.prepare;
+    const restoreCounters: (() => void)[] = [];
     tui.terminal.write = data => {
       write.call(tui.terminal, data);
       bytes += Buffer.byteLength(data);
       if (data.includes("\x1b[?2026l")) frame?.();
     };
-    NativeDocument.prototype.render = function(width) { documents++; return render.call(this, width); };
-    TranscriptTimestamps.prototype.prepare = function(components) { timestampIndexes++; return prepare.call(this, components); };
     const inspector = new Session();
     const measure = async (name: string, action: () => void): Promise<void> => {
       const before = { documents, timestampIndexes, bytes };
@@ -76,6 +71,19 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       inspector.connect();
       await capture();
       const mounted = containers();
+      // Instrument the loader's actual instances; fixture imports have a separate module cache.
+      const indexes = new Set<object>();
+      for (const document of mounted.filter(component => component.constructor.name === "NativeDocument")) {
+        const render = document.render;
+        document.render = width => { documents++; return render.call(document, width); };
+        restoreCounters.push(() => { document.render = render; });
+        const index = Reflect.get(document, "timestamps") as { prepare(components: unknown[]): void };
+        if (indexes.has(index)) continue;
+        indexes.add(index);
+        const prepare = index.prepare;
+        index.prepare = components => { timestampIndexes++; return prepare.call(index, components); };
+        restoreCounters.push(() => { index.prepare = prepare; });
+      }
       const allViews = mounted.filter((component): component is ScrollView => component instanceof ScrollView);
       const combined = allViews.find(view => Reflect.get(view.children[0], "pane") === "combined");
       const nativeRoot = (combined ? Reflect.get(combined.children[0], "source") : allViews[0]?.children[0]) as Container;
@@ -153,8 +161,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     } finally {
       inspector.disconnect();
       tui.terminal.write = write;
-      NativeDocument.prototype.render = render;
-      TranscriptTimestamps.prototype.prepare = prepare;
+      for (const restore of restoreCounters.reverse()) restore();
     }
   });
 }
