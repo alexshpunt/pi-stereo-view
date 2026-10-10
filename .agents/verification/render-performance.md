@@ -184,6 +184,16 @@ This verifies the merged behavioral checkpoint, not stock performance parity. LP
 
 The current warm CPU profiles retain substantial self time in `NativeRenderCache.matches`. This experiment replaces repeated Reflect.get calls in that hot loop with ordinary property access. It keeps the same tracked keys, getter receivers, shell/tree checks and background validation; no missing-field filtering or invalidation checks are removed. All20 related cache/compact/native-work cases, typecheck and diff checks pass (`shell:8fe14bec5f62`). This is not an established speed improvement yet. Matched large native-auto profiling is next; the installed merged checkpoint remains unchanged while this candidate is measured.
 
+## Direct lookup result: do not promote
+
+The requested `direct-cache-lookup-large-1` matrix completed in `shell:47fcca3b9a82`, exit0, all4 modes passed (281.71s profiling). Candidate source6914847, direct clean latest IDE0.8.0 source1922570b9882c023f284b85ac45d3bad4be46550, Pi1.1.0 and all workload settings are recorded and match the preceding3c8b03b large checkpoint. Scroll samples show native bars; no pane-preview copy regression appears. Raw output, profiles, runtime and computed comparison are tracked in `.agents/verification/rendering/direct-cache-lookup-large-1/`.
+
+Current matched Stock/Columns/Rows typing median/p95 is60.1/81.5ms,47.7/76.9ms,40.9/59.0ms. Split typing remains below current Stock, but Columns scroll is71.9/99.9ms against67.0/82.0ms. Initial display is701/872/978ms; expanded cold is516/583/743ms; resize median is379/320/464ms. Initial/cold CPU is also higher in split. These remaining gaps fail the original parity scenario.
+
+The previous checkpoint's Stock/Columns/Rows typing medians were59.0/41.8/31.0ms. Compact typing overhead rises from13.1 to19.5ms in Columns and13.9 to20.7ms in Rows; matches self samples rise from721 to1211ms and659 to1119ms, including a larger share of sampled time. Host variation and reverse versus forward mode order limit causal claims: unchanged Stock and Combined also move. Nevertheless, this run provides no demonstrated benefit for direct property lookup and flags possible regression. Leave the candidate unpromoted; do not install or merge it from this evidence. Installation remains0.0.0-dev.1791636688, checked after the run, with no update/reload.
+
+Read-only replica1243db70 separately found duplicate cold structural reads between post-render graph collection and snapshot creation. Reusing that metadata is an untried follow-up candidate, not an implemented fix or parity evidence. This round makes no additional source change or benchmark. The performance branch and LPT-718 remain open; search acceptance remains paused.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
