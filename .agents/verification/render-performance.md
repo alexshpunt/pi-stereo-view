@@ -147,6 +147,12 @@ Each case uses 600 synthetic exchanges, 80 lines per saved tool and 16 interacti
 
 Ordinary-window typing, ongoing assistant text and tool-update medians are below Stock in both repeats. Warm Rows also improves the large-window medians. However, large Columns tool updates are 59.4/105.1 ms against Stock49.6/56.4 ms, and initial display, expanded cold rendering and large Rows resize still trail Stock. Control variation is visible, especially in scrolling; it does not explain away these remaining costs. These are passing workload checks, not a passing parity scenario. The user's native-feeling live feedback and the installed intermediate fix remain valid, while LPT-718 stays open and search acceptance stays paused.
 
+## Stable-tree subscription follow-up
+
+Read-only review `replica-6382543c` found duplicate subscription maintenance on every cache miss: `watch(initial)` and `watch(after)` visited the same stable graph. A width-change work regression failed with two maintenance passes instead of one (`shell:39d0e4f33b45`). The cache now retains the initial observation result and only checks that its wrappers are still owned after a stable render; changed graphs still update subscriptions and their first output is not cached. A renderer replacing its invalidate method is also explicitly covered.
+
+All19 focused cache, compact-format and native-work cases pass, along with typecheck and diff checks (`shell:596236fa4184`). Existing tests retain render-time invalidation, new-child first-render handling, removed-child restoration, shared subscribers, native background updates, images and unobservable components. This small change is not installed yet and its latency improvement is not proven; matched large-window profiling is next. The installed intermediate version remains unchanged.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
