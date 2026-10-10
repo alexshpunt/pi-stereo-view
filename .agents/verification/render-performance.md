@@ -170,7 +170,7 @@ At `3c8b03b`, the complete ten-file non-search suite passed all49 cases. The rev
 
 Warm Rows is faster in this control, and Columns typing median remains improved. Columns scrolling and output tails, initial display and cold rendering still fail the original strict parity criterion. The cold sample and six resizes are limited evidence; they are not robust tail measurements. The code changes prove less duplicate work, not that every phase is now faster than Stock. Both follow-ups are committed and pushed but not installed or live verified yet.
 
-The user is choosing whether to continue the original full-parity stage now or preserve this behavioral checkpoint and pause the remaining performance work (ask `188fbcf2-89a3-4434-9df3-cc4087b31138`, `performance_next_stage`). Until that decision arrives, no new implementation, merge, final acceptance or task closure is authorized. The currently installed intermediate fix and paused search status are unchanged.
+The user chose to continue to full parity in ask `188fbcf2-89a3-4434-9df3-cc4087b31138` / `performance_next_stage`, with the explicit note: “мержим в девелоп, чтобы я мог этим пользоваться, затем продолжаешь работу”. This authorizes merging the verified checkpoint into develop now and continuing the residual work; it is not parity acceptance or permission to close LPT-718. Search acceptance stays paused. The performance branch and worktree remain active after this intermediate merge.
 
 ## Acceptance still needed
 
