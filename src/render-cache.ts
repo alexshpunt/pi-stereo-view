@@ -39,12 +39,14 @@ function subscribe(component: Component, changed: () => void): (() => void) | un
 
 // Native setters can rebuild children or clear Text/Markdown caches without calling invalidate.
 // Custom renderer state follows invalidate instead.
-const inputs = ["text", "paddingX", "paddingY", "customBgFn", "bgFn", "theme"];
+const inputs = ["text", "paddingX", "paddingY", "customBgFn", "bgFn", "theme", "cachedText", "cachedWidth", "cachedLines"];
 const shellInputs = ["lastMessage", "args", "result", "isPartial", "expanded", "outputPad",
   "hideComponent", "showImages", "imageWidthCells"];
 interface NodeState {
   component: Component;
   render: Component["render"];
+  box: boolean;
+  background: unknown;
   values: unknown[];
   children?: Component[];
   members: Component[];
@@ -52,6 +54,18 @@ interface NodeState {
   wrapped?: Component;
 }
 interface State { nodes: NodeState[]; shell: unknown[] }
+
+function isBox(component: Component): boolean {
+  for (let prototype = Object.getPrototypeOf(component); prototype; prototype = Object.getPrototypeOf(prototype)) {
+    if (prototype.constructor?.name === "Box") return true;
+  }
+  return false;
+}
+
+function background(component: Component): unknown {
+  const color = Reflect.get(component, "bgFn") as ((text: string) => string) | undefined;
+  return color?.("test");
+}
 
 function snapshot(root: Component): State {
   const seen = new Set<Component>();
@@ -63,8 +77,9 @@ function snapshot(root: Component): State {
     const child = Reflect.get(component, "child") as Component | undefined;
     const wrapped = Reflect.get(component, "component") as Component | undefined;
     const members = Array.isArray(children) ? children.slice() : [];
+    const box = isBox(component);
     nodes.push({ component, render: component.render, values: inputs.map(key => Reflect.get(component, key)),
-      children, members, child, wrapped });
+      box, background: box ? background(component) : undefined, children, members, child, wrapped });
     for (const next of [...members, child, wrapped]) if (next && typeof next.render === "function") visit(next);
   };
   visit(root);
@@ -77,7 +92,8 @@ function matches(root: Component, state: State): boolean {
     const { component } = node;
     if (component.render !== node.render || component.invalidate !== subscriptions.get(component)?.wrapped ||
       inputs.some((key, index) => Reflect.get(component, key) !== node.values[index]) ||
-      Reflect.get(component, "child") !== node.child || Reflect.get(component, "component") !== node.wrapped) return false;
+      Reflect.get(component, "child") !== node.child || Reflect.get(component, "component") !== node.wrapped ||
+      (node.box && background(component) !== node.background)) return false;
     const children = Reflect.get(component, "children") as Component[] | undefined;
     if (children !== node.children || (Array.isArray(children) && (children.length !== node.members.length ||
       children.some((child, index) => child !== node.members[index])))) return false;
@@ -120,11 +136,15 @@ export class NativeRenderCache {
     const cached = this.cached;
     if (cached?.width === width && cached.theme === theme && matches(this.component, cached.state)) return cached.lines;
     this.cached = undefined;
-    this.watch(snapshot(this.component).nodes);
+    const initial = snapshot(this.component);
+    this.watch(initial.nodes);
     const before = this.revision;
     const lines = this.component.render(width);
     const after = snapshot(this.component);
-    if (this.watch(after.nodes) && this.revision === before &&
+    const stableGraph = initial.nodes.length === after.nodes.length &&
+      after.nodes.every((node, index) => node.component === initial.nodes[index].component);
+    // A newly created child could invalidate during its first render, before observation.
+    if (this.watch(after.nodes) && stableGraph && this.revision === before &&
       !lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="))) {
       this.cached = { width, theme, state: after, lines };
     }
