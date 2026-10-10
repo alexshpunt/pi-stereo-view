@@ -38,7 +38,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
   const agent = await mkdtemp(path.resolve("tmp/render-profile-agent-"));
   const artifact = path.join(output, mode);
   try {
-    await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true, hideThinkingBlock: false, fullscreenScrollbar: "always" }));
+    await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true, hideThinkingBlock: false, fullscreenScrollbar: "always", compaction: { enabled: false } }));
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
       mode: mode === "combined" ? "combined" : "split", side: "left", chatWidth: Math.floor((width - 1) * 0.35),
       layout: mode === "rows" ? "rows" : "columns", chatHeight: null, zoom: null, showTimestamps: true,
@@ -78,6 +78,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     expect(git("rev-parse", "HEAD")).toBe(sourceCommit);
     expect(git("diff", "HEAD"), "IDE source changed during the workload; results are not comparable").toBe(sourceDiff);
     expect(measurements.syntheticOnly).toBe(true);
+    expect(measurements.runtime.savedToolBlocks, "The synthetic history must not be compacted before measurement").toBe(size);
     expect(measurements.samples).not.toHaveLength(0);
     expect(measurements.draft).toBe("SYNTHETIC PROFILE DRAFT ");
     console.log(JSON.stringify({ mode, summary: measurements.summary }));
