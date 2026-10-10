@@ -103,6 +103,11 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       "Intrinsic pane measurement must not pad the full scrollback for a scrollbar").toBe(true);
     expect(measurements.samples.every((sample: { panePreviewCharacters: number }) => sample.panePreviewCharacters === 0),
       "Intrinsic pane height measurement must not composite native text").toBe(true);
+    if (scrollbar === "auto") {
+      expect(measurements.samples.filter((sample: { action: string }) => sample.action === "scroll")
+        .every((sample: { visibleScrollbars: number }) => sample.visibleScrollbars > 0),
+      "Auto-mode scrolling must measure visible native scrollbars, not a hidden-bar substitute").toBe(true);
+    }
     expect(measurements.draft).toBe("SYNTHETIC PROFILE DRAFT ");
     console.log(JSON.stringify({ mode, summary: measurements.summary }));
   } finally {
