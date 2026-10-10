@@ -213,6 +213,14 @@ The initial/cold diagnostic completed all3 cases in shell:6112ea10ad1d, exit0 (1
 
 The next watch candidate counts currently owned entries while observing the deduplicated graph and only builds a membership Set/sweeps old observers when entries are actually missing. The work regression failed with two removal-sweep visits on an unchanged width miss instead of zero (shell:2bb973acd18c); after the change all25 focused cache/compact/native-work cases, typecheck and diff checks pass (shell:117cb10aa21d). Another case verifies that a frozen replacement with unchanged graph cardinality still removes the old observer and never caches. Full regression, matched default-off controls and read-only lifecycle review remain required before promotion.
 
+## Autonomous completion direction and latest experiments
+
+The user's later direct instruction authorizes autonomous experiments through merge into develop. A justified practical limit of the current architecture may serve as completion, with remaining costs and constraints stated honestly. This supersedes strict-parity-only closure, not the requirement to measure, preserve behavior, verify live or report gaps. The Original Request, Task and Scenario have been updated and read back. Search acceptance remains paused.
+
+Subscription-presence source d394519 completed54 non-search cases and eight large profile cases in shell:4ab22717e4ff. Raw evidence is in rendering/subscription-presence/. An unchanged subscription set now performs no removal sweep, but no latency win is established: forward Rows slows throughout the case, while reverse Rows is faster than Stock on warm actions. Both are retained. Combined has a separate resize outlier. Do not promote based only on passing correctness assertions.
+
+Cold profiles also show repeated blank-edge ANSI classification. A bounded pure-string cache of confirmed blank rows is the next small candidate: at most32 entries, no strings over4096 characters, native parsing unchanged, paragraphs/semantic markers/images preserved. Its test first failed with40 classifications instead of one across20 cold blocks, then all28 focused cases, typecheck and diff checks passed (shell:686d7abc57ab red; shell:5c9d0c9adf84 green). Full non-search regression and repeated normal/large controls are next; installation remains unchanged.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
