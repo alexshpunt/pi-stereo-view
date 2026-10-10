@@ -42,16 +42,18 @@ function subscribe(component: Component, changed: () => void): (() => void) | un
 const inputs = ["text", "paddingX", "paddingY", "customBgFn", "bgFn", "theme", "cachedText", "cachedWidth", "cachedLines"];
 const shellInputs = ["lastMessage", "args", "result", "isPartial", "expanded", "outputPad",
   "hideComponent", "showImages", "imageWidthCells"];
-interface NodeState {
+interface NodeLinks {
+  children?: Component[];
+  child?: Component;
+  wrapped?: Component;
+}
+interface NodeState extends NodeLinks {
   component: Component;
   render: Component["render"];
   box: boolean;
   background: unknown;
   values: unknown[];
-  children?: Component[];
   members: Component[];
-  child?: Component;
-  wrapped?: Component;
 }
 interface State { nodes: NodeState[]; shell: unknown[] }
 
@@ -67,34 +69,34 @@ function background(component: Component): unknown {
   return color?.("test");
 }
 
-function components(root: Component): Component[] {
+function components(root: Component, links?: NodeLinks[]): Component[] {
   const seen = new Set<Component>();
   const nodes: Component[] = [];
   const visit = (component: Component): void => {
     if (seen.has(component)) return;
     seen.add(component);
+    const index = nodes.length;
     nodes.push(component);
     const children = Reflect.get(component, "children") as Component[] | undefined;
     if (Array.isArray(children)) for (const child of children) if (child && typeof child.render === "function") visit(child);
-    for (const key of ["child", "component"]) {
-      const child = Reflect.get(component, key) as Component | undefined;
-      if (child && typeof child.render === "function") visit(child);
-    }
+    const child = Reflect.get(component, "child") as Component | undefined;
+    if (child && typeof child.render === "function") visit(child);
+    const wrapped = Reflect.get(component, "component") as Component | undefined;
+    if (wrapped && typeof wrapped.render === "function") visit(wrapped);
+    if (links) links[index] = { children, child, wrapped };
   };
   visit(root);
   return nodes;
 }
 
-function snapshot(root: Component, nodes: Component[]): State {
+function snapshot(root: Component, nodes: Component[], links: NodeLinks[]): State {
   return {
-    nodes: nodes.map(component => {
-      const children = Reflect.get(component, "children") as Component[] | undefined;
+    nodes: nodes.map((component, index) => {
+      const { children, child, wrapped } = links[index];
       const box = isBox(component);
       return { component, render: component.render, values: inputs.map(key => Reflect.get(component, key)),
         box, background: box ? background(component) : undefined, children,
-        members: Array.isArray(children) ? children.slice() : [],
-        child: Reflect.get(component, "child") as Component | undefined,
-        wrapped: Reflect.get(component, "component") as Component | undefined };
+        members: Array.isArray(children) ? children.slice() : [], child, wrapped };
     }),
     shell: shellInputs.map(key => Reflect.get(root, key)),
   };
@@ -173,7 +175,8 @@ export class NativeRenderCache {
     const lines = this.component.render(width);
     this.outputVersion++;
     this.imagePlacement = lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="));
-    const after = components(this.component);
+    const links: NodeLinks[] = [];
+    const after = components(this.component, links);
     const stableGraph = initial.length === after.length &&
       after.every((component, index) => component === initial[index]);
     // Stable trees already have subscriptions; rendering can still replace a wrapper.
@@ -181,7 +184,7 @@ export class NativeRenderCache {
       component.invalidate === subscriptions.get(component)?.wrapped) : this.watch(after);
     // A newly created child could invalidate during its first render, before observation.
     if (observable && stableGraph && this.revision === before && !this.imagePlacement) {
-      this.cached = { width, theme, state: snapshot(this.component, after), lines };
+      this.cached = { width, theme, state: snapshot(this.component, after, links), lines };
     }
     return lines;
   }

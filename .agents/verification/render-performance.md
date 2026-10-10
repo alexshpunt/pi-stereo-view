@@ -194,6 +194,12 @@ The previous checkpoint's Stock/Columns/Rows typing medians were59.0/41.8/31.0ms
 
 Read-only replica1243db70 separately found duplicate cold structural reads between post-render graph collection and snapshot creation. Reusing that metadata is an untried follow-up candidate, not an implemented fix or parity evidence. This round makes no additional source change or benchmark. The performance branch and LPT-718 remain open; search acceptance remains paused.
 
+## Post-render structural snapshot experiment
+
+Direct property lookup did not demonstrate a gain, so commit `caf1176` restores the matched production validation loop from `3c8b03b`. The installed package stays unchanged. The next candidate captures children/child/component links during the existing post-render graph walk and reuses them when building the cache snapshot. The pre-render observation, wrapper ownership, graph-change guard, native input checks and subscription cleanup remain intact. Expensive snapshot inputs are still collected only when output can be cached.
+
+A cold-width work regression failed with three reads per structural link instead of two (`shell:7305a449a9ab`). With metadata reuse, all21 cache/compact/native-work cases pass, including render-time invalidation, child creation, removed-child restoration, shared subscribers, backgrounds and images; typecheck and diff checks pass (`shell:16733e3cbd98`). This proves less duplicate structural work, not lower latency or stock parity. Two additional cases cover changed child/component links, restored old subscriptions and subsequent nested invalidation. Full non-search regression and forward/reverse large native-auto matrices are next. No installation, promotion or task closure is implied.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
