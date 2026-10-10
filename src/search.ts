@@ -1,7 +1,7 @@
-import { getSelectListTheme, type Theme } from "@earendil-works/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
-  Box, Container, fuzzyFilter, getKeybindings, Input, Spacer, SelectList, stripTerminalSequences, Text,
-  type Component, type Focusable, type TUI, type TuiMouseEvent,
+  fuzzyFilter, getKeybindings, HStack, Input, matchesKey, MouseRegion, stripTerminalSequences, Text, truncateToWidth,
+  type Component, type TUI,
 } from "@earendil-works/pi-tui";
 
 const NATIVE_SEARCH = "tui.altScreen.search";
@@ -24,7 +24,6 @@ export class PanelSearchShortcut {
     const replacement = keys.filter(key => key !== "ctrl+f");
     manager.setUserBindings({ ...manager.getUserBindings(), [NATIVE_SEARCH]: replacement });
     this.restore = () => {
-      // Do not overwrite another extension's later keyboard change.
       if (JSON.stringify(manager.getUserBindings()[NATIVE_SEARCH]) !== JSON.stringify(replacement)) return;
       const bindings = { ...manager.getUserBindings() };
       if (saved === undefined) delete bindings[NATIVE_SEARCH];
@@ -38,6 +37,7 @@ export class PanelSearchShortcut {
     this.restore = undefined;
   }
 }
+
 /** Saved text attached to an exact native block in the currently mounted branch. */
 export interface SearchEntry {
   source: Component;
@@ -53,98 +53,118 @@ export interface SearchHit {
   text: string;
 }
 
-/** Keep transcript text readable without allowing terminal control sequences in the picker. */
+/** Read searchable text without terminal control sequences. */
 export function searchText(value: string): string {
   return stripTerminalSequences(value).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "").replace(/\t/g, "  ");
 }
 
-/** Search complete block text; equally ranked results prefer more recent blocks. */
-export function searchHits(entries: SearchEntry[], query: string): SearchHit[] {
-  const hits = entries.slice().reverse().flatMap(entry => searchText(entry.text).split("\n").flatMap((text, line) =>
+function candidates(entries: SearchEntry[]): SearchHit[] {
+  return entries.slice().reverse().flatMap(entry => searchText(entry.text).split("\n").flatMap((text, line) =>
     text.trim() ? [{ entry, line, text: text.trim() }] : []));
-  return fuzzyFilter(hits, query, hit => hit.text).slice(0, 200);
 }
 
-/** A single fuzzy picker that never submits or edits the main prompt. */
-export class PanelSearch implements Component, Focusable {
-  private readonly input = new Input({ prompt: "Search: " });
-  private readonly content = new Container();
-  private readonly box: Box;
-  private list?: SelectList;
+class SearchInput extends Input {
+  constructor(private readonly changed: () => void, private readonly previous: () => void) {
+    super({ prompt: "Search: " });
+  }
+
+  override handleInput(data: string): void {
+    if (matchesKey(data, "shift+enter")) {
+      this.previous();
+      return;
+    }
+    const before = this.getValue();
+    super.handleInput(data);
+    if (this.getValue() !== before) this.changed();
+  }
+}
+
+/** A one-row live fuzzy search mounted inside a panel, never over the editor. */
+export class PanelSearch extends HStack {
+  readonly input: Input;
+  private index?: SearchHit[];
   private hits: SearchHit[] = [];
-  private snapshot = "";
-  private query?: string;
-  private visibleRows = 0;
+  private selected = 0;
+  private dirty = true;
+  private query = "";
+  private width?: number;
 
   constructor(
-    private readonly title: string,
-    private readonly entries: () => SearchEntry[],
+    private readonly savedEntries: () => SearchEntry[],
     private readonly tui: TUI,
-    private readonly theme: Theme,
-    private readonly done: (hit: SearchHit | undefined) => void,
+    private readonly theme: () => Theme,
+    private readonly match: (hit: SearchHit | undefined, query: string) => void,
+    private readonly close: () => void,
   ) {
-    this.box = new Box(1, 1, text => theme.bg("customMessageBg", text));
-    this.box.addChild(this.content);
-    this.input.onEscape = () => done(undefined);
-    this.input.onSubmit = () => this.select();
-  }
-
-  get focused(): boolean { return this.input.focused; }
-  set focused(value: boolean) { this.input.focused = value; }
-
-  private select(): void {
-    const selected = this.list?.getSelectedItem();
-    if (selected) this.done(this.hits[Number(selected.value)]);
-  }
-
-  private refresh(): void {
-    const entries = this.entries();
-    const snapshot = entries.map(entry => entry.label + "\0" + entry.text).join("\0");
-    const query = this.input.getValue();
-    const visibleRows = Math.max(1, Math.min(8, this.tui.terminal.rows - 10));
-    if (snapshot === this.snapshot && query === this.query && visibleRows === this.visibleRows && this.list) return;
-    this.visibleRows = visibleRows;
-    const previous = this.list?.getSelectedItem();
-    const selected = previous ? this.hits[Number(previous.value)] : undefined;
-    this.hits = searchHits(entries, query);
-    this.list = new SelectList(this.hits.map((hit, index) => ({
-      value: String(index), label: hit.text, description: hit.entry.label,
-    })), visibleRows, getSelectListTheme(), {
-      maxPrimaryColumnWidth: 70,
+    super([], { gap: 1 });
+    this.input = new SearchInput(() => this.refresh(true), () => this.step(-1));
+    this.input.onEscape = close;
+    this.input.onSubmit = () => this.step(1);
+    const button = (label: string, action: () => void): Component => new MouseRegion({
+      render: width => new Text(this.theme().fg("accent", label), 0, 0).render(width),
+      invalidate() {},
+    }, event => {
+      if (event.button !== "left") return;
+      if (event.type === "press") return { capture: true };
+      if (event.type === "click") {
+        action();
+        return { handled: true, render: true };
+      }
+      return { handled: true };
     });
-    if (query === this.query && selected) {
-      const index = this.hits.findIndex(hit => hit.entry.source === selected.entry.source &&
-        hit.entry.label === selected.entry.label && hit.line === selected.line);
-      if (index >= 0) this.list.setSelectedIndex(index);
-    }
-    this.list.onSelect = () => this.select();
-    this.list.onCancel = () => this.done(undefined);
-    this.snapshot = snapshot;
+    this.addChild(this.input, { basis: 0, grow: 1, minSize: 10 });
+    this.addChild({
+      render: width => new Text(this.theme().fg(this.hits.length ? "accent" : "dim",
+        truncateToWidth(`${this.hits.length ? this.selected + 1 : 0}/${this.hits.length}`, width, "…")), 0, 0).render(width),
+      invalidate() {},
+    }, { basis: 7, shrink: 0 });
+    this.addChild(button("[↓]", () => { this.step(1); this.focus(); }), { basis: 3, shrink: 0 });
+    this.addChild(button("[×]", close), { basis: 3, shrink: 0 });
+  }
+
+  /** Focus the existing native Input without opening another interface. */
+  focus(): void { this.tui.setFocus(this.input); }
+
+  /** Keep the selected result visible after a viewport height change. */
+  reposition(): void {
+    const hit = this.hits[this.selected];
+    if (hit) this.match(hit, this.query);
+  }
+  /** Defer indexing until an open, non-empty search actually needs updated history. */
+  markDirty(): void { this.dirty = true; }
+
+  private refresh(queryChanged = false): void {
+    const query = this.input.getValue();
+    if (!queryChanged && !this.dirty) return;
+    const old = this.hits[this.selected];
+    if (this.dirty) this.index = undefined;
+    this.dirty = false;
+    this.hits = query.trim() ? fuzzyFilter(this.index ??= candidates(this.savedEntries()), query, hit => hit.text) : [];
+    const retained = !queryChanged && old ? this.hits.findIndex(hit => hit.entry.source === old.entry.source &&
+      hit.entry.label === old.entry.label && hit.line === old.line && hit.text === old.text) : -1;
+    this.selected = Math.max(0, retained);
     this.query = query;
-    this.content.children = [
-      new Text(this.theme.fg("accent", this.theme.bold(this.title)), 0, 0),
-      this.input, new Spacer(1),
-      this.hits.length ? this.list : new Text(this.theme.fg("dim", "No matches"), 0, 0),
-      new Spacer(1), new Text(this.theme.fg("dim", "↑/↓ choose · Enter jump · Esc close"), 0, 0),
-    ];
-  }
-
-  render(width: number): string[] {
-    this.refresh();
-    return this.box.render(width);
-  }
-
-  handleInput(data: string): void {
-    const keys = getKeybindings();
-    const navigation = ["tui.select.up", "tui.select.down", "tui.select.pageUp", "tui.select.pageDown"] as const;
-    if (navigation.some(key => keys.matches(data, key))) this.list?.handleInput(data);
-    else this.input.handleInput(data);
+    if (queryChanged || retained < 0) this.match(this.hits[this.selected], query);
     this.tui.requestRender();
   }
 
-  handleMouse(event: TuiMouseEvent): ReturnType<Box["handleMouse"]> {
-    return this.box.handleMouse(event);
+  private step(direction: number): void {
+    this.refresh();
+    if (!this.hits.length) return;
+    this.selected = (this.selected + direction + this.hits.length) % this.hits.length;
+    this.match(this.hits[this.selected], this.query);
+    this.tui.requestRender();
   }
 
-  invalidate(): void { this.box.invalidate(); }
+  override render(width: number): string[] {
+    this.refresh();
+    if (this.width !== width && this.width !== undefined && this.hits.length) {
+      this.match(this.hits[this.selected], this.query);
+    }
+    this.width = width;
+    // A short counter leaves usable query space even in a 24-column panel.
+    this.entries[1].basis = Math.min(`${this.hits.length ? this.selected + 1 : 0}/${this.hits.length}`.length,
+      Math.max(3, width - 19));
+    return super.render(width);
+  }
 }

@@ -1,9 +1,42 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.js";
+import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
 import { CompactMessage, TimestampedMessage, type TranscriptTimestamps } from "./timestamps.js";
 
 export type Pane = "activity" | "chat";
+
+/** Decorate one selected block without changing native text or mouse coordinates. */
+class SearchHighlight implements Component {
+  private cache?: { lines: string[]; result: string[]; width: number; query: string; hit: SearchHit; revision: number };
+
+  constructor(
+    private readonly component: Component,
+    private readonly hit: () => SearchHit,
+    private readonly query: () => string,
+    private readonly theme: () => Theme,
+    private readonly revision: () => number,
+  ) {}
+
+  render(width: number): string[] {
+    const lines = this.component.render(width);
+    const hit = this.hit();
+    const query = this.query();
+    const revision = this.revision();
+    const cache = this.cache;
+    if (cache && cache.lines === lines && cache.width === width && cache.query === query &&
+      cache.hit === hit && cache.revision === revision) return cache.result;
+    const clock = this.component instanceof CompactMessage ? this.component.searchClock() : undefined;
+    const result = highlightSearchRows(lines, hit, query, this.theme(), clock);
+    this.cache = { lines, result, width, query, hit, revision };
+    return result;
+  }
+
+  invalidate(): void { this.cache = undefined; }
+  handleMouse(event: TuiMouseEvent): ReturnType<NonNullable<Component["handleMouse"]>> {
+    return this.component.handleMouse?.(event);
+  }
+}
 interface NativeAssistant extends Container {
   contentContainer: Container;
   hasToolCalls: boolean;
@@ -47,9 +80,12 @@ export class NativeDocument extends Container {
   private readonly views = new WeakMap<NativeAssistant, Container>();
   private readonly stamped = new WeakMap<Component, Component>();
   private readonly compactBlocks = new Map<Component, CompactMessage>();
-  private readonly positions = new Map<Component, { row: number; lines: string[]; excerptRow?: number }>();
+  private readonly positions = new Map<Component, { row: number; lines: string[]; clock?: SearchClock; excerptRow?: number }>();
   private excerpt?: SearchHit;
   private searchAnchor?: SearchHit;
+  private searchQuery = "";
+  private highlightRevision = 0;
+  private highlights = new WeakMap<Component, SearchHighlight>();
   private lastWidth = 1;
   private frameActive = false;
   private frameWidth?: number;
@@ -149,12 +185,36 @@ export class NativeDocument extends Container {
     return (this.source.children[2] as Container).children.includes(hit.entry.source);
   }
   /** Reveal one selected block without replacing its native renderer. */
-  reveal(hit: SearchHit): boolean {
+  reveal(hit: SearchHit, query = ""): boolean {
     if (!this.containsSearchHit(hit)) return false;
     this.excerpt = undefined;
+    if (this.searchAnchor?.entry.source !== hit.entry.source) this.highlights = new WeakMap();
     this.searchAnchor = hit;
+    this.searchQuery = query;
+    this.frameWidth = undefined;
     hit.entry.reveal?.();
     return true;
+  }
+
+  /** Clear search-only fragments, measurements and highlighting without invalidating native blocks. */
+  clearSearch(): void {
+    this.searchAnchor = undefined;
+    this.excerpt = undefined;
+    this.searchQuery = "";
+    this.highlights = new WeakMap();
+    this.frameWidth = undefined;
+  }
+
+  private highlighted(component: Component, fragment = false): Component {
+    let decoration = this.highlights.get(component);
+    if (!decoration) {
+      decoration = new SearchHighlight(component, () => {
+        const hit = this.searchAnchor!;
+        return fragment ? { ...hit, line: 0, entry: { ...hit.entry, text: hit.text } } : hit;
+      }, () => this.searchQuery, this.theme, () => this.highlightRevision);
+      this.highlights.set(component, decoration);
+    }
+    return decoration;
   }
 
   /** Add a temporary fragment when the renderer does not display the saved matching text. */
@@ -165,24 +225,8 @@ export class NativeDocument extends Container {
     const block = this.positions.get(hit.entry.source);
     if (!block) return undefined;
     if (block.excerptRow !== undefined) return block.excerptRow;
-    const normalize = (text: string): string => searchText(text).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
-    const wanted = normalize(hit.text);
-    if (!wanted) return block.row;
-    const rows: number[] = [];
-    const text = block.lines.map((line, row) => {
-      const plain = normalize(searchText(line).replace(/\s+(?:~?\d{2}:\d{2}:\d{2}|--:--:--)\s*[┃│]?$/, ""));
-      rows.push(...Array.from({ length: plain.length }, () => row));
-      return plain;
-    }).join("");
-    let occurrence = searchText(hit.entry.text).split("\n").slice(0, hit.line).filter(line => normalize(line) === wanted).length;
-    let start = 0;
-    while (start <= text.length) {
-      const index = text.indexOf(wanted, start);
-      if (index < 0) return undefined;
-      if (occurrence-- === 0) return block.row + rows[index];
-      start = index + wanted.length;
-    }
-    return undefined;
+    const found = searchHitRow(block.lines, hit, block.clock);
+    return found === undefined ? undefined : block.row + found;
   }
 
   /** Stop native observers when the layout is detached or falls back. */
@@ -255,6 +299,10 @@ export class NativeDocument extends Container {
             result.push(stamped);
           } else result.push(...spacing, stamped);
         }
+        if (this.searchAnchor?.entry.source === component && !this.excerpt) {
+          const last = result.length - 1;
+          result[last] = this.highlighted(result[last]);
+        }
         if (locateMatch) {
           const lines = result.slice(start).flatMap(child => child.render(width));
           let excerptRow: number | undefined;
@@ -265,11 +313,12 @@ export class NativeDocument extends Container {
               lines.push("");
             }
             excerptRow = row + lines.length;
-            result.push(fragment);
-            lines.push(...fragment.render(width));
+            const decorated = this.highlighted(fragment, true);
+            result.push(decorated);
+            lines.push(...decorated.render(width));
             visibleBlock = true;
           }
-          this.positions.set(component, { row, lines, excerptRow });
+          this.positions.set(component, { row, lines, clock: this.compactBlocks.get(component)?.searchClock(), excerptRow });
           row += lines.length;
         }
       }
@@ -285,6 +334,7 @@ export class NativeDocument extends Container {
   }
 
   override invalidate(): void {
+    this.highlightRevision++;
     this.frameWidth = undefined;
     this.checked = false;
     // Theme changes must rebuild native parents, including collapsed thinking text.
