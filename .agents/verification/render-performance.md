@@ -127,6 +127,26 @@ Mandatory reload completed. Real human-pane capture `w3SR:p1`, 158x57 cells, rev
 
 The hidden-scrollbar diagnostic passed three modes at `tmp/profiling/hidden-scrollbar-large-1`: typing median/p95 Stock48.6/65.0ms, Columns44.6/78.7ms, Rows30.3/34.9ms. It informed the visibility choice but is not acceptance for auto mode, especially during scrolling when bars are visible. Matched auto-mode controls remain needed. Runtime and viewport metadata are recorded in `tmp/test-runs/intermediate-live-runtime.json`. Search acceptance remains paused.
 
+## Matched native-auto controls
+
+Profiling-only commit `5d7fc32` records visible scrollbar counts and requires every auto-mode scroll sample to show a native bar. Production source remains through `02a0e24`. All twelve cases passed across `auto-normal-1`, reverse-order `auto-normal-2`, and reverse-order `auto-large-1`. The two latter matrices completed sequentially in `shell:8b2500484b41` (exit0, 348s); no other benchmark or regression suite ran alongside them. Each case verified the same clean, latest fetched IDE v0.8.0 source `1922570b9882c023f284b85ac45d3bad4be46550` before and after the run.
+
+Each case uses 600 synthetic exchanges, 80 lines per saved tool and 16 interaction samples. Normal windows are 120x35; the large window is 274x108. Bars are visible in every measured scroll sample, so the comparison does not rely on hiding them during scrolling. Raw measurements, runtime records and warm CPU profiles are archived in `.agents/verification/rendering/auto-checkpoint-02a0e24/`.
+
+| Run / mode | Typing median / p95 | Scroll median / p95 | Initial display | Expanded cold frame | Resize median / maximum |
+| --- | --- | --- | --- | --- | --- |
+| Normal 1 / Stock | 42.0 / 51.1 ms | 44.0 / 59.0 ms | 659 ms | 439 ms | 354 / 361 ms |
+| Normal 1 / Columns | 35.5 / 48.0 ms | 37.6 / 61.6 ms | 696 ms | 474 ms | 288 / 317 ms |
+| Normal 1 / Rows | 30.9 / 39.5 ms | 30.3 / 52.9 ms | 710 ms | 470 ms | 332 / 369 ms |
+| Normal 2 / Stock | 43.2 / 56.6 ms | 63.2 / 96.4 ms | 718 ms | 455 ms | 380 / 424 ms |
+| Normal 2 / Columns | 31.3 / 44.4 ms | 42.5 / 77.0 ms | 691 ms | 517 ms | 263 / 336 ms |
+| Normal 2 / Rows | 35.6 / 44.7 ms | 31.4 / 67.6 ms | 691 ms | 466 ms | 335 / 363 ms |
+| Large / Stock | 47.9 / 60.6 ms | 60.5 / 81.5 ms | 597 ms | 421 ms | 313 / 360 ms |
+| Large / Columns | 39.7 / 73.5 ms | 59.1 / 84.6 ms | 747 ms | 535 ms | 316 / 341 ms |
+| Large / Rows | 34.2 / 45.3 ms | 40.0 / 71.9 ms | 826 ms | 605 ms | 554 / 605 ms |
+
+Ordinary-window typing, ongoing assistant text and tool-update medians are below Stock in both repeats. Warm Rows also improves the large-window medians. However, large Columns tool updates are 59.4/105.1 ms against Stock49.6/56.4 ms, and initial display, expanded cold rendering and large Rows resize still trail Stock. Control variation is visible, especially in scrolling; it does not explain away these remaining costs. These are passing workload checks, not a passing parity scenario. The user's native-feeling live feedback and the installed intermediate fix remain valid, while LPT-718 stays open and search acceptance stays paused.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
