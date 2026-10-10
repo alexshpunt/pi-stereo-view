@@ -131,11 +131,15 @@ function matches(root: Component, state: State): boolean {
  */
 export class NativeRenderCache {
   private revision = 0;
+  private outputVersion = 0;
   private readonly changed = (): void => { this.revision++; this.cached = undefined; };
   private readonly watched = new Map<Component, () => void>();
   private cached?: { width: number; theme: object; state: State; lines: string[] };
 
   constructor(private readonly component: Component) {}
+
+  /** Changes after each native render, even when it reuses a mutable row array. */
+  get version(): number { return this.outputVersion; }
 
   private watch(nodes: Component[]): boolean {
     const present = new Set(nodes);
@@ -163,6 +167,7 @@ export class NativeRenderCache {
     this.watch(initial);
     const before = this.revision;
     const lines = this.component.render(width);
+    this.outputVersion++;
     const after = components(this.component);
     const stableGraph = initial.length === after.length &&
       after.every((component, index) => component === initial[index]);

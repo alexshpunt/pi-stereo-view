@@ -33,6 +33,31 @@ test("reuses compact formatting for unchanged native lines without hiding native
   expect(clocks).toBe(4);
 });
 
+test("does not reread cached history rows but refreshes an invalidated mutable array", () => {
+  let reads = 0;
+  const content = new Proxy(["", "old text", ""], {
+    get(target, property, receiver) {
+      if (typeof property === "string" && /^\d+$/.test(property)) reads++;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const colors = theme();
+  const native: Component = { render: () => content, invalidate() {} };
+  const message = new CompactMessage(native, () => "12:34:56", () => colors, () => 0, () => true);
+  message.prepare(30, true);
+  const first = message.render(30);
+  reads = 0;
+  message.prepare(30, true);
+  expect(reads, "A cached block must not scan all its rows again on each frame").toBe(0);
+  expect(message.render(30)).toBe(first);
+  content[1] = "updated text";
+  native.invalidate();
+  message.prepare(30, true);
+  expect(message.render(30).map(stripTerminalSequences).join("\n")).toContain("updated text");
+  expect(message.render(30).join("\n")).not.toContain("old text");
+  message.dispose();
+});
+
 test("reuses separated rows without hiding native updates on the next preparation", () => {
   let content = ["", "same content", ""];
   let renders = 0;
