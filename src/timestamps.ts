@@ -9,6 +9,18 @@ type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
 type UserSlot = { kind: string; text?: string; time: unknown };
 
+// Identical native padding is common across cold blocks. Keep only a few short blank rows.
+const blankRows = new Set<string>();
+const blank = (line: string): boolean => {
+  if (blankRows.has(line)) return true;
+  if (stripTerminalSequences(line).trim().length !== 0) return false;
+  if (line.length <= 4096) {
+    if (blankRows.size >= 32) blankRows.delete(blankRows.values().next().value!);
+    blankRows.add(line);
+  }
+  return true;
+};
+
 /** Display-only session entry: { toolCallId: string, time: epoch milliseconds }. */
 export const TOOL_START_ENTRY = "pi-agent-transcript/tool-start";
 
@@ -234,7 +246,6 @@ export class CompactMessage extends Container {
       this.top = time ? -1 : 0;
       return time ? [theme.fg("dim", time.padStart(width - gutter)), ...content] : content;
     }
-    const blank = (line: string): boolean => stripTerminalSequences(line).trim().length === 0;
     this.top = 0;
     let end = content.length;
     while (this.top < end && blank(content[this.top])) this.top++;
