@@ -20,7 +20,8 @@ test("reloads twice with one clean split, stable history clocks and a full-width
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: { PI_CODING_AGENT_DIR: agent, TZ: "UTC", PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         RELOAD_FRAMES_FILE: path.resolve("tmp/test-runs/two-reloads/reload-frames.json") },
-      rawMode: false, tuiSize: { cols: 120, rows: 45 },
+      // Three startups and two reloads share one trace deadline, not a latency assertion.
+      timeoutMs: 60_000, rawMode: false, tuiSize: { cols: 120, rows: 45 },
       extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/reload-controls.ts")],
       tools: [], conversation: [assistantMessage([text("FRESH ANSWER")])],
     }).run("/transcript-reload-check");
@@ -43,4 +44,4 @@ test("reloads twice with one clean split, stable history clocks and a full-width
   } finally {
     await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
   }
-});
+}, 90_000);
