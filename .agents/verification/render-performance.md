@@ -111,6 +111,12 @@ Separate diagnostic profiles at `startup-profile-600` passed Stock, Columns and 
 
 Read-only review found another full-scrollback copy: the pane's `basis: "auto"` ScrollView entry was measured by native VStack independently of `TranscriptPane.render`. The old counter missed that path. The counter now covers every pane ScrollView.render call. Both split modes failed this strengthened real-Pi work contract before `02a0e24`, and pass afterward. The view now fills the already allocated pane height with numeric zero basis and grow=1. Native scrollbars, hit geometry, painting and scroll state remain owned by Pi; no custom scrollbar was introduced. Final short-history, zoom, resize and other non-search behavior verification is still required.
 
+## Behavior verification at the current production checkpoint
+
+The ten-file non-search suite passed all 46 cases against production source through `02a0e24`, with the direct latest IDE checkout verified before launch. Search tests were excluded. It includes automatic/compact sizing, native work contracts, cache correctness, native display, controls and divider persistence, reload, timestamps, selection/copy and independent scrolling. Typecheck and diff checks also pass. Runtime receipt is `tmp/test-runs/non-search-final-runtime.json` and terminal `shell:dfb1ef246ea7` (exit0, 250.87s). This verifies behavior, not stock performance parity or live acceptance.
+
+Raw large-window evidence from `fill-pane-large-1` is archived in `.agents/verification/rendering/checkpoint-02a0e24-large/`. All four cases passed. Columns typing median/p95 is 81.9/123.5 ms against Stock74.4/103.5 ms; Rows69.0/88.0 ms. Rows initial display and resize still trail Stock. There was no hidden-copy counter activity after the numeric pane basis change, but this alone did not eliminate the remaining painting cost.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
