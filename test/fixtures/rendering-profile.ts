@@ -133,7 +133,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         tui.requestRender();
       });
       assistant.updateContent(original, false);
-      const tool = messages.find(component => component.constructor.name === "ToolExecutionComponent") as
+      const tool = messages.filter(component => component.constructor.name === "ToolExecutionComponent").at(-1) as
         (Container & { updateResult(result: { content: { type: string; text: string }[]; isError: boolean }, partial: boolean): void }) | undefined;
       if (!tool) throw new Error("Missing saved native tool update target");
       for (let index = 0; index < count; index++) await measure("tool", () => {
@@ -157,6 +157,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
           savedToolBlocks: messages.filter(component => component.constructor.name === "ToolExecutionComponent").length },
         draft: ctx.ui.getEditorText(), syntheticOnly: true,
         frameDefinition: "Action to synchronized terminal-frame emission, not compositor presentation; process CPU delta includes scheduling background work.",
+        toolTarget: "Latest saved native tool, visible in Activity while following the end.",
         markers: phases.finished.map(stripTerminalSequences).filter(line => line.includes("SYNTHETIC")),
       }, null, 2));
     } finally {
