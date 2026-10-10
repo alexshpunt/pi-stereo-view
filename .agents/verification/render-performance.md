@@ -99,6 +99,16 @@ The streamed-assistant assertion now checks the emitted frame before restoring t
 
 `1a74939` avoids capturing unused native property snapshots before a cache miss is rendered, and removes per-node comparison callbacks on warm hits. All sixteen focused behavior cases and typecheck pass. Its performance measurement is pending. Neither change is installed in the personal Pi instance yet. Search testing remains paused.
 
+## Wider-window follow-up
+
+The first `intrinsic-count-large-1` matrix passed Stock only. Combined failed its post-run Git source check and the remaining cases could not fetch IDE source; those results are discarded. Separate foreground cases at `intrinsic-count-large-verified` passed Columns and Rows without bypassing authorization. Typing median/p95: Stock 64.7/77.7 ms, Columns 89.5/116.1 ms, Rows 58.3/79.6 ms. Initial display: Stock 806 ms, Columns 1018 ms, Rows 1012 ms. The controls still fail parity.
+
+Separate diagnostic profiles at `startup-profile-600` passed Stock, Columns and Rows. They show native history rendering plus cache setup in initial display, and extra cache observation/invalidation in the expanded cold frame. Inspector overhead is material; use these profiles to locate work, not as default-off timing acceptance. No single cold-path fix is proven by these samples.
+
+`d3b8ae8` reuses compact formatting by the native render version instead of scanning and copying cached rows. A work regression failed with three reread rows before implementation and passes with zero afterward. It also verifies an invalidated renderer that mutates the same array refreshes visible text. All seventeen focused cases and typecheck pass.
+
+Read-only review found another full-scrollback copy: the pane's `basis: "auto"` ScrollView entry was measured by native VStack independently of `TranscriptPane.render`. The old counter missed that path. The counter now covers every pane ScrollView.render call. Both split modes failed this strengthened real-Pi work contract before `02a0e24`, and pass afterward. The view now fills the already allocated pane height with numeric zero basis and grow=1. Native scrollbars, hit geometry, painting and scroll state remain owned by Pi; no custom scrollbar was introduced. Final short-history, zoom, resize and other non-search behavior verification is still required.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
