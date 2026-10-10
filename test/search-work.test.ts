@@ -1,5 +1,5 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { Text, type TUI } from "@earendil-works/pi-tui";
+import { Text, type Component, type TUI } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { PanelSearch, type SearchHit } from "../src/search.js";
 
@@ -31,6 +31,43 @@ test("indexes an open nonempty search once, not on ordinary frames or query edit
   expect(calls, "Unrelated streamed text must not pull the reader back to the same match").toHaveLength(jumps);
 });
 
+test("a retired search input repairs later overlay focus restoration without a mounted layout", async () => {
+  const editor = new Text("editor", 0, 0);
+  const overlay = new Text("overlay", 0, 0);
+  let focused: Component | null = editor;
+  const host = {
+    requestRender() {},
+    setFocus(component: Component | null) {
+      if (focused && "focused" in focused) Reflect.set(focused, "focused", false);
+      focused = component;
+      if (focused && "focused" in focused) Reflect.set(focused, "focused", true);
+    },
+  } as unknown as TUI;
+  const bar = new PanelSearch(() => [], host, theme, () => {}, () => {});
+  bar.focus();
+  host.setFocus(overlay);
+  bar.retire(() => { if (focused === bar.input) host.setFocus(editor); });
+  await Promise.resolve();
+  expect(focused, "Retiring the field must not steal focus from the live overlay").toBe(overlay);
+  // Native overlay dismissal can restore preFocus after this layout was disposed.
+  host.setFocus(bar.input);
+  await Promise.resolve();
+  expect(focused).toBe(editor);
+});
+test("refreshes a retained occurrence when text before it changes in the same native block", () => {
+  const source = new Text("", 0, 0);
+  let content = "worker gone\nready";
+  const selected: SearchHit[] = [];
+  const bar = new PanelSearch(() => [{ source, label: "User", text: content }], tui, theme,
+    hit => { if (hit) selected.push(hit); }, () => {});
+  bar.input.handleInput("ready");
+  expect(selected.at(-1)?.line).toBe(1);
+  content = "worker ready\nready";
+  bar.markDirty();
+  bar.render(45);
+  expect(selected.at(-1)?.line).toBe(1);
+  expect(selected.at(-1)?.entry.text, "Occurrence mapping must use the updated complete saved text").toBe(content);
+});
 test("counts and visits every match beyond the old popup limit without wrapping a narrow search row", () => {
   const entries = Array.from({ length: 250 }, (_, index) => ({
     source: new Text("", 0, 0), label: String(index), text: "same phrase",

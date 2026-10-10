@@ -259,9 +259,18 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       await writeFile(path.join(ctx.cwd, "rendering.cpuprofile"), JSON.stringify(profile));
       phases.finished = await capture();
       if (split && process.env.PROFILE_SEARCH === "1") {
+        if (process.env.PROFILE_SEARCH_PANE === "activity") {
+          const lines = (await capture()).map(stripTerminalSequences);
+          const row = lines.findIndex(line => line.includes("Activity") && line.includes("[ ⌕ ]"));
+          const column = lines[row].indexOf("Activity");
+          for (const suffix of ["M", "m"]) {
+            tui.handleTerminalInput(`\x1b[<0;${column + 1};${row + 1}${suffix}`);
+            await capture();
+          }
+        }
         await measure("search-open", () => tui.handleTerminalInput("\x06"));
         phases.searchOpened = await capture();
-        const query = "SYNTHETIC USER";
+        const query = process.env.PROFILE_SEARCH_PANE === "activity" ? "SYNTHETIC TOOL" : "SYNTHETIC USER";
         for (const character of query) {
           await measure("search-typing", () => tui.handleTerminalInput(character));
           // Matching emits a feedback frame, then positions the selected native result.
@@ -290,7 +299,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       }));
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
         samples, summary, initialDisplay, frames: phases, runtime: { node: process.version, pid: process.pid,
-          profileStartup, profileSearch: process.env.PROFILE_SEARCH === "1",
+          profileStartup, profileSearch: process.env.PROFILE_SEARCH === "1", searchPane: process.env.PROFILE_SEARCH_PANE ?? "chat",
           mode: process.env.PROFILE_MODE, nativeComponents: components.length, samples: count,
           savedToolBlocks: messages.filter(component => component.constructor.name === "ToolExecutionComponent").length },
         draft: ctx.ui.getEditorText(), syntheticOnly: true,

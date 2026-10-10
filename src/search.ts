@@ -68,6 +68,18 @@ class SearchInput extends Input {
     super({ prompt: "Search: " });
   }
 
+  /** Native overlays may refocus this removed Input even after its layout is gone. */
+  retire(restoreFocus: () => void): void {
+    let focused = this.focused;
+    Object.defineProperty(this, "focused", {
+      configurable: true, enumerable: true,
+      get: () => focused,
+      set: (value: boolean) => {
+        focused = value;
+        if (value) queueMicrotask(restoreFocus);
+      },
+    });
+  }
   override handleInput(data: string): void {
     if (matchesKey(data, "shift+enter")) {
       this.previous();
@@ -81,7 +93,7 @@ class SearchInput extends Input {
 
 /** A one-row live fuzzy search mounted inside a panel, never over the editor. */
 export class PanelSearch extends HStack {
-  readonly input: Input;
+  readonly input: SearchInput;
   private index?: SearchHit[];
   private hits: SearchHit[] = [];
   private selected = 0;
@@ -125,6 +137,8 @@ export class PanelSearch extends HStack {
   /** Focus the existing native Input without opening another interface. */
   focus(): void { this.tui.setFocus(this.input); }
 
+  /** Retire focus ownership without taking input away from an unrelated overlay. */
+  retire(restoreFocus: () => void): void { this.input.retire(restoreFocus); }
   /** Keep the selected result visible after a viewport height change. */
   reposition(): void {
     const hit = this.hits[this.selected];
@@ -144,7 +158,9 @@ export class PanelSearch extends HStack {
       hit.entry.label === old.entry.label && hit.line === old.line && hit.text === old.text) : -1;
     this.selected = Math.max(0, retained);
     this.query = query;
-    if (queryChanged || retained < 0) this.match(this.hits[this.selected], query);
+    if (queryChanged || retained < 0 || old?.entry.text !== this.hits[this.selected]?.entry.text) {
+      this.match(this.hits[this.selected], query);
+    }
     this.tui.requestRender();
   }
 

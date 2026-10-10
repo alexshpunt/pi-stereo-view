@@ -101,8 +101,7 @@ export default function transcript(pi: ExtensionAPI): void {
       ensureLayout();
       const pane = layout?.searchPane();
       if (pane && !settingsOpen && matchesKey(data, "ctrl+f")) {
-        if (!isKeyRelease(data)) layout?.openSearch(pane);
-        return { consume: true };
+        if (isKeyRelease(data) || layout?.openSearch(pane)) return { consume: true };
       }
       return undefined;
     });

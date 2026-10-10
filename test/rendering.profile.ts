@@ -17,6 +17,8 @@ const output = path.resolve(process.env.PROFILE_OUTPUT ?? "tmp/profiling/baselin
 const ide = "/root/dev/pi/pi-agent-ide";
 const transcript = path.resolve(process.env.PROFILE_TRANSCRIPT_PATH ?? ".");
 const profileSearch = process.env.PROFILE_SEARCH === "1";
+const searchPane = process.env.PROFILE_SEARCH_PANE ?? "chat";
+if (!["chat", "activity"].includes(searchPane)) throw new Error("Unknown search pane: " + searchPane);
 const git = (...args: string[]): string => execFileSync("git", ["-C", ide, ...args], { encoding: "utf8" }).trim();
 
 const savedAssistant = (content: AssistantMessage["content"]): AssistantMessage => ({
@@ -63,7 +65,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     }
     const runtime = { ide: { path: ide, version, sourceCommit, workingTree }, transcriptCommit, pi: execFileSync("pi", ["--version"], { encoding: "utf8" }).trim(),
       transcript: { path: transcript, sourceCommit: transcriptCommit, workingTree: transcriptGit("status", "--porcelain") },
-      profileStartup: process.env.PROFILE_STARTUP === "1", profileSearch,
+      profileStartup: process.env.PROFILE_STARTUP === "1", profileSearch, searchPane,
       workload: { exchanges: size, toolLines, width, height, scrollbar, syntheticOnly: true },
       provider: "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.", mode };
     await mkdir(artifact, { recursive: true });
@@ -73,7 +75,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: ide, PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines),
-        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_SEARCH: profileSearch ? "1" : "0" },
+        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane },
       rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
       extensions: [...(mode === "stock" ? [] : [path.join(transcript, "src/index.ts")]), path.resolve("test/fixtures/rendering-profile.ts")],
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],

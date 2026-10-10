@@ -95,7 +95,6 @@ export class TranscriptLayout {
   };
   private searchVersion = 0;
   private restoreVersion = 0;
-  private readonly retiredSearchFocus = new WeakMap<Component, Component | null>();
   private drag?: { position: number; size: number };
   private failed = false;
   private fallback = false;
@@ -197,11 +196,6 @@ export class TranscriptLayout {
     this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"));
     let historyHeight = 0;
     const shown = ({ width, height }: { width: number; height: number }): boolean => {
-      const focused = host.getFocusedComponent();
-      if (focused && this.retiredSearchFocus.has(focused)) {
-        host.setFocus(this.retiredSearchFocus.get(focused) ?? null);
-        this.retiredSearchFocus.delete(focused);
-      }
       const previousHeight = historyHeight;
       historyHeight = Math.max(0, height - dock.render(width).length - 1);
       const search = this.search;
@@ -399,16 +393,32 @@ export class TranscriptLayout {
     return this.preferences.zoom ?? this.activePane;
   }
 
-  /** Open or focus the compact search row below this panel's header. */
-  openSearch(pane: Pane): void {
+  private canFocusSearch(): boolean {
+    const focused = this.host?.getFocusedComponent();
+    if (!focused || focused === this.search?.bar.input) return true;
+    const dock = this.original?.children[1];
+    const pending = dock ? [dock] : [];
+    const visited = new Set<Component>();
+    while (pending.length) {
+      const component = pending.pop()!;
+      if (component === focused) return true;
+      if (visited.has(component)) continue;
+      visited.add(component);
+      if (component instanceof Container) pending.push(...component.children);
+    }
+    return false;
+  }
+
+  /** Open the inline field, or leave another active interface's focus untouched. */
+  openSearch(pane: Pane): boolean {
     const host = this.host;
     const document = this.documents?.[pane];
     const view = pane === "chat" ? this.chat : this.activity;
-    if (!host || !document || !view || !this.searchPane()) return;
+    if (!host || !document || !view || !this.searchPane() || !this.canFocusSearch()) return false;
     if (this.search?.pane === pane) {
       this.search.bar.focus();
       host.requestRender();
-      return;
+      return true;
     }
     this.closeSearch();
     this.activate(pane);
@@ -427,6 +437,7 @@ export class TranscriptLayout {
     this.searchRows[pane].addChild(bar);
     bar.focus();
     host.requestRender();
+    return true;
   }
 
   /** Rebuild the open search index only after saved history changes. */
@@ -443,9 +454,13 @@ export class TranscriptLayout {
     this.searchVersion++;
     this.searchRows[search.pane].clear();
     search.document.clearSearch();
+    search.bar.retire(() => {
+      if (host.getFocusedComponent() === search.bar.input) {
+        host.setFocus(search.focus);
+        host.requestRender();
+      }
+    });
     if (host.getFocusedComponent() === search.bar.input) host.setFocus(search.focus);
-    // An unrelated overlay may later restore its old focus to this removed Input.
-    else this.retiredSearchFocus.set(search.bar.input, search.focus);
     host.requestRender();
     if (!restore) return;
     // Removing the row changes viewport height. Restore after native layout settles.
