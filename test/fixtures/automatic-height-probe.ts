@@ -3,6 +3,7 @@ import path from "node:path";
 import { setImmediate } from "node:timers/promises";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, type TUI } from "@earendil-works/pi-tui";
+import { emittedFrame } from "./emitted-frame.js";
 
 type Host = TUI & { layoutRoot?: Container; getScreenLines(): string[]; handleTerminalInput(data: string): void };
 
@@ -10,11 +11,11 @@ type Host = TUI & { layoutRoot?: Container; getScreenLines(): string[]; handleTe
 export default function automaticHeightProbe(pi: ExtensionAPI): void {
   let tui: Host;
   let pending = Promise.resolve();
-  const samples: Record<string, { lines: string[]; height: number; available: number }> = {};
+  const samples: Record<string, { lines: string[]; height: number; available: number; contentRows: number }> = {};
   const thresholds = [1, 3, 10, 25];
   const sample = async (name: string): Promise<void> => {
-    tui.requestRender(true);
-    await setImmediate();
+    const preferences = JSON.parse(await readFile(path.join(getAgentDir(), "transcript.json"), "utf8"));
+    await emittedFrame(tui, () => tui.requestRender(true));
     const views: ScrollView[] = [];
     const seen = new Set<Container>();
     const walk = (component: Container): void => {
@@ -27,10 +28,10 @@ export default function automaticHeightProbe(pi: ExtensionAPI): void {
     const chat = views.find(view => view.viewportHeight > 0 && view.render(tui.terminal.columns)
       .some(line => stripTerminalSequences(line).includes("HEIGHT USER")));
     if (!chat) throw new Error("Missing visible Conversation viewport");
-    const preferences = JSON.parse(await readFile(path.join(getAgentDir(), "transcript.json"), "utf8"));
     const dock = tui.layoutRoot!.children.at(-1)!;
+    const contentRows = chat.children[0].render(chat.getContentWidth(tui.terminal.columns)).length;
     samples[name] = {
-      lines: tui.getScreenLines(), height: chat.viewportHeight + (preferences.side === "left" ? 3 : 2),
+      contentRows, lines: tui.getScreenLines(), height: chat.viewportHeight + (preferences.side === "left" ? 3 : 2),
       available: tui.terminal.rows - dock.render(tui.terminal.columns).length - 1,
     };
   };
