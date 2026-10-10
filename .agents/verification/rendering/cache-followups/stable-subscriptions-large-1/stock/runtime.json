@@ -1,0 +1,21 @@
+{
+  "ide": {
+    "path": "/root/dev/pi/pi-agent-ide",
+    "version": "0.8.0",
+    "sourceCommit": "1922570b9882c023f284b85ac45d3bad4be46550",
+    "workingTree": ""
+  },
+  "transcriptCommit": "fc03c3816efe24819fe3fe17480ecbc9a0a3456d",
+  "pi": "1.1.0",
+  "profileStartup": false,
+  "workload": {
+    "exchanges": 600,
+    "toolLines": 80,
+    "width": 274,
+    "height": 108,
+    "scrollbar": "auto",
+    "syntheticOnly": true
+  },
+  "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+  "mode": "stock"
+}

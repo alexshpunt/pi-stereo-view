@@ -157,6 +157,21 @@ The `fc03c38` large auto matrix passed all four cases (`shell:16da9feefc1b`, exi
 
 The same review identified a duplicate image-placement scan on formatting misses. A work regression failed with two scans (`shell:bb5dae9127b6`) before implementation. NativeRenderCache now shares the latest render's image-placement classification with CompactMessage. The regression covers unchanged text, Kitty and iTerm images, and image-to-text updates without dropping rows or retaining image placement. All20 focused cases, typecheck and diff checks pass (`shell:2b6fec308944`). Full non-search regression and another matched large control are next; neither new cache follow-up is installed yet.
 
+## Verified cache follow-ups, remaining decision
+
+At `3c8b03b`, the complete ten-file non-search suite passed all49 cases. The reverse-order large native-auto matrix then passed all four modes sequentially in the same terminal `shell:b50017179166` (exit0, 496s). No benchmark ran alongside regression tests. IDE v0.8.0 was loaded from the clean direct latest source `1922570b9882c023f284b85ac45d3bad4be46550`; each profile case verifies it before and after. Raw evidence for this matrix and the previous `fc03c38` matrix is archived in `.agents/verification/rendering/cache-followups/`.
+
+| Mode | Typing median / p95 | Scroll median / p95 | Stream median / p95 | Tool update median / p95 | Initial display | Expanded cold frame | Resize median / maximum |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Stock | 59.0 / 72.5 ms | 68.7 / 92.1 ms | 50.1 / 76.3 ms | 56.7 / 68.1 ms | 656 ms | 451 ms | 374 / 516 ms |
+| Combined | 62.6 / 76.1 ms | 77.7 / 123.5 ms | 66.7 / 98.1 ms | 66.7 / 91.0 ms | 636 ms | 443 ms | 346 / 403 ms |
+| Columns | 41.8 / 75.6 ms | 68.5 / 135.6 ms | 50.3 / 80.3 ms | 58.3 / 76.5 ms | 796 ms | 704 ms | 319 / 373 ms |
+| Rows | 31.0 / 42.2 ms | 36.1 / 55.7 ms | 33.8 / 44.3 ms | 34.0 / 73.7 ms | 767 ms | 562 ms | 389 / 444 ms |
+
+Warm Rows is faster in this control, and Columns typing median remains improved. Columns scrolling and output tails, initial display and cold rendering still fail the original strict parity criterion. The cold sample and six resizes are limited evidence; they are not robust tail measurements. The code changes prove less duplicate work, not that every phase is now faster than Stock. Both follow-ups are committed and pushed but not installed or live verified yet.
+
+The user is choosing whether to continue the original full-parity stage now or preserve this behavioral checkpoint and pause the remaining performance work (ask `188fbcf2-89a3-4434-9df3-cc4087b31138`, `performance_next_stage`). Until that decision arrives, no new implementation, merge, final acceptance or task closure is authorized. The currently installed intermediate fix and paused search status are unchanged.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
