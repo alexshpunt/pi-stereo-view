@@ -53,5 +53,12 @@
   "judgment": "Both native Bash blocks show current output and inline right-aligned clocks, with one blank row between blocks. Assistant paragraph break remains. Columns, full-width input dock and footer are intact; no new rendering error, stray escapes, overlap or clipping. Earlier remote save failure is correctly shown as a failure, not hidden. This capture is visual evidence, not a latency benchmark.",
   "userApproval": "Autonomous experiments; evidence-backed practical limit accepted; merge develop explicitly approved.",
   "searchAcceptance": "paused; LPT-717 remains open",
-  "privacy": "No personal screenshot or history copied to tracked artifacts; metadata/judgment only."
+  "privacy": "No personal screenshot or history copied to tracked artifacts; metadata/judgment only.",
+  "additionalRegression": {
+    "terminal": "shell:8728d3daeacf",
+    "focusedPassed": 29,
+    "newContracts": 1,
+    "totalCurrentCasesVerified": 58,
+    "productionCodeChanged": false
+  }
 }

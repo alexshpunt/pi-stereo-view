@@ -231,6 +231,10 @@ The bounded blank cache received read-only review9270b9e3 with no concrete defec
 
 Under the latest direct approval, proceed to final install/reload/live verification and develop merge, then record the practical-limit Result honestly. Search remains open/paused and untested.
 
+## Final shared-child handoff guard
+
+Read-only review96c1161a found no concrete native defect in the changed watch order. Deduplicated node counting, frozen replacements, shared subscribers and inherited invalidate ownership remain sound. It suggested a missing replacement-while-live regression. That test now replaces a child in one of two caches, verifies both old and replacement invalidations still refresh the correct cache, then checks original-method restoration after the last old subscriber leaves. All29 focused cases, typecheck and diff checks pass (shell:8728d3daeacf). This is an additional passing contract guard, not a red/green defect fix. No production code changed, so the measured and installed source remains identical. Together with the full57-case non-search run, all58 current cases are verified.
+
 ## Final live verification and accepted boundary
 
 Published and installed0.0.0-dev.1791642798 from evidence commitb612163, production9d29c78. All five installed source comparisons pass before and after mandatory Pi reload. Latest clean direct IDE0.8.0 source1922570b9882c023f284b85ac45d3bad4be46550 was fetched/verified before the live run. User-selected split/columns67,height15,sideleft,clocksTRUE/nativeauto settings were preserved.

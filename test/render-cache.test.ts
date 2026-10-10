@@ -102,6 +102,43 @@ test("shared native children notify both caches and restore only after the last 
   expect(child.invalidate).toBe(original);
 });
 
+test("replacing a shared child keeps the other cache subscribed until removal", () => {
+  let oldValue = "old";
+  let newValue = "new";
+  const oldChild: Component = { render: () => [oldValue], invalidate() {} };
+  const replacement: Component = { render: () => [newValue], invalidate() {} };
+  const original = oldChild.invalidate;
+  const replacementOriginal = replacement.invalidate;
+  const left = new Container();
+  const right = new Container();
+  left.addChild(oldChild);
+  right.addChild(oldChild);
+  const one = new NativeRenderCache(left);
+  const two = new NativeRenderCache(right);
+  const theme = {};
+  try {
+    one.render(20, theme);
+    two.render(20, theme);
+    left.children = [replacement];
+    expect(one.render(20, theme)).toEqual(["new"]);
+    expect(oldChild.invalidate).not.toBe(original);
+    oldValue = "old refreshed";
+    oldChild.invalidate();
+    expect(two.render(20, theme)).toEqual(["old refreshed"]);
+    newValue = "replacement refreshed";
+    replacement.invalidate();
+    expect(one.render(20, theme)).toEqual(["replacement refreshed"]);
+    right.clear();
+    expect(two.render(20, theme)).toEqual([]);
+    expect(oldChild.invalidate).toBe(original);
+    expect(replacement.invalidate).not.toBe(replacementOriginal);
+  } finally {
+    one.dispose();
+    two.dispose();
+  }
+  expect(replacement.invalidate).toBe(replacementOriginal);
+});
+
 test("a renderer that invalidates during rendering is refreshed on the next frame", () => {
   let renders = 0;
   const component: Component = {
