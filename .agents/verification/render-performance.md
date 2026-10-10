@@ -44,7 +44,7 @@ V8 profiles and actual render counters show that Columns repeatedly prepares the
 
 Commit `64d1d0d` reuses routing and native block preparation for repeated measurements at the same width within one root layout frame. The next frame always refreshes the native source. Timestamp correlation is shared between panels in that frame. Compact formatting is reused only after reading and comparing current native output, clock, width, gutter and theme; image placement blocks are not retained by that formatting cache. Unknown native renderers still run on each new frame.
 
-Two deterministic work-reuse regressions failed before the change and now pass. Together with the existing compact-message tests, seven unit cases pass. Typecheck and `git diff --check` pass. The matched 600-exchange post-change matrix is running; no speedup or parity claim yet.
+Two deterministic work-reuse regressions failed before the change and now pass. Together with the existing compact-message tests, seven unit cases pass. Typecheck and `git diff --check` pass. Its four-mode 600-exchange matrix passed at `tmp/profiling/frame-reuse-600/`: Stock typing median 48.43ms, Columns 126.55ms, Rows 127.65ms. This is a material improvement, not stock parity.
 
 ## Further measured checkpoints
 
@@ -54,9 +54,18 @@ Two deterministic work-reuse regressions failed before the change and now pass. 
 
 Starting with that latter run, tool updates target the latest saved tool, and the final emitted frames contain updated tool lines in all four modes. Earlier runs updated an offscreen tool and are useful for render-work diagnosis but not sufficient evidence for visible tool-update latency. The changed method is recorded in measurements.
 
-A separate real-Pi regression at `tmp/profiling/repeated-invalidation-red/` showed seven source-history invalidations for one root refresh. After `1f7c136`, `tmp/profiling/single-invalidation-green/` passes the exact-one-invalidation contract and verifies updated tool text is visible. The shared root owns the source refresh; individual projected documents reset their own frame state without refreshing the same source again. Guarded fallback lets the native ScrollView retain that ownership. The next 600-exchange matrix and the non-search regression suite are pending.
+A separate real-Pi regression at `tmp/profiling/repeated-invalidation-red/` showed seven source-history invalidations for one root refresh. After `1f7c136`, `tmp/profiling/single-invalidation-green/` passes the exact-one-invalidation contract and verifies updated tool text is visible. The shared root owns the source refresh; individual projected documents reset their own frame state without refreshing the same source again. Guarded fallback lets the native ScrollView retain that ownership. The four-mode 600-exchange matrix passed at `tmp/profiling/single-invalidation-600/`: typing medians Stock 50.88ms, Columns 93.51ms, Rows 88.45ms. The nine-file non-search regression suite passed all 36 cases at this revision; search tests were excluded.
 
-Before acceptance, investigate the remaining cost of ancestor stacks assembling full-history arrays just to measure pane height. Any viewport-bounded measurement change must preserve short-pane sizing, latest-message follow, scrolling, image rows and the native input dock.
+`005007b` bounds the preview arrays used by ancestor stacks to measure pane height. The native ScrollView still owns the full document for painting, selection and scrolling. A real-Pi work contract failed before the change and now passes in both split modes: intrinsic pane measurement cannot construct more rows than the terminal height. The matched four-mode matrix passed at `tmp/profiling/bounded-pane-600/`, with maximum pane preview length 28 rows in the 35-row window.
+
+| Mode | Typing median / p95 (ms) | Typing CPU median (ms) | Scroll median (ms) |
+| --- | --- | --- | --- |
+| Stock | 51.11 / 69.73 | 56.59 | 47.97 |
+| Combined | 63.51 / 73.08 | 69.16 | 64.90 |
+| Columns | 86.52 / 116.81 | 102.96 | 95.41 |
+| Rows | 76.34 / 91.13 | 88.24 | 73.17 |
+
+This removes excess measurement copies but still does not meet stock parity. Profiles retain substantial native background formatting and compact-render work. Separate native/compact timing is being added to distinguish the remaining costs. The non-search regression suite must be rerun after this latest layout change.
 
 ## Acceptance still needed
 

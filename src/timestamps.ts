@@ -184,7 +184,7 @@ export class CompactMessage extends Container {
   private contentWidth = 0;
   private contentHeight = 0;
   private leadingRows = 0;
-  private prepared?: { width: number; lines: string[] };
+  private prepared?: { width: number; content: string[]; lines: string[] };
   private formatted?: { width: number; time: string; gutter: number; theme: Theme; content: string[]; top: number; lines: string[] };
 
   constructor(private readonly component: Component, private readonly label: () => string,
@@ -197,8 +197,11 @@ export class CompactMessage extends Container {
   /** Prepare one visible block and its separator once per document render. */
   prepare(width: number, separate: boolean): boolean {
     const lines = this.renderContent(width);
-    this.leadingRows = separate && lines.length > 0 ? 1 : 0;
-    this.prepared = { width, lines: this.leadingRows ? ["", ...lines] : lines };
+    const leading = separate && lines.length > 0 ? 1 : 0;
+    if (this.prepared?.width !== width || this.prepared.content !== lines || this.leadingRows !== leading) {
+      this.prepared = { width, content: lines, lines: leading ? ["", ...lines] : lines };
+    }
+    this.leadingRows = leading;
     return lines.length > 0;
   }
 
