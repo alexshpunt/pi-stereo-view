@@ -22,7 +22,9 @@ class PanelScrollView extends ScrollView {
 
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
     if (event.type === "wheel" || (event.type === "press" && event.button === "left")) this.interact();
-    return super.handleMouse(event);
+    // Native layout already dispatches to the visible document with its scroll offset.
+    // Container routing here would send the event into unrelated off-screen rows.
+    return undefined;
   }
 }
 class TranscriptColumns extends HStack {
