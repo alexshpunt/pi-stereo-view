@@ -148,18 +148,26 @@ export class NativeRenderCache {
   get hasImagePlacement(): boolean { return this.imagePlacement; }
 
   private watch(nodes: Component[]): boolean {
-    const present = new Set(nodes);
-    for (const [component, stop] of this.watched) if (!present.has(component)) {
-      stop();
-      this.watched.delete(component);
-    }
     let observable = true;
-    for (const component of present) {
+    let presentCount = 0;
+    // Graph collection already deduplicates nodes. Count owned entries during observation.
+    for (const component of nodes) {
       if (!this.watched.has(component)) {
         const stop = subscribe(component, this.changed);
-        if (stop) this.watched.set(component, stop);
+        if (stop) { this.watched.set(component, stop); presentCount++; }
         else observable = false;
-      } else if (component.invalidate !== subscriptions.get(component)?.wrapped) observable = false;
+      } else {
+        presentCount++;
+        if (component.invalidate !== subscriptions.get(component)?.wrapped) observable = false;
+      }
+    }
+    // Only changed sets need a membership index and a scan for removed observers.
+    if (this.watched.size !== presentCount) {
+      const present = new Set(nodes);
+      for (const [component, stop] of this.watched) if (!present.has(component)) {
+        stop();
+        this.watched.delete(component);
+      }
     }
     return observable;
   }
