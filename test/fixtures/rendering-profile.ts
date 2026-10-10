@@ -8,7 +8,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, type Component, type TUI } from "@earendil-works/pi-tui";
 
 type Host = TUI & { layoutRoot?: Container; getScreenLines(): string[]; handleTerminalInput(data: string): void };
-interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; paneRows: number; previewScrollRows: number; bytes: number; nativeMs: number; compactMs: number; documentMs: number }
+interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; paneRows: number; panePreviewCharacters: number; previewScrollRows: number; bytes: number; nativeMs: number; compactMs: number; documentMs: number }
 
 /** Measure real native frame emission and capture V8 profiles without changing Pi source. */
 export default function renderingProfile(pi: ExtensionAPI): void {
@@ -18,6 +18,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
   let timestampIndexes = 0;
   let sourceInvalidations = 0;
   let paneRows = 0;
+  let panePreviewCharacters = 0;
   let previewScrollRows = 0;
   let nativeMs = 0;
   let compactMs = 0;
@@ -89,6 +90,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     const inspector = new Session();
     const measure = async (name: string, action: () => void): Promise<void> => {
       paneRows = 0;
+      panePreviewCharacters = 0;
       previewScrollRows = 0;
       const before = { documents, timestampIndexes, sourceInvalidations, bytes, nativeMs, compactMs, documentMs };
       const cpu = process.cpuUsage();
@@ -97,7 +99,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       const usage = process.cpuUsage(cpu);
       samples.push({ action: name, emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000,
         documents: documents - before.documents, timestampIndexes: timestampIndexes - before.timestampIndexes,
-        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, paneRows, previewScrollRows, bytes: bytes - before.bytes,
+        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, paneRows, panePreviewCharacters, previewScrollRows, bytes: bytes - before.bytes,
         nativeMs: nativeMs - before.nativeMs, compactMs: compactMs - before.compactMs, documentMs: documentMs - before.documentMs });
     };
     const phases: Record<string, string[]> = {};
@@ -120,6 +122,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
           try {
             const lines = render.call(pane, width);
             paneRows = Math.max(paneRows, lines.length);
+            panePreviewCharacters += lines.reduce((total, line) => total + line.length, 0);
             return lines;
           } finally { previewing = false; }
         };
@@ -235,7 +238,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         return [action, { count: group.length, frameP50: percentile(group.map(sample => sample.emittedFrameMs), 0.5),
           frameP95: percentile(group.map(sample => sample.emittedFrameMs), 0.95), cpuP50: percentile(group.map(sample => sample.cpuMs), 0.5),
           cpuP95: percentile(group.map(sample => sample.cpuMs), 0.95), documents: group.map(sample => sample.documents),
-          timestampIndexes: group.map(sample => sample.timestampIndexes), sourceInvalidations: group.map(sample => sample.sourceInvalidations), paneRows: group.map(sample => sample.paneRows), previewScrollRows: group.map(sample => sample.previewScrollRows),
+          timestampIndexes: group.map(sample => sample.timestampIndexes), sourceInvalidations: group.map(sample => sample.sourceInvalidations), paneRows: group.map(sample => sample.paneRows), panePreviewCharacters: group.map(sample => sample.panePreviewCharacters), previewScrollRows: group.map(sample => sample.previewScrollRows),
           nativeP50: percentile(group.map(sample => sample.nativeMs), 0.5), compactP50: percentile(group.map(sample => sample.compactMs), 0.5),
           documentP50: percentile(group.map(sample => sample.documentMs), 0.5) }];
       }));

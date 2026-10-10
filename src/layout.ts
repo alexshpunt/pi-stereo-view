@@ -50,16 +50,12 @@ class TranscriptPane extends VStack {
   }
 
   override render(width: number): string[] {
-    // Native layout uses this for intrinsic sizing, then paints the original ScrollView.
-    // Measure a window, not a second full-history copy in every ancestor stack.
-    const header = this.header.render(width);
-    const contentWidth = this.view.getContentWidth(width);
-    const content = this.view.children[0].render(contentWidth);
-    const available = Math.max(1, this.height() - header.length);
-    const maxTop = Math.max(0, content.length - available);
-    const top = this.view.isFollowingEnd ? maxTop : Math.min(this.view.scrollTop, maxTop);
-    const preview = content.slice(top, top + available);
-    return [...header, ...(contentWidth === width ? preview : preview.map(line => `${line} `))];
+    // Native layout measures height here, then paints the original header and ScrollView.
+    // Empty preview rows avoid composing colored history text in ancestor measurements.
+    const headerRows = this.header.render(width).length;
+    const contentRows = this.view.children[0].render(this.view.getContentWidth(width)).length;
+    const available = Math.max(1, this.height() - headerRows);
+    return Array<string>(headerRows + Math.min(contentRows, available)).fill("");
   }
 }
 
