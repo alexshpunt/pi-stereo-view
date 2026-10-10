@@ -217,6 +217,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         assistant.updateContent({ ...original, content: [{ type: "text", text: Array.from({ length: 80 }, (_, row) => "SYNTHETIC STREAM LINE " + row).join("\n") + "\nSYNTHETIC STREAM UPDATE " + index }] }, true);
         tui.requestRender();
       });
+      phases.streamed = await capture();
       assistant.updateContent(original, false);
       const tool = messages.filter(component => component.constructor.name === "ToolExecutionComponent").at(-1) as
         (Container & { updateResult(result: { content: { type: string; text: string }[]; isError: boolean }, partial: boolean): void }) | undefined;
