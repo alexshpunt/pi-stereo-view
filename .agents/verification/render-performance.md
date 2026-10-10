@@ -15,6 +15,8 @@ node --experimental-strip-types scripts/summarize-render-profile.ts tmp/profilin
 
 `PROFILE_STARTUP=1` additionally saves separate `initial.cpuprofile` and `cold.cpuprofile` files. These diagnostic runs add profiler overhead and must not replace the default-off timing controls. Set `PROFILE_PHASE=initial` or `cold` when using the summary script to select one of those files.
 
+`PROFILE_SCROLLBAR` selects `always` (the default), `auto` or `hidden` in the isolated synthetic settings only. Record and match it across modes. Hidden-scrollbar diagnostics are not acceptance for the default always-visible scrollbar.
+
 Raw samples, initial/final terminal lines, CPU profiles and runtime provenance are saved below `PROFILE_OUTPUT`. Initial runtime records are kept outside the individual case folders so failed cases do not erase them. The profiler wraps the actual loaded document instances, not separately imported classes.
 
 Latency is action to synchronized terminal-frame emission, not compositor presentation. CPU is the process CPU delta and includes work scheduled in the interval. `cold` means an invalidated history frame, not total process startup. Six resize samples and one cold sample are not enough for a robust tail-latency claim. V8 samples cover the measured phase sequence; inclusive totals are not additive and do not isolate each action.

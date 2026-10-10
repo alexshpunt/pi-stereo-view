@@ -11,6 +11,8 @@ const size = Number(process.env.PROFILE_HISTORY ?? 100);
 const toolLines = Number(process.env.PROFILE_TOOL_LINES ?? 80);
 const width = Number(process.env.PROFILE_WIDTH ?? 120);
 const height = Number(process.env.PROFILE_HEIGHT ?? 35);
+const scrollbar = process.env.PROFILE_SCROLLBAR ?? "always";
+if (!["always", "auto", "hidden"].includes(scrollbar)) throw new Error("Unknown profile scrollbar: " + scrollbar);
 const output = path.resolve(process.env.PROFILE_OUTPUT ?? "tmp/profiling/baseline");
 const ide = "/root/dev/pi/pi-agent-ide";
 const git = (...args: string[]): string => execFileSync("git", ["-C", ide, ...args], { encoding: "utf8" }).trim();
@@ -38,7 +40,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
   const agent = await mkdtemp(path.resolve("tmp/render-profile-agent-"));
   const artifact = path.join(output, mode);
   try {
-    await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true, hideThinkingBlock: false, fullscreenScrollbar: "always", compaction: { enabled: false } }));
+    await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true, hideThinkingBlock: false, fullscreenScrollbar: scrollbar, compaction: { enabled: false } }));
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
       mode: mode === "combined" ? "combined" : "split", side: "left", chatWidth: Math.floor((width - 1) * 0.35),
       layout: mode === "rows" ? "rows" : "columns", chatHeight: null, zoom: null, showTimestamps: true,
@@ -57,7 +59,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     }
     const runtime = { ide: { path: ide, version, sourceCommit, workingTree }, transcriptCommit, pi: execFileSync("pi", ["--version"], { encoding: "utf8" }).trim(),
       profileStartup: process.env.PROFILE_STARTUP === "1",
-      workload: { exchanges: size, toolLines, width, height, syntheticOnly: true },
+      workload: { exchanges: size, toolLines, width, height, scrollbar, syntheticOnly: true },
       provider: "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.", mode };
     await mkdir(artifact, { recursive: true });
     await writeFile(path.join(output, "runtime-" + mode + ".json"), JSON.stringify(runtime, null, 2));
