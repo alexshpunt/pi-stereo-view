@@ -5,10 +5,10 @@ import { performance } from "node:perf_hooks";
 import { setImmediate } from "node:timers/promises";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Container, ScrollView, stripTerminalSequences, Text, type TUI } from "@earendil-works/pi-tui";
+import { Container, ScrollView, stripTerminalSequences, Text, type Component, type TUI } from "@earendil-works/pi-tui";
 
 type Host = TUI & { layoutRoot?: Container; getScreenLines(): string[]; handleTerminalInput(data: string): void };
-interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; paneRows: number; bytes: number }
+interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; paneRows: number; bytes: number; nativeMs: number; compactMs: number; documentMs: number }
 
 /** Measure real native frame emission and capture V8 profiles without changing Pi source. */
 export default function renderingProfile(pi: ExtensionAPI): void {
@@ -18,6 +18,9 @@ export default function renderingProfile(pi: ExtensionAPI): void {
   let timestampIndexes = 0;
   let sourceInvalidations = 0;
   let paneRows = 0;
+  let nativeMs = 0;
+  let compactMs = 0;
+  let documentMs = 0;
   let bytes = 0;
   let frame: (() => void) | undefined;
   const count = Math.max(3, Number(process.env.PROFILE_SAMPLES ?? 12));
@@ -61,14 +64,15 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     const inspector = new Session();
     const measure = async (name: string, action: () => void): Promise<void> => {
       paneRows = 0;
-      const before = { documents, timestampIndexes, sourceInvalidations, bytes };
+      const before = { documents, timestampIndexes, sourceInvalidations, bytes, nativeMs, compactMs, documentMs };
       const cpu = process.cpuUsage();
       const start = performance.now();
       await paint(action);
       const usage = process.cpuUsage(cpu);
       samples.push({ action: name, emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000,
         documents: documents - before.documents, timestampIndexes: timestampIndexes - before.timestampIndexes,
-        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, paneRows, bytes: bytes - before.bytes });
+        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, paneRows, bytes: bytes - before.bytes,
+        nativeMs: nativeMs - before.nativeMs, compactMs: compactMs - before.compactMs, documentMs: documentMs - before.documentMs });
     };
     const phases: Record<string, string[]> = {};
     try {
@@ -88,7 +92,12 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       const indexes = new Set<object>();
       for (const document of mounted.filter(component => component.constructor.name === "NativeDocument")) {
         const render = document.render;
-        document.render = width => { documents++; return render.call(document, width); };
+        document.render = width => {
+          documents++;
+          const start = performance.now();
+          try { return render.call(document, width); }
+          finally { documentMs += performance.now() - start; }
+        };
         restoreCounters.push(() => { document.render = render; });
         const index = Reflect.get(document, "timestamps") as { prepare(components: unknown[]): void };
         if (indexes.has(index)) continue;
@@ -102,6 +111,29 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       const nativeRoot = (combined ? Reflect.get(combined.children[0], "source") : allViews[0]?.children[0]) as Container;
       const messages = (nativeRoot?.children[2] as Container)?.children;
       if (!Array.isArray(messages)) throw new Error("Unsupported native history for profiling");
+      // Time the actual projected native owners, without suppressing any render calls.
+      const compact = mounted.filter(component => component.constructor.name === "CompactMessage");
+      const owners = new Set<Component>(compact.length ?
+        compact.map(component => Reflect.get(component, "component") as Component) : messages);
+      for (const owner of owners) {
+        const render = owner.render;
+        owner.render = width => {
+          const start = performance.now();
+          try { return render.call(owner, width); }
+          finally { nativeMs += performance.now() - start; }
+        };
+        restoreCounters.push(() => { owner.render = render; });
+      }
+      for (const component of compact) {
+        const prepare = Reflect.get(component, "prepare") as (width: number, separate: boolean) => boolean;
+        Reflect.set(component, "prepare", (width: number, separate: boolean) => {
+          const start = performance.now();
+          const nativeBefore = nativeMs;
+          try { return prepare.call(component, width, separate); }
+          finally { compactMs += performance.now() - start - (nativeMs - nativeBefore); }
+        });
+        restoreCounters.push(() => { Reflect.set(component, "prepare", prepare); });
+      }
       const invalidate = nativeRoot.invalidate;
       nativeRoot.invalidate = () => { sourceInvalidations++; invalidate.call(nativeRoot); };
       restoreCounters.push(() => { nativeRoot.invalidate = invalidate; });
@@ -165,7 +197,9 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         return [action, { count: group.length, frameP50: percentile(group.map(sample => sample.emittedFrameMs), 0.5),
           frameP95: percentile(group.map(sample => sample.emittedFrameMs), 0.95), cpuP50: percentile(group.map(sample => sample.cpuMs), 0.5),
           cpuP95: percentile(group.map(sample => sample.cpuMs), 0.95), documents: group.map(sample => sample.documents),
-          timestampIndexes: group.map(sample => sample.timestampIndexes), sourceInvalidations: group.map(sample => sample.sourceInvalidations), paneRows: group.map(sample => sample.paneRows) }];
+          timestampIndexes: group.map(sample => sample.timestampIndexes), sourceInvalidations: group.map(sample => sample.sourceInvalidations), paneRows: group.map(sample => sample.paneRows),
+          nativeP50: percentile(group.map(sample => sample.nativeMs), 0.5), compactP50: percentile(group.map(sample => sample.compactMs), 0.5),
+          documentP50: percentile(group.map(sample => sample.documentMs), 0.5) }];
       }));
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
         samples, summary, frames: phases, runtime: { node: process.version, pid: process.pid,
