@@ -1,0 +1,28 @@
+{
+  "ide": {
+    "path": "/root/dev/pi/pi-agent-ide",
+    "version": "0.8.0",
+    "sourceCommit": "be61c669fcf92edb42105298643cdfe6709863a3",
+    "workingTree": ""
+  },
+  "transcriptCommit": "48cc71c39b2e76d47335af12023457082921d333",
+  "pi": "1.1.0",
+  "transcript": {
+    "path": "/root/dev/pi/pi-agent-transcript",
+    "sourceCommit": "48cc71c39b2e76d47335af12023457082921d333",
+    "workingTree": ""
+  },
+  "profileStartup": false,
+  "profileSearch": false,
+  "searchPane": "chat",
+  "workload": {
+    "exchanges": 600,
+    "toolLines": 80,
+    "width": 274,
+    "height": 108,
+    "scrollbar": "auto",
+    "syntheticOnly": true
+  },
+  "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+  "mode": "columns"
+}

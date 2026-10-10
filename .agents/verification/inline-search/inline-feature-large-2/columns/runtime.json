@@ -1,0 +1,28 @@
+{
+  "ide": {
+    "path": "/root/dev/pi/pi-agent-ide",
+    "version": "0.8.0",
+    "sourceCommit": "c714fdcce2261df6c16bf657f885a87af22f7add",
+    "workingTree": ""
+  },
+  "transcriptCommit": "340abd15655645ce80fad5950bf5b6fb2e883866",
+  "pi": "1.1.0",
+  "transcript": {
+    "path": "/root/.herdr/worktrees/pi-agent-transcript/feat-lpt-717-panel-search",
+    "sourceCommit": "340abd15655645ce80fad5950bf5b6fb2e883866",
+    "workingTree": ""
+  },
+  "profileStartup": false,
+  "profileSearch": true,
+  "searchPane": "chat",
+  "workload": {
+    "exchanges": 600,
+    "toolLines": 80,
+    "width": 274,
+    "height": 108,
+    "scrollbar": "auto",
+    "syntheticOnly": true
+  },
+  "provider": "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.",
+  "mode": "columns"
+}
