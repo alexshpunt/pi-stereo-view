@@ -8,7 +8,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, type TUI } from "@earendil-works/pi-tui";
 
 type Host = TUI & { layoutRoot?: Container; getScreenLines(): string[]; handleTerminalInput(data: string): void };
-interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; bytes: number }
+interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; bytes: number }
 
 /** Measure real native frame emission and capture V8 profiles without changing Pi source. */
 export default function renderingProfile(pi: ExtensionAPI): void {
@@ -16,6 +16,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
   const samples: Sample[] = [];
   let documents = 0;
   let timestampIndexes = 0;
+  let sourceInvalidations = 0;
   let bytes = 0;
   let frame: (() => void) | undefined;
   const count = Math.max(3, Number(process.env.PROFILE_SAMPLES ?? 12));
@@ -58,13 +59,14 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     };
     const inspector = new Session();
     const measure = async (name: string, action: () => void): Promise<void> => {
-      const before = { documents, timestampIndexes, bytes };
+      const before = { documents, timestampIndexes, sourceInvalidations, bytes };
       const cpu = process.cpuUsage();
       const start = performance.now();
       await paint(action);
       const usage = process.cpuUsage(cpu);
       samples.push({ action: name, emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000,
-        documents: documents - before.documents, timestampIndexes: timestampIndexes - before.timestampIndexes, bytes: bytes - before.bytes });
+        documents: documents - before.documents, timestampIndexes: timestampIndexes - before.timestampIndexes,
+        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, bytes: bytes - before.bytes });
     };
     const phases: Record<string, string[]> = {};
     try {
@@ -89,6 +91,9 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       const nativeRoot = (combined ? Reflect.get(combined.children[0], "source") : allViews[0]?.children[0]) as Container;
       const messages = (nativeRoot?.children[2] as Container)?.children;
       if (!Array.isArray(messages)) throw new Error("Unsupported native history for profiling");
+      const invalidate = nativeRoot.invalidate;
+      nativeRoot.invalidate = () => { sourceInvalidations++; invalidate.call(nativeRoot); };
+      restoreCounters.push(() => { nativeRoot.invalidate = invalidate; });
       for (const component of messages) if (component.constructor.name === "ToolExecutionComponent") {
         Reflect.get(component, "setExpanded").call(component, true);
       }
@@ -149,7 +154,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         return [action, { count: group.length, frameP50: percentile(group.map(sample => sample.emittedFrameMs), 0.5),
           frameP95: percentile(group.map(sample => sample.emittedFrameMs), 0.95), cpuP50: percentile(group.map(sample => sample.cpuMs), 0.5),
           cpuP95: percentile(group.map(sample => sample.cpuMs), 0.95), documents: group.map(sample => sample.documents),
-          timestampIndexes: group.map(sample => sample.timestampIndexes) }];
+          timestampIndexes: group.map(sample => sample.timestampIndexes), sourceInvalidations: group.map(sample => sample.sourceInvalidations) }];
       }));
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
         samples, summary, frames: phases, runtime: { node: process.version, pid: process.pid,
