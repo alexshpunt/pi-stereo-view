@@ -84,6 +84,8 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     expect(measurements.samples).not.toHaveLength(0);
     expect(measurements.samples.find((sample: { action: string }) => sample.action === "cold").sourceInvalidations,
       "A root invalidation must refresh the shared native history exactly once").toBe(1);
+    expect(measurements.frames.streamed.some((line: string) => line.includes("SYNTHETIC STREAM UPDATE")),
+      "The streamed native assistant must be visible before restoring its content").toBe(true);
     expect(measurements.markers.some((line: string) => line.includes("SYNTHETIC TOOL UPDATE")),
       "The updated native tool must be visible in the emitted final frame").toBe(true);
     expect(measurements.samples.every((sample: { paneRows: number }) => sample.paneRows <= height),
