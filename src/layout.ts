@@ -41,6 +41,26 @@ class TranscriptRows extends VStack {
   }
 }
 
+class TranscriptPane extends VStack {
+  constructor(private readonly header: Component, private readonly view: ScrollView, private readonly height: () => number) {
+    super([
+      { component: header, basis: "auto", shrink: 0 },
+      { component: view, basis: "auto", grow: 1, minSize: 1 },
+    ]);
+  }
+
+  override render(width: number): string[] {
+    // Native layout uses this for intrinsic sizing, then paints the original ScrollView.
+    // Measure a window, not a second full-history copy in every ancestor stack.
+    const header = this.header.render(width);
+    const content = this.view.render(width);
+    const available = Math.max(1, this.height() - header.length);
+    const maxTop = Math.max(0, content.length - available);
+    const top = this.view.isFollowingEnd ? maxTop : Math.min(this.view.scrollTop, maxTop);
+    return [...header, ...content.slice(top, top + available)];
+  }
+}
+
 class TranscriptRoot extends VStack {
   constructor(children: StackChild[], private readonly source: Container, private readonly nativeScroll: ScrollView) { super(children); }
 
@@ -239,10 +259,7 @@ export class TranscriptLayout {
         { component: label, basis: 1, shrink: 0 },
         { component: line, basis: 1, shrink: 0 },
       ]);
-      return new VStack([
-        { component: header, basis: "auto", shrink: 0 },
-        { component: view, basis: "auto", grow: 1, minSize: 1 },
-      ]);
+      return new TranscriptPane(header, view, () => historyHeight);
     };
     const activityPane = pane("Activity", "activity", this.activity);
     const chatPane = pane("Conversation", "chat", this.chat);

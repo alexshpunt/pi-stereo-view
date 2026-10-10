@@ -8,7 +8,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, type TUI } from "@earendil-works/pi-tui";
 
 type Host = TUI & { layoutRoot?: Container; getScreenLines(): string[]; handleTerminalInput(data: string): void };
-interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; bytes: number }
+interface Sample { action: string; emittedFrameMs: number; cpuMs: number; documents: number; timestampIndexes: number; sourceInvalidations: number; paneRows: number; bytes: number }
 
 /** Measure real native frame emission and capture V8 profiles without changing Pi source. */
 export default function renderingProfile(pi: ExtensionAPI): void {
@@ -17,6 +17,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
   let documents = 0;
   let timestampIndexes = 0;
   let sourceInvalidations = 0;
+  let paneRows = 0;
   let bytes = 0;
   let frame: (() => void) | undefined;
   const count = Math.max(3, Number(process.env.PROFILE_SAMPLES ?? 12));
@@ -59,6 +60,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     };
     const inspector = new Session();
     const measure = async (name: string, action: () => void): Promise<void> => {
+      paneRows = 0;
       const before = { documents, timestampIndexes, sourceInvalidations, bytes };
       const cpu = process.cpuUsage();
       const start = performance.now();
@@ -66,13 +68,22 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       const usage = process.cpuUsage(cpu);
       samples.push({ action: name, emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000,
         documents: documents - before.documents, timestampIndexes: timestampIndexes - before.timestampIndexes,
-        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, bytes: bytes - before.bytes });
+        sourceInvalidations: sourceInvalidations - before.sourceInvalidations, paneRows, bytes: bytes - before.bytes });
     };
     const phases: Record<string, string[]> = {};
     try {
       inspector.connect();
       await capture();
       const mounted = containers();
+      for (const pane of mounted.filter(component => component.children.length === 2 && component.children[1] instanceof ScrollView)) {
+        const render = pane.render;
+        pane.render = width => {
+          const lines = render.call(pane, width);
+          paneRows = Math.max(paneRows, lines.length);
+          return lines;
+        };
+        restoreCounters.push(() => { pane.render = render; });
+      }
       // Instrument the loader's actual instances; fixture imports have a separate module cache.
       const indexes = new Set<object>();
       for (const document of mounted.filter(component => component.constructor.name === "NativeDocument")) {
@@ -154,7 +165,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         return [action, { count: group.length, frameP50: percentile(group.map(sample => sample.emittedFrameMs), 0.5),
           frameP95: percentile(group.map(sample => sample.emittedFrameMs), 0.95), cpuP50: percentile(group.map(sample => sample.cpuMs), 0.5),
           cpuP95: percentile(group.map(sample => sample.cpuMs), 0.95), documents: group.map(sample => sample.documents),
-          timestampIndexes: group.map(sample => sample.timestampIndexes), sourceInvalidations: group.map(sample => sample.sourceInvalidations) }];
+          timestampIndexes: group.map(sample => sample.timestampIndexes), sourceInvalidations: group.map(sample => sample.sourceInvalidations), paneRows: group.map(sample => sample.paneRows) }];
       }));
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
         samples, summary, frames: phases, runtime: { node: process.version, pid: process.pid,

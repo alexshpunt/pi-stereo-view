@@ -45,6 +45,19 @@ V8 profiles and actual render counters show that Columns repeatedly prepares the
 Commit `64d1d0d` reuses routing and native block preparation for repeated measurements at the same width within one root layout frame. The next frame always refreshes the native source. Timestamp correlation is shared between panels in that frame. Compact formatting is reused only after reading and comparing current native output, clock, width, gutter and theme; image placement blocks are not retained by that formatting cache. Unknown native renderers still run on each new frame.
 
 Two deterministic work-reuse regressions failed before the change and now pass. Together with the existing compact-message tests, seven unit cases pass. Typecheck and `git diff --check` pass. The matched 600-exchange post-change matrix is running; no speedup or parity claim yet.
+
+## Further measured checkpoints
+
+`293b8e2` also caches the assembled document array within a frame. All four cases passed at `tmp/profiling/assembled-frame-600/`. Typing medians: Stock 47.34ms, Columns 135.90ms, Rows 102.83ms. This did not establish a Columns improvement.
+
+`3c18500` avoids building wrapped match-position maps during ordinary rendering and checks the shared native history once rather than separately for each panel. Search acceptance is not resumed. All four cases passed at `tmp/profiling/lazy-position-600/`. Typing medians: Stock 61.87ms, Columns 93.43ms, Rows 81.22ms. Both split modes are still consistently above stock in this run; there is no parity claim.
+
+Starting with that latter run, tool updates target the latest saved tool, and the final emitted frames contain updated tool lines in all four modes. Earlier runs updated an offscreen tool and are useful for render-work diagnosis but not sufficient evidence for visible tool-update latency. The changed method is recorded in measurements.
+
+A separate real-Pi regression at `tmp/profiling/repeated-invalidation-red/` showed seven source-history invalidations for one root refresh. After `1f7c136`, `tmp/profiling/single-invalidation-green/` passes the exact-one-invalidation contract and verifies updated tool text is visible. The shared root owns the source refresh; individual projected documents reset their own frame state without refreshing the same source again. Guarded fallback lets the native ScrollView retain that ownership. The next 600-exchange matrix and the non-search regression suite are pending.
+
+Before acceptance, investigate the remaining cost of ancestor stacks assembling full-history arrays just to measure pane height. Any viewport-bounded measurement change must preserve short-pane sizing, latest-message follow, scrolling, image rows and the native input dock.
+
 ## Acceptance still needed
 
 - Implement and measure the fixes against matched controls, including repeated runs and a large window.
