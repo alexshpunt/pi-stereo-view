@@ -45,7 +45,7 @@ class TranscriptPane extends VStack {
   constructor(private readonly header: Component, private readonly view: ScrollView, private readonly height: () => number) {
     super([
       { component: header, basis: "auto", shrink: 0 },
-      { component: view, basis: "auto", grow: 1, minSize: 1 },
+      { component: view, basis: 0, grow: 1, minSize: 1 },
     ]);
   }
 
