@@ -17,9 +17,10 @@ test("reuses compact formatting for unchanged native lines without hiding native
   const first = message.render(30);
   message.prepare(30, true);
   expect(message.render(30).slice(1)).toEqual(first);
-  expect(renders).toBe(2);
+  expect(renders).toBe(1);
   expect(clocks, "Unchanged history must not repeat clock and line formatting on each layout pass").toBe(1);
   content = ["", "new text", ""];
+  native.invalidate();
   message.prepare(30, false);
   expect(message.render(30).join("\n")).toContain("new text");
   expect(clocks).toBe(2);
@@ -42,8 +43,9 @@ test("reuses separated rows without hiding native updates on the next preparatio
   const first = message.render(30);
   message.prepare(30, true);
   expect(message.render(30), "Unchanged history must not copy every row just to add its separator").toBe(first);
-  expect(renders).toBe(2);
+  expect(renders).toBe(1);
   content = ["", "changed content", ""];
+  native.invalidate();
   message.prepare(30, true);
   expect(message.render(30)).not.toBe(first);
   expect(message.render(30).map(stripTerminalSequences).join("\n")).toContain("changed content");
@@ -60,6 +62,7 @@ test("adds one separator only for a visible block and renders native content onc
   expect(message.render(30)[0]).toBe("");
   expect(renders).toBe(1);
   content = [];
+  native.invalidate();
   expect(message.prepare(30, true)).toBe(false);
   expect(message.render(30)).toEqual([]);
   expect(renders).toBe(2);
