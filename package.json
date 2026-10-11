@@ -1,12 +1,34 @@
 {
   "name": "pi-agent-transcript",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "Separate Pi conversation and activity without replacing native rendering.",
+  "description": "Keep Pi conversation separate from tool output and agent activity.",
+  "license": "MIT",
+  "author": "Alexander Shpuntenko",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexshpunt/pi-agent-transcript.git"
+  },
+  "homepage": "https://github.com/alexshpunt/pi-agent-transcript#readme",
+  "bugs": {
+    "url": "https://github.com/alexshpunt/pi-agent-transcript/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "transcript",
+    "tui",
+    "split-pane"
+  ],
   "engines": {
     "node": ">=22.19.0"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "pi": {
     "extensions": [
       "./src/index.ts"
@@ -16,7 +38,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "profile": "vitest run --config vitest.profile.config.ts",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "check:package": "vitest run test/package.integration.test.ts"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
@@ -29,5 +52,9 @@
     "pi-coding-agent-test": "0.1.3",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }
