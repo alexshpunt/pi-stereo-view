@@ -2,7 +2,6 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Session } from "node:inspector/promises";
 import { performance } from "node:perf_hooks";
-import { setImmediate } from "node:timers/promises";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, type Component, type TUI } from "@earendil-works/pi-tui";
@@ -32,8 +31,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
   let startupProfile: Promise<void> | undefined;
   const count = Math.max(3, Number(process.env.PROFILE_SAMPLES ?? 12));
   const capture = async (): Promise<string[]> => {
-    tui.requestRender(true);
-    await setImmediate();
+    await paint(() => tui.requestRender(true));
     return tui.getScreenLines();
   };
   const containers = (): Container[] => {
@@ -41,7 +39,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     const walk = (component: Container): void => {
       if (found.has(component)) return;
       found.add(component);
-      for (const child of component.children ?? []) if (child instanceof Container) walk(child);
+      for (const child of component.children ?? []) if (Array.isArray(Reflect.get(child, "children"))) walk(child as Container);
     };
     if (tui.layoutRoot) walk(tui.layoutRoot);
     return [...found];
@@ -120,12 +118,15 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         visibleScrollbars: profileViews.filter(view => view.isScrollbarVisible).length, bytes: bytes - before.bytes,
         nativeMs: nativeMs - before.nativeMs, compactMs: compactMs - before.compactMs, documentMs: documentMs - before.documentMs });
     };
+    // Extension loaders can hold distinct native module instances; use the public scroll API.
+    const isScrollView = (component: Container): component is ScrollView =>
+      typeof Reflect.get(component, "scrollBy") === "function" && typeof Reflect.get(component, "scrollToEnd") === "function";
     const phases: Record<string, string[]> = {};
     try {
       inspector.connect();
       await capture();
       const mounted = containers();
-      for (const pane of mounted.filter(component => component.children.length === 2 && component.children[1] instanceof ScrollView)) {
+      for (const pane of mounted.filter(component => component.children.length === 2 && isScrollView(component.children[1] as Container))) {
         const render = pane.render;
         const view = pane.children[1] as ScrollView;
         const scrollRender = view.render;
@@ -162,10 +163,10 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         index.prepare = components => { timestampIndexes++; return prepare.call(index, components); };
         restoreCounters.push(() => { index.prepare = prepare; });
       }
-      const allViews = mounted.filter((component): component is ScrollView => component instanceof ScrollView);
+      const allViews = mounted.filter(isScrollView);
       profileViews = allViews;
-      const combined = allViews.find(view => Reflect.get(view.children[0], "pane") === "combined");
-      const nativeRoot = (combined ? Reflect.get(combined.children[0], "source") : allViews[0]?.children[0]) as Container;
+      const projected = mounted.find(component => component.constructor.name === "NativeDocument");
+      const nativeRoot = (projected ? Reflect.get(projected, "source") : allViews[0]?.children[0]) as Container;
       const messages = (nativeRoot?.children[2] as Container)?.children;
       if (!Array.isArray(messages)) throw new Error("Unsupported native history for profiling");
       // Time the actual projected native owners, without suppressing any render calls.
@@ -216,8 +217,9 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       ctx.ui.setEditorText("SYNTHETIC PROFILE DRAFT ");
       await capture();
       for (let index = 0; index < count; index++) await measure("typing", () => tui.handleTerminalInput(index % 2 ? "\x7f" : "x"));
+      if (count % 2) await paint(() => tui.handleTerminalInput("\x7f"));
       const components = containers();
-      const views = components.filter((component): component is ScrollView => component instanceof ScrollView);
+      const views = components.filter(isScrollView);
       const split = process.env.PROFILE_MODE === "columns" || process.env.PROFILE_MODE === "rows";
       const view = views.find(candidate => candidate.viewportHeight > 0 &&
         (!split || Reflect.get(candidate.children[0], "pane") === "chat"));
@@ -242,15 +244,23 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         (Container & { lastMessage: AssistantMessage; updateContent(message: AssistantMessage, streaming: boolean): void }) | undefined;
       if (!assistant) throw new Error("Missing native assistant update target");
       const original = assistant.lastMessage;
+      const tool = messages.filter(component => component.constructor.name === "ToolExecutionComponent").at(-1) as
+        (Container & { setExpanded(expanded: boolean): void; updateResult(result: { content: { type: string; text: string }[]; isError: boolean }, partial: boolean): void }) | undefined;
+      if (!tool) throw new Error("Missing saved native tool update target");
+      // Keep the preceding assistant visible in native Combined/stock history too.
+      // Collapse only during streaming, then restore expanded tool output for its phase.
+      tool.setExpanded(false);
+      view.scrollToEnd();
+      await capture();
       for (let index = 0; index < count; index++) await measure("stream", () => {
         assistant.updateContent({ ...original, content: [{ type: "text", text: Array.from({ length: 80 }, (_, row) => "SYNTHETIC STREAM LINE " + row).join("\n") + "\nSYNTHETIC STREAM UPDATE " + index }] }, true);
         tui.requestRender();
       });
       phases.streamed = await capture();
       assistant.updateContent(original, false);
-      const tool = messages.filter(component => component.constructor.name === "ToolExecutionComponent").at(-1) as
-        (Container & { updateResult(result: { content: { type: string; text: string }[]; isError: boolean }, partial: boolean): void }) | undefined;
-      if (!tool) throw new Error("Missing saved native tool update target");
+      tool.setExpanded(true);
+      for (const target of views) target.scrollToEnd();
+      await capture();
       for (let index = 0; index < count; index++) await measure("tool", () => {
         tool.updateResult({ content: [{ type: "text", text: Array.from({ length: Number(process.env.PROFILE_TOOL_LINES ?? 80) }, (_, row) => "SYNTHETIC TOOL UPDATE " + index + " line " + row).join("\n") }], isError: false }, true);
         tui.requestRender();
@@ -300,12 +310,16 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       await writeFile(path.join(ctx.cwd, "rendering-measurements.json"), JSON.stringify({
         samples, summary, initialDisplay, frames: phases, runtime: { node: process.version, pid: process.pid,
           profileStartup, profileSearch: process.env.PROFILE_SEARCH === "1", searchPane: process.env.PROFILE_SEARCH_PANE ?? "chat",
+          autoExtensionsDisabled: process.argv.includes("--no-extensions"),
+          extensions: process.argv.flatMap((argument, index) =>
+            argument === "--extension" || argument === "-e" ? [process.argv[index + 1]] : []),
           mode: process.env.PROFILE_MODE, nativeComponents: components.length, samples: count,
           savedToolBlocks: messages.filter(component => component.constructor.name === "ToolExecutionComponent").length },
         draft: ctx.ui.getEditorText(), syntheticOnly: true,
         frameDefinition: "Action to synchronized terminal-frame emission, not compositor presentation; process CPU delta includes scheduling background work.",
         initialDisplayDefinition: "End of profiling session_start handler to first emitted frame containing restored history, including native history construction and remaining initialization; excludes module loading and precedes the scripted setup turn.",
-        toolTarget: "Latest saved native tool, visible in Activity while following the end.",
+        streamTarget: "Latest saved native assistant while following the end; its following saved tool is collapsed outside timed streaming actions, then expanded before tool updates.",
+        toolTarget: "Latest saved native tool, expanded and visible while following the end.",
         markers: phases.finished.map(stripTerminalSequences).filter(line => line.includes("SYNTHETIC")),
       }, null, 2));
     } finally {
