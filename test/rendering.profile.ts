@@ -14,12 +14,10 @@ const height = Number(process.env.PROFILE_HEIGHT ?? 35);
 const scrollbar = process.env.PROFILE_SCROLLBAR ?? "always";
 if (!["always", "auto", "hidden"].includes(scrollbar)) throw new Error("Unknown profile scrollbar: " + scrollbar);
 const output = path.resolve(process.env.PROFILE_OUTPUT ?? "tmp/profiling/baseline");
-const ide = "/root/dev/pi/pi-agent-ide";
 const transcript = path.resolve(process.env.PROFILE_TRANSCRIPT_PATH ?? ".");
 const profileSearch = process.env.PROFILE_SEARCH === "1";
 const searchPane = process.env.PROFILE_SEARCH_PANE ?? "chat";
 if (!["chat", "activity"].includes(searchPane)) throw new Error("Unknown search pane: " + searchPane);
-const git = (...args: string[]): string => execFileSync("git", ["-C", ide, ...args], { encoding: "utf8" }).trim();
 
 const savedAssistant = (content: AssistantMessage["content"]): AssistantMessage => ({
   role: "assistant", content, timestamp: Date.parse("2026-01-01T10:00:00Z"), api: "openai-responses", provider: "openai", model: "synthetic-profile",
@@ -31,12 +29,7 @@ const savedAssistant = (content: AssistantMessage["content"]): AssistantMessage 
 /** Matched real-Pi workload; timings are evidence, not brittle wall-clock assertions. */
 test.each(modes)("profiles native rendering in %s", async mode => {
   if (!["stock", "combined", "columns", "rows"].includes(mode)) throw new Error("Unknown profile mode: " + mode);
-  git("fetch", "origin", "develop");
-  const sourceCommit = git("rev-parse", "HEAD");
-  expect(sourceCommit, "The benchmark must load the latest IDE develop checkout").toBe(git("rev-parse", "origin/develop"));
-  const workingTree = git("status", "--porcelain");
-  const sourceDiff = git("diff", "HEAD");
-  const version = JSON.parse(await readFile(path.join(ide, "package.json"), "utf8")).version;
+  const extensions = [...(mode === "stock" ? [] : [path.join(transcript, "src/index.ts")]), path.resolve("test/fixtures/rendering-profile.ts")];
   const transcriptGit = (...args: string[]): string => execFileSync("git", ["-C", transcript, ...args], { encoding: "utf8" }).trim();
   const transcriptCommit = transcriptGit("rev-parse", "HEAD");
   const transcriptDiff = transcriptGit("diff", "HEAD");
@@ -63,7 +56,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       manager.appendMessage({ role: "toolResult", toolName: "read", toolCallId: "synthetic-read-" + index, isError: false,
         content: [{ type: "text", text: Array.from({ length: toolLines }, (_, row) => "SYNTHETIC TOOL " + index + " line " + row + " predictable result data").join("\n") }], timestamp: at + index });
     }
-    const runtime = { ide: { path: ide, version, sourceCommit, workingTree }, transcriptCommit, pi: execFileSync("pi", ["--version"], { encoding: "utf8" }).trim(),
+    const runtime = { extensions, transcriptCommit, pi: execFileSync(process.env.PI_COMMAND ?? "pi", ["--version"], { encoding: "utf8" }).trim(),
       transcript: { path: transcript, sourceCommit: transcriptCommit, workingTree: transcriptGit("status", "--porcelain") },
       profileStartup: process.env.PROFILE_STARTUP === "1", profileSearch, searchPane,
       workload: { exchanges: size, toolLines, width, height, scrollbar, syntheticOnly: true },
@@ -73,11 +66,11 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     const result = await new PiIntegrationTest({
       testName: mode, artifactsDir: output, cwd,
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-      environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: ide, PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
+      environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: "", PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines),
         PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane },
       rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
-      extensions: [...(mode === "stock" ? [] : [path.join(transcript, "src/index.ts")]), path.resolve("test/fixtures/rendering-profile.ts")],
+      extensions,
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],
     }).run("SYNTHETIC PROFILE SETUP");
     expect(result.providerRequests).toHaveLength(1);
@@ -91,8 +84,15 @@ test.each(modes)("profiles native rendering in %s", async mode => {
         await writeFile(path.join(artifact, phase + ".cpuprofile"), await readFile(path.join(cwd, phase + ".cpuprofile")));
       }
     }
-    expect(git("rev-parse", "HEAD")).toBe(sourceCommit);
-    expect(git("diff", "HEAD"), "IDE source changed during the workload; results are not comparable").toBe(sourceDiff);
+    expect(measurements.runtime.autoExtensionsDisabled, "Personal and project extensions must not enter the comparison").toBe(true);
+    const launchedExtensions: string[] = measurements.runtime.extensions;
+    expect(launchedExtensions).toHaveLength(extensions.length + 1);
+    expect(measurements.frames.initial.join("\n").includes("[ ≡ ]"),
+      "Only Transcript modes must paint the extension toolbar").toBe(mode !== "stock");
+    expect(launchedExtensions.filter(extension => !extensions.includes(extension)),
+      "Only the scripted test harness may accompany the requested profile extensions").toHaveLength(1);
+    expect(launchedExtensions).toEqual(expect.arrayContaining(extensions));
+    expect(launchedExtensions.find(extension => !extensions.includes(extension))).toMatch(/[/\\]pi-coding-agent-test[/\\]dist[/\\]harness[/\\]extension\.js$/);
     expect(transcriptGit("rev-parse", "HEAD"), "The loaded transcript source changed during measurement").toBe(transcriptCommit);
     expect(transcriptGit("diff", "HEAD"), "The loaded transcript changes must stay fixed during measurement").toBe(transcriptDiff);
     if (profileSearch && (mode === "columns" || mode === "rows")) {
@@ -101,6 +101,10 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       expect(measurements.samples.some((sample: { action: string }) => sample.action === "search-typing")).toBe(true);
     }
     expect(measurements.syntheticOnly).toBe(true);
+    if (mode === "stock" || mode === "combined") {
+      expect(measurements.samples.every((sample: { documents: number; timestampIndexes: number }) =>
+        sample.documents === 0 && sample.timestampIndexes === 0), "Native history must not use projected Transcript documents").toBe(true);
+    }
     expect(measurements.initialDisplay.emittedFrameMs).toBeGreaterThan(0);
     expect(measurements.initialDisplay.cpuMs).toBeGreaterThan(0);
     expect(measurements.runtime.savedToolBlocks, "The synthetic history must not be compacted before measurement").toBe(size);
