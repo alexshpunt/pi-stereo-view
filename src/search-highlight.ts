@@ -1,7 +1,16 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
-import { extractAnsiCode } from "@earendil-works/pi-tui/dist/utils.js";
 import type { SearchHit } from "./search.js";
+
+// Pi maps the public host package, not its private subpaths, in installed extensions.
+// Keep CSI styles and OSC/APC markers intact without importing a private utility.
+const terminalCode = /\x1b(?:\[[\s\S]*?[mGKHJ]|[\]_][\s\S]*?(?:\x07|\x1b\\))/y;
+function extractAnsiCode(line: string, offset: number): { code: string; length: number } | null {
+  if (line.charCodeAt(offset) !== 0x1b) return null;
+  terminalCode.lastIndex = offset;
+  const code = terminalCode.exec(line)?.[0];
+  return code ? { code, length: code.length } : null;
+}
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const normalize = (text: string, lettersOnly: boolean): string => text.normalize("NFKC").toLowerCase()
@@ -54,7 +63,7 @@ function decorate(line: string, selected: Position[], theme: Theme): string {
   let plainOffset = 0;
   let styles: string[] = [];
   while (offset < line.length) {
-    // Use the native parser so OSC markers and links remain byte-for-byte, exactly once.
+    // Preserve OSC markers and links byte-for-byte, exactly once.
     const ansi = extractAnsiCode(line, offset);
     if (ansi) {
       output += ansi.code;
