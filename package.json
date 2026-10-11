@@ -1,5 +1,5 @@
 {
-  "name": "pi-agent-transcript",
+  "name": "pi-stereo-view",
   "version": "0.1.0",
   "type": "module",
   "description": "Keep Pi conversation separate from tool output and agent activity.",
@@ -7,11 +7,11 @@
   "author": "Alexander Shpuntenko",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alexshpunt/pi-agent-transcript.git"
+    "url": "git+https://github.com/alexshpunt/pi-stereo-view.git"
   },
-  "homepage": "https://github.com/alexshpunt/pi-agent-transcript#readme",
+  "homepage": "https://github.com/alexshpunt/pi-stereo-view#readme",
   "bugs": {
-    "url": "https://github.com/alexshpunt/pi-agent-transcript/issues"
+    "url": "https://github.com/alexshpunt/pi-stereo-view/issues"
   },
   "keywords": [
     "pi-package",

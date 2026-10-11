@@ -39,7 +39,7 @@ export default function transcript(pi: ExtensionAPI): void {
         }, () => done());
         const content = new Container();
         content.addChild({
-          render: () => [ctx.ui.theme.fg("accent", ctx.ui.theme.bold("Transcript settings")), ""],
+          render: () => [ctx.ui.theme.fg("accent", ctx.ui.theme.bold("pi-stereo-view settings")), ""],
           invalidate() {},
         });
         content.addChild(list);
@@ -67,7 +67,7 @@ export default function transcript(pi: ExtensionAPI): void {
   const persist = (ctx: ExtensionContext): void => {
     const snapshot = { ...preferences };
     writes = writes.then(() => savePreferences(file, snapshot)).catch(error => {
-      ctx.ui.notify("Could not save transcript preferences: " + String(error), "error");
+      ctx.ui.notify("Could not save pi-stereo-view preferences: " + String(error), "error");
     });
   };
 
@@ -80,7 +80,7 @@ export default function transcript(pi: ExtensionAPI): void {
     try {
       preferences = await loadPreferences(file);
     } catch (error) {
-      ctx.ui.notify("Could not read transcript preferences; using defaults: " + String(error), "warning");
+      ctx.ui.notify("Could not read pi-stereo-view preferences; using defaults: " + String(error), "warning");
       preferences = { ...defaults };
     }
     let finish: () => void = () => {};
@@ -143,18 +143,18 @@ export default function transcript(pi: ExtensionAPI): void {
     layout?.toggle();
     ensureLayout();
   };
-  pi.registerCommand("transcript", {
+  pi.registerCommand("stereo-view", {
     description: "History: settings, toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
     handler: async (args, ctx) => {
       if (ctx.mode !== "tui" || !layout) {
-        ctx.ui.notify("Transcript layout is available only in interactive Pi.", "warning");
+        ctx.ui.notify("pi-stereo-view layout is available only in interactive Pi.", "warning");
         return;
       }
       const [action = "toggle", target, amount] = args.trim().split(/\s+/);
       if (action === "toggle" || action === "") toggle();
       else if (action === "settings") await openSettings(ctx);
       else if (action === "help") {
-        ctx.ui.notify("Transcript icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ≡ settings. Ctrl+F searches the active panel. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("pi-stereo-view icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ≡ settings. Ctrl+F searches the active panel. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);
@@ -164,7 +164,7 @@ export default function transcript(pi: ExtensionAPI): void {
       else if (action === "scroll" && (target === "chat" || target === "activity") && /^-?\d+$/.test(amount ?? "")) {
         layout.scroll(target, Number(amount));
       } else {
-        ctx.ui.notify("Use /transcript [help|settings|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
+        ctx.ui.notify("Use /stereo-view [help|settings|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
         return;
       }
       ensureLayout();
@@ -172,7 +172,7 @@ export default function transcript(pi: ExtensionAPI): void {
     },
   });
   pi.registerShortcut("ctrl+alt+t", { description: "Toggle split history", handler: async () => toggle() });
-  pi.registerShortcut("ctrl+alt+s", { description: "Swap transcript panels", handler: async () => layout?.swap() });
+  pi.registerShortcut("ctrl+alt+s", { description: "Swap stereo-view panels", handler: async () => layout?.swap() });
   pi.registerShortcut("ctrl+alt+left", { description: "Shrink conversation along the split axis", handler: async () => {
     layout?.resize(-1);
   } });

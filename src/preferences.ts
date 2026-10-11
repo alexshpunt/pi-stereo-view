@@ -29,7 +29,7 @@ export async function loadPreferences(file: string): Promise<Preferences> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { ...defaults };
     throw error;
   }
-  if (!value || typeof value !== "object") throw new Error("Invalid transcript preferences");
+  if (!value || typeof value !== "object") throw new Error("Invalid pi-stereo-view preferences");
   const record = value as Record<string, unknown>;
   // The first version only had columns; keep that saved arrangement.
   const layout = record.layout === undefined ? "columns" : record.layout;
@@ -43,7 +43,7 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       (layout !== "columns" && layout !== "rows") ||
       (chatHeight !== null && (typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240)) ||
       (zoom !== null && zoom !== "activity" && zoom !== "chat") || typeof showTimestamps !== "boolean") {
-    throw new Error("Invalid transcript preferences");
+    throw new Error("Invalid pi-stereo-view preferences");
   }
   return { mode: record.mode, side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom, showTimestamps };
 }
