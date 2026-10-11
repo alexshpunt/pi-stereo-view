@@ -28,8 +28,9 @@ The expanded-panel scrollbar check passed in `shell:72aa869c8d77`. The extra mou
 
 Final focused run: `shell:464d93b5310d` passed all 23 cases across six files; typecheck and diff check passed. It also covers search, selection/copy and reload. Pi Agent IDE had advanced to clean latest `0b3830d26b9287d255c1ebaccf2cf62c3cf8f50b` before this run; its version remains `0.8.0`.
 
+The recorded compaction run was replayed offline into 38 synchronized frames. Replay's final screen matched `tui-rendered.log` byte-for-byte. An extra focused check now explicitly verifies mouse expansion followed by Pi's native Ctrl+O collapse, avoiding a rapid second mouse click being interpreted as word selection; `shell:b4fc56478238` passed this check with typecheck and diff check.
 Read-only review found no concrete regression in routing, search reveal, native invalidation or mode switching. Review is not a substitute for runtime checks.
 
 ## Live verification
 
-Before reload, `inspect_tui` captured pane `w3Q0:pJ`, 274×108 cells, revision 104 at the live bottom. Combined still showed the old added clock rows. Final source reload and visual checks are pending.
+Before reload, `inspect_tui` captured pane `w3Q0:pJ`, 274×108 cells, revision 104 at the live bottom. Combined still showed the old added clock rows. Normal-configuration startup smoke `shell:7c972eb84050` passed with a clean Ctrl+D exit (code 0), no model prompt, one configured Transcript source `/root/dev/pi/pi-agent-transcript/src`, and no load or duplicate-registration errors observed. It used clean latest direct IDE `b0ae4c124eb909ba7527b531178520b53f9eb469`, version `0.8.0`. Final source reload and human-viewport checks are pending.
