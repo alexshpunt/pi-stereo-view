@@ -7,6 +7,58 @@ import type { SearchHit } from "../src/search.js";
 
 class UserMessageComponent extends Text {}
 
+class ThemedText extends Text {
+  stale = false;
+  renders = 0;
+  private pendingText?: string;
+  update(text: string): void { this.pendingText = text; this.invalidate(); }
+  override invalidate(): void { super.invalidate(); this.stale = true; }
+  override render(width: number): string[] {
+    if (this.stale && this.pendingText !== undefined) super.setText(this.pendingText);
+    this.stale = false;
+    this.renders++;
+    return super.render(width);
+  }
+}
+
+test("routes compaction notices but not other native status text to Conversation", () => {
+  const notice = new ThemedText("\x1b[2mSession compacted 2 times\x1b[22m", 1, 0);
+  const status = new ThemedText("Tool output: expanded", 1, 0);
+  const history = new Container();
+  history.addChild(notice);
+  history.addChild(status);
+  const source = new Container();
+  source.addChild(new Container());
+  source.addChild(new Container());
+  source.addChild(history);
+  const timestamps = new TranscriptTimestamps({
+    buildContextEntries: () => [], getBranch: () => [],
+  } as unknown as ExtensionContext["sessionManager"]);
+  const chat = new NativeDocument(source, "chat", timestamps, () => colors, () => 0, () => false);
+  const activity = new NativeDocument(source, "activity", timestamps, () => colors, () => 0, () => false);
+  try {
+    expect(chat.render(60).map(stripTerminalSequences).join("\n")).toContain("Session compacted 2 times");
+    expect(activity.render(60).map(stripTerminalSequences).join("\n")).not.toContain("Session compacted");
+    expect(activity.render(60).map(stripTerminalSequences).join("\n")).toContain("Tool output: expanded");
+    expect(chat.searchEntries().map(entry => entry.text)).toEqual(["Session compacted 2 times"]);
+    expect(activity.searchEntries().map(entry => entry.text.trim())).toEqual(["Tool output: expanded"]);
+    const renders = notice.renders;
+    chat.beginFrame();
+    activity.beginFrame();
+    chat.render(60);
+    activity.render(60);
+    expect(notice.renders, "Warm status classification must not rerender native text").toBe(renders);
+    notice.update("Tool output: collapsed");
+    chat.invalidate();
+    activity.invalidate();
+    expect(chat.render(60).map(stripTerminalSequences).join("\n")).not.toContain("Tool output:");
+    expect(activity.render(60).map(stripTerminalSequences).join("\n")).toContain("Tool output: collapsed");
+  } finally {
+    chat.dispose();
+    activity.dispose();
+  }
+});
+
 class CompactionSummaryMessageComponent extends Text {
   readonly message = { summary: "COMPACTION CONTEXT" };
   setExpanded(expanded: boolean): void { this.setText(expanded ? this.message.summary : "[compaction]"); }
