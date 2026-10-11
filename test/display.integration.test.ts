@@ -97,6 +97,10 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   const restarted: Record<string, string[]> = JSON.parse(await readFile(path.resolve("tmp/test-runs/display-settings-restarted/display-frames.json"), "utf8"));
   expect(clean(restarted.initial).join("\n")).not.toMatch(/\d{2}:\d{2}:\d{2}/);
   for (const frame of Object.values(frames)) {
-    expect(clean(frame.slice(-5)).some(line => line.includes("─".repeat(120)))).toBe(true);
+    const lines = clean(frame);
+    const footer = lines.findIndex(line => line.includes(path.basename(cwd)));
+    expect(footer, "The native dock must remain directly above the cwd footer").toBeGreaterThan(2);
+    expect(lines[footer - 1]).toBe("─".repeat(120));
+    expect(lines[footer - 3]).toBe("─".repeat(120));
   }
 });

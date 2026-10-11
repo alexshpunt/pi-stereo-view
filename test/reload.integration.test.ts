@@ -36,8 +36,8 @@ test("reloads twice with one clean split, stable history clocks and a full-width
       expect(lines.filter(line => line.includes("Conversation") && line.includes("[ ↗ ]"))).toHaveLength(1);
       expect(lines.filter(line => /SAVED USER\s+01:02:03\s*[┃│]?$/.test(line.trim())), lines.join("\n")).toHaveLength(1);
       expect(lines.join("\n")).toContain("SAVED USER");
-      expect(lines.join("\n")).not.toContain("Transcript split is unavailable");
-      expect(lines.join("\n")).not.toContain("Transcript split disabled");
+      expect(lines.join("\n")).not.toContain("pi-stereo-view split is unavailable");
+      expect(lines.join("\n")).not.toContain("pi-stereo-view split disabled");
       expect(lines.slice(-5).some(line => line.includes("─".repeat(120)))).toBe(true);
     }
     expect(state.frames.at(-1)!.map(stripTerminalSequences).join("\n")).toContain("FRESH ANSWER");

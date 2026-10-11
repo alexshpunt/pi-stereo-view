@@ -10,7 +10,7 @@ import { expect, test } from "vitest";
 const exec = promisify(execFile);
 
 test("ships only public runtime files and loads the installed archive in real Pi", async () => {
-  const scratch = await mkdtemp(path.join(tmpdir(), "pi-agent-transcript-package-"));
+  const scratch = await mkdtemp(path.join(tmpdir(), "pi-stereo-view-package-"));
   const runtime = path.join(scratch, "runtime");
   const workspace = path.join(scratch, "workspace");
   const agent = path.join(scratch, "agent");
@@ -32,8 +32,8 @@ test("ships only public runtime files and loads the installed archive in real Pi
     await writeFile(path.join(runtime, "package.json"), JSON.stringify({ private: true }));
     await exec("npm", ["install", path.join(scratch, archive.filename), "--omit=dev", "--ignore-scripts",
       "--legacy-peer-deps", "--no-audit", "--no-fund"], { cwd: runtime, maxBuffer: 1024 * 1024 });
-    expect(await readdir(path.join(runtime, "node_modules"))).toEqual([".package-lock.json", "pi-agent-transcript"]);
-    const installed = path.join(runtime, "node_modules/pi-agent-transcript");
+    expect(await readdir(path.join(runtime, "node_modules"))).toEqual([".package-lock.json", "pi-stereo-view"]);
+    const installed = path.join(runtime, "node_modules/pi-stereo-view");
     const manifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
     expect(manifest.private).not.toBe(true);
     expect(manifest.license).toBe("MIT");
@@ -42,7 +42,7 @@ test("ships only public runtime files and loads the installed archive in real Pi
       "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-tui": "*",
     });
     expect(manifest.keywords).toContain("pi-package");
-    expect(manifest.repository.url).toBe("git+https://github.com/alexshpunt/pi-agent-transcript.git");
+    expect(manifest.repository.url).toBe("git+https://github.com/alexshpunt/pi-stereo-view.git");
 
     const run = await new PiIntegrationTest({
       testName: "installed-archive", artifactsDir: path.resolve("tmp/test-runs"), cwd: workspace,
@@ -66,7 +66,7 @@ test("ships only public runtime files and loads the installed archive in real Pi
     for (const marker of ["PACKED USER", "PACKED ANSWER", "NATIVE CALL MARKER", "NATIVE RESULT MARKER", "THINKING MARKER"]) {
       expect(lines.join("\n")).toContain(marker);
     }
-    expect(lines.join("\n")).not.toContain("Transcript split is unavailable");
+    expect(lines.join("\n")).not.toContain("pi-stereo-view split is unavailable");
     expect(lines.slice(-5).some(line => line.includes("─".repeat(120)))).toBe(true);
   } finally {
     await rm(scratch, { recursive: true, force: true });

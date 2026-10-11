@@ -78,7 +78,7 @@ export default function automaticHeightProbe(pi: ExtensionAPI): void {
       await mouse(0, 10, moved, "m");
       await sample("manual");
     } else {
-      for (const character of "/transcript height auto") tui.handleTerminalInput(character);
+      for (const character of "/stereo-view height auto") tui.handleTerminalInput(character);
       tui.handleTerminalInput("\r");
       await sample("autoCommand");
       await click("[ ≡ ]");

@@ -45,7 +45,7 @@ export default function displayControls(pi: ExtensionAPI): void {
         await click("[ ▣ ]");
         frames.offCombined = await capture();
         await click("[ ◫ ]");
-        for (const character of "/transcript settings") tui.handleTerminalInput(character);
+        for (const character of "/stereo-view settings") tui.handleTerminalInput(character);
         tui.handleTerminalInput("\r");
         frames.commandMenu = await capture();
         await click("Show timestamps");
