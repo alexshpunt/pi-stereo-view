@@ -69,16 +69,6 @@ class TranscriptPane extends VStack {
   }
 }
 
-class TranscriptRoot extends VStack {
-  constructor(children: StackChild[], private readonly source: Container, private readonly nativeScroll: ScrollView) { super(children); }
-
-  override invalidate(): void {
-    // The same history is projected into several visible and hidden layout entries.
-    // After guarded fallback the native ScrollView already owns that invalidation.
-    if (this.nativeScroll.children[0] !== this.source) this.source.invalidate();
-    super.invalidate();
-  }
-}
 /** Own only guarded fullscreen history controls; never replace the input dock. */
 export class TranscriptLayout {
   private host?: NativeTui;
@@ -103,7 +93,6 @@ export class TranscriptLayout {
   private automaticHeight = MIN_ROWS;
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
-  private restoreDocument = (): void => {};
 
   constructor(
     readonly preferences: Preferences,
@@ -173,20 +162,11 @@ export class TranscriptLayout {
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("chat"), false);
     this.documents = { activity: activityDocument, chat: chatDocument };
-    const combinedDocument = new NativeDocument(document, "combined", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      undefined, false);
     this.disposeDocuments = () => {
       activityDocument.dispose();
       chatDocument.dispose();
-      combinedDocument.dispose();
     };
-    // Keep the native combined ScrollView, including its selection and scroll state.
-    owner.child = combinedDocument;
-    owner.children[0] = combinedDocument;
-    this.restoreDocument = () => {
-      if (owner.child === combinedDocument) owner.child = document;
-      if (owner.children[0] === combinedDocument) owner.children[0] = document;
-    };
+    // Combined history keeps the original native document, renderer and scroll state.
     const scrollOptions = {
       follow: "end" as const,
       overscroll: "contain" as const,
@@ -215,9 +195,9 @@ export class TranscriptLayout {
       this.searchShortcut.sync(!this.failed && this.preferences.mode === "split" && fits);
       if (this.failed) return false;
       try {
+        if (this.preferences.mode !== "split" || !fits) return false;
         // Both panels project the same native history and supported content kinds.
         activityDocument.check();
-        if (this.preferences.mode !== "split" || !fits) return false;
         this.activity?.setScrollbar(scroll.scrollbar);
         this.chat?.setScrollbar(scroll.scrollbar);
         columns.sizeConversation(chatPane, this.preferences.chatWidth ?? this.defaultWidth(width));
@@ -232,7 +212,6 @@ export class TranscriptLayout {
       } catch (error) {
         this.failed = true;
         this.searchShortcut.dispose();
-        this.restoreDocument();
         this.disposeDocuments?.();
         queueMicrotask(() => this.warn("Transcript split disabled: " + (error as Error).message));
         return false;
@@ -357,13 +336,12 @@ export class TranscriptLayout {
       }
     };
     this.rebuild();
-    const mounted = new TranscriptRoot([
+    const mounted = new VStack([
       { component: toolbar, basis: 1, shrink: 0, visible: () => {
         // Root visibility is evaluated once at the start of each native layout pass.
         this.timestamps.beginFrame();
         activityDocument.beginFrame();
         chatDocument.beginFrame();
-        combinedDocument.beginFrame();
         return true;
       } },
       { component: columns, basis: 0, grow: 1, minSize: 1,
@@ -376,7 +354,7 @@ export class TranscriptLayout {
         visible: viewport => shown(viewport) && this.preferences.zoom === "chat" },
       { component: transcript, basis: 0, grow: 1, minSize: 1, visible: viewport => !shown(viewport) },
       { component: dock, basis: "auto", shrink: 0, minSize: 1 },
-    ], document, scroll);
+    ]);
     this.mounted = mounted;
     host.setLayoutRoot(mounted);
     host.requestRender();
@@ -589,10 +567,8 @@ export class TranscriptLayout {
   dispose(): void {
     this.closeSearch(false);
     this.searchShortcut.dispose();
-    this.restoreDocument();
     this.disposeDocuments?.();
     this.disposeDocuments = undefined;
-    this.restoreDocument = () => {};
     const host = this.host;
     this.activity?.setScrollbar("hidden");
     this.chat?.setScrollbar("hidden");
