@@ -1,0 +1,70 @@
+{
+  "sourceRoot": "/root/dev/pi/pi-agent-transcript",
+  "branch": "fix/compaction-conversation-native-combined",
+  "baseCommit": "f169a8c514ba4cc2cd824697c27a294021dba079",
+  "sourceCommit": "74e42f5",
+  "requestedBehavior": [
+    "compaction summary and native notice in Conversation",
+    "classic Combined without extension timestamps",
+    "retain split and expanded panel clock preference"
+  ],
+  "red": {
+    "terminal": "shell:05891cf274ab",
+    "failedContracts": 3,
+    "noticeTerminal": "shell:06bd0d8294e1"
+  },
+  "historicalRegression": {
+    "terminal": "shell:464d93b5310d",
+    "tests": 23,
+    "files": 6,
+    "production": "96d34e8"
+  },
+  "atomicNoticeRun": {
+    "terminal": "shell:b70e74fcd727",
+    "tests": 6,
+    "files": 2,
+    "status": "passed"
+  },
+  "finalRun": {
+    "terminal": "shell:da2348b46ba0",
+    "tests": 15,
+    "files": 2,
+    "status": "passed",
+    "optionalIdeOverride": false,
+    "typecheck": "passed",
+    "diffCheck": "passed"
+  },
+  "startup": {
+    "terminal": "shell:a976d561771a",
+    "status": "passed",
+    "exitCode": 0,
+    "loadedTranscript": "/root/dev/pi/pi-agent-transcript/src",
+    "modelPromptSent": false
+  },
+  "ideVerification": {
+    "required": false,
+    "reason": "User requested removal; reread main AGENTS.md confirms no such requirement."
+  },
+  "replay": {
+    "status": "passed",
+    "frames": 31,
+    "finalMatchesRecordedScreen": true,
+    "selected": [
+      18,
+      22,
+      25,
+      27
+    ]
+  },
+  "live": {
+    "status": "reloaded; recorded-layout fallback inspected", "sourceCommit": "74e42f5", "humanCapture": "refused: w3Q0:pJ belongs to a different Pi session", "humanVisualPassClaimed": false, "recordedLayoutPixels": ["shell:ca9336c86f5f", "shell:58f414f9430d"], "judgment": "Summary and notices only in Conversation with panel clocks; Combined native spacing and no added clocks; no message clipping or escape overlap. Plain replay glyph/color fidelity limited.",
+    "baselinePane": "w3Q0:pJ",
+    "baselineRevision": 104,
+    "cells": [
+      274,
+      108
+    ]
+  },
+  "personalSettingsChanged": false,
+  "paidCompactionInvoked": false
+}

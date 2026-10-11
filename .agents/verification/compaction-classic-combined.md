@@ -2,7 +2,7 @@
 
 ## Requested behavior
 
-Compaction summaries belong in Conversation, including saved-summary search. Activity must not show a duplicate. Combined history must use Pi's original document and renderer without extension clocks or compact spacing. Expanding a single panel still uses its saved clock setting. Switching modes must not change that setting.
+Compaction summaries and native compaction notices belong in Conversation, including saved-text search. Activity must not show a duplicate. Combined history must use Pi's original document and renderer without extension clocks or compact spacing. Expanding a single panel still uses its saved clock setting. Switching modes must not change that setting.
 
 Work stays in `/root/dev/pi/pi-agent-transcript`; no Teleport or extra worktree is used. No personal settings are changed and no paid compaction is invoked.
 
@@ -39,4 +39,12 @@ Fallback inspection used the final synthetic real-Pi run, replayed into 37 synch
 
 The replay also exposed a separate native `Session compacted …` notice in Activity. The user explicitly chose to move both the summary and this notice in `compaction_notice_scope` (request `37964444-3b08-4fc5-93bb-1b7df6d04359`). Notice painting and search now route to Conversation too; other native status messages remain in Activity. Classification refreshes Pi's lazy ThemedText only after invalidation and caches the decision by exact native text, without another native render on warm frames.
 
-The notice regression failed meaningfully before the follow-up, then all six atomic mapping/render-work cases passed (`shell:b70e74fcd727`); typecheck and diff check passed. Final real-Pi verification is blocked before launch because the shared IDE checkout changed to another agent's branch, HEAD `bce261faadf3fcc63221041234f9184f84fc126a`, with unrelated dirty files. It was not switched or reset. The user's verification-source decision is pending.
+The notice regression failed meaningfully before the follow-up, then all six atomic mapping/render-work cases passed (`shell:b70e74fcd727`); typecheck and diff check passed. The earlier verification launch stopped because the shared IDE checkout had changed. It was not switched or reset. The user then removed IDE verification from this task and asked to reread the main agent instructions; the current `/root/.pi/agent/AGENTS.md` no longer contains that requirement. Final Transcript checks run without the optional IDE extension override.
+
+## Final notice verification
+
+At production commit `74e42f5`, `shell:da2348b46ba0` passed all 15 real-Pi timestamp and search cases without `PI_TRANSCRIPT_IDE_PATH`; typecheck and diff check passed. The native compaction case verifies both summary and notice in Conversation, native mouse expansion and Ctrl+O collapse, classic Combined without clocks, and retained split clock preferences.
+
+Normal configured startup `shell:a976d561771a` passed with a clean Ctrl+D exit (code 0), no model prompt, one configured Transcript source at `/root/dev/pi/pi-agent-transcript/src`, and no observed load or duplicate-registration errors. No optional IDE verification was performed.
+
+The current synthetic compaction recording replayed into 31 synchronized frames and its final screen matched `tui-rendered.log` byte-for-byte. Native scenario snapshots and runtime metadata are archived under `.agents/verification/compaction-classic/` as `frames.json` and `runtime.json`. The replay inspection selected expanded summary (18), Rows (22), Combined (25), and restored Rows (27). The final source was reloaded at `74e42f5`. `inspect_tui` again refused because pane `w3Q0:pJ` belonged to another Pi session; no other human pane was substituted. Recorded-layout pixel checks used `shell:ca9336c86f5f` (Rows) and `shell:58f414f9430d` (Combined), both 120×85 cells. Rows shows the native summary and compaction notices only in Conversation, with right-aligned panel clocks and preserved input dock. Combined shows the original native spacing with no added clocks. No message clipping or escape-code overlap was observed. The plain replay viewer has missing icon/divider glyphs and does not preserve the original colors; no post-reload human-pane visual pass is claimed.
