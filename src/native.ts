@@ -2,7 +2,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.js";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
-import { CompactMessage, TimestampedMessage, type TranscriptTimestamps } from "./timestamps.js";
+import { CompactMessage, type TranscriptTimestamps } from "./timestamps.js";
 
 export type Pane = "activity" | "chat";
 
@@ -42,6 +42,8 @@ interface NativeAssistant extends Container {
   hasToolCalls: boolean;
 }
 const nameOf = (component: Component): string => component.constructor.name;
+const messagePane = (name: string): Pane =>
+  name === "UserMessageComponent" || name === "Image" || name === "CompactionSummaryMessageComponent" ? "chat" : "activity";
 
 function assistant(component: Component): NativeAssistant | undefined {
   if (nameOf(component) !== "AssistantMessageComponent") return undefined;
@@ -78,7 +80,7 @@ function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
  */
 export class NativeDocument extends Container {
   private readonly views = new WeakMap<NativeAssistant, Container>();
-  private readonly stamped = new WeakMap<Component, Component>();
+  private readonly stamped = new WeakMap<Component, CompactMessage>();
   private readonly compactBlocks = new Map<Component, CompactMessage>();
   private readonly positions = new Map<Component, { row: number; lines: string[]; clock?: SearchClock; excerptRow?: number }>();
   private excerpt?: SearchHit;
@@ -94,7 +96,7 @@ export class NativeDocument extends Container {
 
   constructor(
     private readonly source: Container,
-    private readonly pane: Pane | "combined",
+    private readonly pane: Pane,
     private readonly timestamps: TranscriptTimestamps,
     private readonly theme: () => Theme,
     private readonly timestampGutter: () => number,
@@ -125,14 +127,13 @@ export class NativeDocument extends Container {
     for (const component of chat.children) {
       this.timestamps.check(component);
       const native = assistant(component);
-      if (native) assistantParts(native, this.pane === "combined" ? "activity" : this.pane);
+      if (native) assistantParts(native, this.pane);
     }
     this.checked = true;
   }
 
   /** Read full saved text from the current native branch, including collapsed blocks. */
   searchEntries(): SearchEntry[] {
-    if (this.pane === "combined") return [];
     const entries: SearchEntry[] = [];
     const add = (source: Component, label: string, text: string, reveal?: () => void): void => {
       if (text.trim()) entries.push({ source, label, text, reveal });
@@ -172,7 +173,9 @@ export class NativeDocument extends Container {
           throw new Error("Pi's shell search text is not supported");
         }
         add(component, "Shell", [native.command, ...native.outputLines].join("\n"), () => native.setExpanded?.(true));
-      } else if (this.pane === "activity" && name !== "Spacer" && name !== "Image" && name !== "UserMessageComponent") {
+      } else if (name === "CompactionSummaryMessageComponent" && this.pane === "chat") {
+        add(component, "Compaction", native.message?.summary ?? "", () => native.setExpanded?.(true));
+      } else if (this.pane === "activity" && messagePane(name) === "activity" && name !== "Spacer") {
         add(component, name.replace(/(?:Message)?Component$/, ""),
           contentText(native.message?.content) || native.message?.summary || searchText(component.render(this.lastWidth).join("\n")));
       }
@@ -255,7 +258,7 @@ export class NativeDocument extends Container {
     if (this.excerpt && !chat.children.includes(this.excerpt.entry.source)) this.excerpt = undefined;
     if (this.searchAnchor && !chat.children.includes(this.searchAnchor.entry.source)) this.searchAnchor = undefined;
     const result: Component[] = this.pane !== "chat" ? this.source.children.slice(0, 2) : [];
-    const locateMatch = this.pane !== "combined" && (this.searchAnchor !== undefined || this.excerpt !== undefined);
+    const locateMatch = this.searchAnchor !== undefined || this.excerpt !== undefined;
     let row = locateMatch ? result.reduce((count, child) => count + child.render(width).length, 0) : 0;
     let spacing: Component[] = [];
     let visibleBlock = false;
@@ -267,7 +270,7 @@ export class NativeDocument extends Container {
       }
       const native = assistant(component);
       let routed: Component | undefined;
-      if (native && this.pane !== "combined") {
+      if (native) {
         const parts = assistantParts(native, this.pane);
         if (parts.length) {
           let view = this.views.get(native);
@@ -284,8 +287,7 @@ export class NativeDocument extends Container {
           routed = view;
         }
       } else {
-        const target = name === "UserMessageComponent" || name === "Image" ? "chat" : "activity";
-        if (target === this.pane || this.pane === "combined") routed = component;
+        if (messagePane(name) === this.pane) routed = component;
       }
       if (routed) {
         const start = result.length;
@@ -295,15 +297,12 @@ export class NativeDocument extends Container {
         else {
           let stamped = this.stamped.get(routed);
           if (!stamped) {
-            const Decorator = this.pane !== "combined" ? CompactMessage : TimestampedMessage;
-            stamped = new Decorator(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
+            stamped = new CompactMessage(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
             this.stamped.set(routed, stamped);
           }
-          if (stamped instanceof CompactMessage) {
-            this.compactBlocks.set(component, stamped);
-            visibleBlock = stamped.prepare(width, visibleBlock) || visibleBlock;
-            result.push(stamped);
-          } else result.push(...spacing, stamped);
+          this.compactBlocks.set(component, stamped);
+          visibleBlock = stamped.prepare(width, visibleBlock) || visibleBlock;
+          result.push(stamped);
         }
         if (this.searchAnchor?.entry.source === component && !this.excerpt) {
           const last = result.length - 1;
@@ -330,9 +329,8 @@ export class NativeDocument extends Container {
       }
       spacing = [];
     }
-    if (this.pane === "combined") result.push(...spacing);
     // Native follow-end guidance overlays the bottom row. Keep the selected last line above it.
-    if (this.pane !== "combined" && this.searchAnchor) result.push(new Spacer(1));
+    if (this.searchAnchor) result.push(new Spacer(1));
     this.children = result;
     this.frameWidth = width;
     this.frameLines = super.render(width);

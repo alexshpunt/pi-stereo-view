@@ -6,6 +6,39 @@ import { TranscriptTimestamps } from "../src/timestamps.js";
 import type { SearchHit } from "../src/search.js";
 
 class UserMessageComponent extends Text {}
+
+class CompactionSummaryMessageComponent extends Text {
+  readonly message = { summary: "COMPACTION CONTEXT" };
+  setExpanded(expanded: boolean): void { this.setText(expanded ? this.message.summary : "[compaction]"); }
+}
+
+test("routes compaction painting and saved summary search only to Conversation", () => {
+  const compact = new CompactionSummaryMessageComponent("[compaction]", 0, 0);
+  const history = new Container();
+  history.addChild(compact);
+  const source = new Container();
+  source.addChild(new Container());
+  source.addChild(new Container());
+  source.addChild(history);
+  const timestamps = new TranscriptTimestamps({
+    buildContextEntries: () => [], getBranch: () => [],
+  } as unknown as ExtensionContext["sessionManager"]);
+  const chat = new NativeDocument(source, "chat", timestamps, () => colors, () => 0, () => false);
+  const activity = new NativeDocument(source, "activity", timestamps, () => colors, () => 0, () => false);
+  try {
+    expect(chat.render(60).map(stripTerminalSequences).join("\n")).toContain("[compaction]");
+    expect(activity.render(60).map(stripTerminalSequences).join("\n")).not.toContain("[compaction]");
+    const entries = chat.searchEntries();
+    expect(entries.map(entry => entry.text)).toEqual(["COMPACTION CONTEXT"]);
+    expect(activity.searchEntries()).toEqual([]);
+    const hit = { entry: entries[0], line: 0, text: entries[0].text, ranges: [{ start: 0, end: 10 }] };
+    expect(chat.reveal(hit, "COMPACTION")).toBe(true);
+    expect(chat.render(60).map(stripTerminalSequences).join("\n")).toContain("COMPACTION CONTEXT");
+  } finally {
+    chat.dispose();
+    activity.dispose();
+  }
+});
 const colors = {
   fg: (_name: string, value: string) => value,
   style: (value: string) => "\x1b[30;43m" + value + "\x1b[39;49m",

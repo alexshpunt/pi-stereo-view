@@ -94,6 +94,50 @@ const panes = (lines: string[]): { chat: string[]; activity: string[] } => ({
   chat: lines.slice(2, -6).map(line => stripTerminalSequences(sliceByColumn(line, 80, 40))),
 });
 
+test("keeps native compaction in Conversation and classic Combined while retaining split clocks", async () => {
+  const { cwd, agent } = await workspace();
+  const manager = SessionManager.create(cwd, cwd);
+  const kept = manager.appendMessage({ role: "user", content: "KEPT USER", timestamp: Date.parse("2001-10-09T10:02:03Z") });
+  manager.appendCompaction("SAVED COMPACTION CONTEXT", kept, 12345);
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+    mode: "combined", side: "right", chatWidth: 40, layout: "columns",
+    chatHeight: 32, zoom: null, showTimestamps: true,
+  }));
+  const run = await new PiIntegrationTest({
+    testName: "compaction-routing", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+    piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
+    environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
+      TIMESTAMP_LAYOUTS: "1", TIMESTAMP_COMPACTION: "1", TZ: "UTC" },
+    rawMode: false, tuiSize: { cols: 120, rows: 85 },
+    extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/timestamp-probe.ts")],
+    tools: [], conversation: [assistantMessage([text("CURRENT ANSWER")])],
+  }).run("CURRENT USER");
+  expect(run.providerRequests).toHaveLength(1);
+  const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "timestamp-frames.json"), "utf8"));
+  const { chat, activity } = panes(frames.columns);
+  await writeFile(path.resolve("tmp/test-runs/compaction-routing/frames.json"), JSON.stringify(frames, null, 2));
+  await writeFile(path.resolve("tmp/test-runs/compaction-routing/session.jsonl"),
+    await readFile(path.join(cwd, "timestamp-session.jsonl"), "utf8"));
+  expect(chat.join("\n")).toContain("[compaction]");
+  expect(activity.join("\n")).not.toContain("[compaction]");
+  expect(clean(frames.chat).join("\n")).toContain("[compaction]");
+  expect(clean(frames.chatExpanded).join("\n")).toContain("SAVED COMPACTION CONTEXT");
+  expect(frames.compactionExpanded).toEqual(["true"]);
+  expect(clean(frames.activity).join("\n")).not.toContain("[compaction]");
+  const rows = clean(frames.rows);
+  const activityHeader = rows.findIndex(line => line.includes("Activity") && line.includes("[ ↗ ]"));
+  const chatHeader = rows.findIndex(line => line.includes("Conversation") && line.includes("[ ↗ ]"));
+  expect(rows.slice(activityHeader, chatHeader).join("\n")).not.toContain("[compaction]");
+  expect(rows.slice(chatHeader).join("\n")).toContain("[compaction]");
+  expect(timeAbove(chat, "CURRENT USER")).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+  expect(timeAbove(clean(frames.rowsRestored), "CURRENT USER")).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+  for (const name of ["combined", "classicAgain"]) {
+    expect(clean(frames[name]).join("\n")).toContain("[compaction]");
+    expect(clean(frames[name]).join("\n")).not.toMatch(/\d{2}:\d{2}:\d{2}|--:--:--/);
+    expect(frames[name + "NativeChild"]).toEqual(["Container"]);
+  }
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8")).showTimestamps).toBe(true);
+});
 test("keeps observed tool-start time stable through partial output and streamed answers", async () => {
   const { cwd, agent } = await workspace();
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
@@ -146,7 +190,7 @@ test("keeps observed tool-start time stable through partial output and streamed 
 test("keeps the last clock digit visible when the native auto scrollbar overlays history", async () => {
   const { cwd, agent } = await workspace();
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
-    mode: "combined", side: "left", chatWidth: 40, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true,
+    mode: "split", side: "left", chatWidth: 40, layout: "columns", chatHeight: null, zoom: "chat", showTimestamps: true,
   }));
   await new PiIntegrationTest({
     testName: "timestamp-scrollbar", artifactsDir: path.resolve("tmp/test-runs"), cwd,
@@ -215,14 +259,14 @@ test("restores repeated messages, branch-local starts, legacy approximations and
   }).run("FRESH USER");
   const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "timestamp-frames.json"), "utf8"));
   const combined = clean(frames.combined);
-  expect(timesAbove(combined, "REPEATED USER")).toEqual(["10:02:03", "12:04:05"]);
-  expect(timeAbove(combined, "LEGACY THINKING")).toBe("11:03:04");
-  expect(timeAbove(combined, "SECOND ANSWER")).toBe("13:05:06");
-  expect(timeAbove(combined, "LEGACY CALL MARKER")).toBe("~11:03:04");
-  expect(timeAbove(combined, "EXACT CALL MARKER")).toBe("14:06:07");
-  expect(timeAbove(combined, "[timestamp-note]")).toBe("15:07:08");
-  expect(timeAbove(clean(frames.combinedEnd), "echo BASH_MARKER")).toBe("16:08:09");
-  expect(timeAbove(clean(frames.combinedEnd), "UNKNOWN USER")).toBe("--:--:--");
+  expect(combined.join("\n")).toContain("REPEATED USER");
+  expect(combined.join("\n")).toContain("LEGACY THINKING");
+  expect(combined.join("\n")).toContain("SECOND ANSWER");
+  expect(clean(frames.combinedEnd).join("\n")).toContain("UNKNOWN USER");
+  for (const frame of [frames.combined, frames.combinedEnd]) {
+    expect(clean(frame).join("\n"), "Combined must use classic native rendering without added clocks")
+      .not.toMatch(/~?\d{2}:\d{2}:\d{2}|--:--:--/);
+  }
   for (const frame of Object.values(frames)) expect(clean(frame).join("\n")).not.toContain("ABANDONED ANSWER");
   const { chat, activity } = panes(frames.columns);
   expect(timesAbove(chat, "REPEATED USER")).toEqual(["10:02:03", "12:04:05"]);

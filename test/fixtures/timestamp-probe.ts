@@ -4,6 +4,7 @@ import { setImmediate, setTimeout } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, visibleWidth, type TUI } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { emittedFrame } from "./emitted-frame.js";
 
 type Host = TUI & { getScreenLines(): string[]; handleTerminalInput(data: string): void; layoutRoot?: Container };
 
@@ -12,8 +13,7 @@ export default function timestampProbe(pi: ExtensionAPI): void {
   let tui: Host;
   const frames: Record<string, string[]> = {};
   const capture = async (): Promise<string[]> => {
-    tui.requestRender(true);
-    await setImmediate();
+    await emittedFrame(tui, () => tui.requestRender(true));
     return tui.getScreenLines();
   };
   const containers = (): Container[] => {
@@ -81,6 +81,11 @@ export default function timestampProbe(pi: ExtensionAPI): void {
     const inspect = async (name: string): Promise<void> => {
       for (const view of views()) view.scrollTo(0);
       frames[name] = await capture();
+      if (process.env.TIMESTAMP_COMPACTION === "1") {
+        frames[name + "NativeChild"] = views()
+          .filter(view => view.constructor.name === "ScrollView")
+          .map(view => view.children[0].constructor.name);
+      }
     };
     if (process.env.TIMESTAMP_ENABLE_TIMES === "1") {
       frames.hidden = await capture();
@@ -126,11 +131,27 @@ export default function timestampProbe(pi: ExtensionAPI): void {
       await click("[ ↙ ]", "Activity");
       await click("[ ↗ ]", "Conversation");
       await inspect("chat");
+      if (process.env.TIMESTAMP_COMPACTION === "1") {
+        const compact = containers().flatMap(container => container.children)
+          .find(component => component.constructor.name === "CompactionSummaryMessageComponent");
+        if (!compact) throw new Error("Missing native compaction mouse target");
+        (compact as typeof compact & { setExpanded(expanded: boolean): void }).setExpanded(false);
+        await click("[compaction]");
+        await inspect("chatExpanded");
+        frames.compactionExpanded = [String(Reflect.get(compact, "expanded"))];
+        await click("[compaction]");
+      }
       await click("[ ↙ ]", "Conversation");
       await click("[ ▤ ]");
       await inspect("rows");
       for (const view of views()) view.scrollTo(100_000);
       frames.rowsEnd = await capture();
+      if (process.env.TIMESTAMP_COMPACTION === "1") {
+        await click("[ ▣ ]");
+        await inspect("classicAgain");
+        await click("[ ◫ ]");
+        await inspect("rowsRestored");
+      }
     } else frames.finished = await capture();
     await writeFile(path.join(ctx.cwd, "timestamp-frames.json"), JSON.stringify(frames));
     const file = ctx.sessionManager.getSessionFile();
