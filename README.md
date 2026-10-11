@@ -61,7 +61,7 @@ New settings start in Columns: Conversation on the left gets 20% of the width, A
 | Conversation height | `/transcript height 12` or `/transcript height auto` | Ctrl+Alt+Left / Right in rows |
 | Scroll a panel | `/transcript scroll chat -10` or `/transcript scroll activity -10` | Native fullscreen scrolling |
 
-Each panel supports native mouse scrolling, selection, and copy. Conversation contains user messages, ordinary assistant text, compaction summaries, and compaction notices. Thinking, tools, notices, and other native entries remain in Activity.
+Each panel supports native mouse scrolling, selection, and copy. Conversation contains user messages, ordinary assistant text, compaction summaries, and compaction notices. Thinking, tools, other notices, and other native entries remain in Activity.
 
 Conversation headers have a soft green fill; Activity headers have a soft blue fill. Both blend with the active theme. Thin lines frame each header, with the double drag divider taking the place of the next header's top line in Rows.
 
