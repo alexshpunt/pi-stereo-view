@@ -139,7 +139,8 @@ export default function timestampProbe(pi: ExtensionAPI): void {
         await click("[compaction]");
         await inspect("chatExpanded");
         frames.compactionExpanded = [String(Reflect.get(compact, "expanded"))];
-        await click("[compaction]");
+        tui.handleTerminalInput("\x0f");
+        await inspect("chatCollapsed");
       }
       await click("[ ↙ ]", "Conversation");
       await click("[ ▤ ]");
