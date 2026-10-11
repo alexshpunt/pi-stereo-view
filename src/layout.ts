@@ -128,7 +128,7 @@ export class TranscriptLayout {
     }
     const host = tui as unknown as NativeTui;
     if (typeof host.getFocusedComponent !== "function") {
-      this.warn("Transcript split is unavailable: Pi's focus API is not supported.");
+      this.warn("pi-stereo-view split is unavailable: Pi's focus API is not supported.");
       return;
     }
     if (host.layoutRoot === this.mounted && this.host) return;
@@ -137,7 +137,7 @@ export class TranscriptLayout {
     if (root && this.rejectedRoots.has(root)) return;
     if (!root || root.constructor.name !== "VStack" || root.children.length !== 2) {
       if (root) this.rejectedRoots.add(root);
-      this.warn("Transcript split is unavailable: Pi's fullscreen layout is not supported.");
+      this.warn("pi-stereo-view split is unavailable: Pi's fullscreen layout is not supported.");
       return;
     }
     const [transcript, dock] = root.children;
@@ -148,7 +148,7 @@ export class TranscriptLayout {
         document?.constructor.name !== "Container" || owner.child !== document || document.children.length !== 3 ||
         !Array.isArray((document.children[2] as Container)?.children)) {
       this.rejectedRoots.add(root);
-      this.warn("Transcript split is unavailable: Pi's history document is not supported.");
+      this.warn("pi-stereo-view split is unavailable: Pi's history document is not supported.");
       return;
     }
     this.host = host;
@@ -213,7 +213,7 @@ export class TranscriptLayout {
         this.failed = true;
         this.searchShortcut.dispose();
         this.disposeDocuments?.();
-        queueMicrotask(() => this.warn("Transcript split disabled: " + (error as Error).message));
+        queueMicrotask(() => this.warn("pi-stereo-view split disabled: " + (error as Error).message));
         return false;
       }
     };
