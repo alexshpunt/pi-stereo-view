@@ -88,9 +88,9 @@ export default function searchActivityControls(pi: ExtensionAPI): void {
       snapshot(name);
       if (choose) await input("\x1b");
     };
-    await search("tool", "rstrtwrkr");
-    await search("thinking", "скртйрсскй");
-    await search("custom", "cstm hddn rslt", true);
+    await search("tool", "restart AND worker NOT failed");
+    await search("thinking", "Скрытый русский");
+    await search("custom", "CUSTOM HIDDEN RESULT", true);
     await search("missing", "ABANDONED BRANCH UNIQUE", false, false);
     await search("scope", "deployment runtime ready", false, false);
     await click("[ ⌕ ]", "Conversation");

@@ -26,8 +26,10 @@ const setup = (text: string, showTimestamps: boolean): { document: NativeDocumen
 
 test("navigates and highlights the standalone occurrence after preceding substring collisions", () => {
   const { document, hit } = setup("worker ready ready\nready", false);
-  const selected = hit(1);
-  expect(document.reveal(selected, "rdy")).toBe(true);
+  document.render(50);
+  const selected = { ...hit(1), ranges: [{ start: 0, end: 5 }] };
+  expect(document.reveal(selected, "ready")).toBe(true);
+  expect(document.searchRow(selected), "Async result navigation must not depend on the next paint").toBe(1);
   const rows = document.render(50);
   expect(document.searchRow(selected)).toBe(1);
   expect(rows[0]).not.toContain("\x1b[30;43m");
@@ -38,7 +40,7 @@ test("navigates and highlights the standalone occurrence after preceding substri
 
 test.each([false, true])("keeps genuine saved timestamps searchable with display clocks %s", showTimestamps => {
   const { document, hit } = setup("first line\nfinished at 12:34:56", showTimestamps);
-  const selected = hit(1);
+  const selected = { ...hit(1), ranges: [{ start: 12, end: 20 }] };
   document.reveal(selected, "12:34:56");
   const rows = document.render(50);
   expect(document.searchRow(selected)).toBe(1);

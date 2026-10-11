@@ -1,9 +1,10 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
-  fuzzyFilter, getKeybindings, HStack, Input, matchesKey, MouseRegion, stripTerminalSequences, Text, truncateToWidth, VStack,
+  getKeybindings, HStack, Input, matchesKey, MouseRegion, stripTerminalSequences, Text, truncateToWidth, visibleWidth, VStack,
   type Component, type TUI,
 } from "@earendil-works/pi-tui";
 
+import { matchSearchLines, type LineMatch, type SearchRange } from "./search-matcher.js";
 const NATIVE_SEARCH = "tui.altScreen.search";
 
 /** Reserve Ctrl+F in split mode without changing any saved keyboard settings. */
@@ -51,8 +52,8 @@ export interface SearchHit {
   entry: SearchEntry;
   line: number;
   text: string;
-  /** Exact substring mode; absent for fuzzy fallback. */
-  exact?: boolean;
+  /** Positive matching spans in this saved line, before wrapping and clock decoration. */
+  ranges?: SearchRange[];
 }
 
 /** Read searchable text without terminal control sequences. */
@@ -106,16 +107,23 @@ class SearchControls extends HStack {
 /** Height reserved for the search field and its closed border. */
 export const PANEL_SEARCH_ROWS = 3;
 
-/** A framed live search inside a panel, preferring exact text over fuzzy fallback. */
+/** A framed literal, Boolean or explicit regex search inside a panel. */
 export class PanelSearch extends VStack {
   readonly input: SearchInput;
-  private readonly controls = new SearchControls(() => `${this.hits.length ? this.selected + 1 : 0}/${this.hits.length}`);
+  private readonly controls = new SearchControls(() => this.count());
   private index?: SearchHit[];
   private hits: SearchHit[] = [];
   private selected = 0;
   private dirty = true;
   private query = "";
   private width?: number;
+  private pending?: AbortController;
+  private generation = 0;
+  private error?: string;
+
+  private count(): string {
+    return this.error ? "!" : this.pending ? "…" : `${this.hits.length ? this.selected + 1 : 0}/${this.hits.length}`;
+  }
 
   constructor(
     private readonly savedEntries: () => SearchEntry[],
@@ -143,7 +151,7 @@ export class PanelSearch extends VStack {
     this.controls.addChild(this.input, { basis: 0, grow: 1, minSize: 10 });
     this.controls.addChild({
       render: width => new Text(this.theme().fg(this.hits.length ? "accent" : "dim",
-        truncateToWidth(`${this.hits.length ? this.selected + 1 : 0}/${this.hits.length}`, width, "…")), 0, 0).render(width),
+        truncateToWidth(this.count(), width, "…")), 0, 0).render(width),
       invalidate() {},
     }, { basis: 7, shrink: 0 });
     this.controls.addChild(button("[↓]", () => { this.step(1); this.focus(); }), { basis: 3, shrink: 0 });
@@ -151,7 +159,10 @@ export class PanelSearch extends VStack {
     const border = (render: (width: number) => string): Component => ({
       render: width => [this.theme().fg("border", render(width))], invalidate() {},
     });
-    this.addChild(border(width => "┌" + "─".repeat(Math.max(0, width - 2)) + "┐"), { basis: 1, shrink: 0 });
+    this.addChild(border(width => {
+      const message = this.error ? truncateToWidth(" " + searchText(this.error.replace(/[\r\n]+/g, " ")) + " ", Math.max(0, width - 2), "…") : "";
+      return "┌" + message + "─".repeat(Math.max(0, width - 2 - visibleWidth(message))) + "┐";
+    }), { basis: 1, shrink: 0 });
     this.addChild(new HStack([
       { component: border(() => "│"), basis: 1, shrink: 0 },
       { component: this.controls, basis: 0, grow: 1, minSize: 1 },
@@ -164,42 +175,77 @@ export class PanelSearch extends VStack {
   focus(): void { this.tui.setFocus(this.input); }
 
   /** Retire focus ownership without taking input away from an unrelated overlay. */
-  retire(restoreFocus: () => void): void { this.input.retire(restoreFocus); }
+  retire(restoreFocus: () => void): void {
+    this.generation++;
+    this.pending?.abort();
+    this.pending = undefined;
+    this.input.retire(restoreFocus);
+  }
   /** Keep the selected result visible after a viewport height change. */
   reposition(): void {
     const hit = this.hits[this.selected];
     if (hit) this.match(hit, this.query);
   }
   /** Defer indexing until an open, non-empty search actually needs updated history. */
-  markDirty(): void { this.dirty = true; }
+  markDirty(): void {
+    this.dirty = true;
+    this.generation++;
+    this.pending?.abort();
+    this.pending = undefined;
+  }
 
   private refresh(queryChanged = false): void {
     const query = this.input.getValue();
     if (!queryChanged && !this.dirty) return;
     const old = this.hits[this.selected];
+    const generation = ++this.generation;
+    this.pending?.abort();
+    this.pending = undefined;
+    this.error = undefined;
     if (this.dirty) this.index = undefined;
     this.dirty = false;
-    const needle = query.trim().toLowerCase();
-    this.hits = [];
-    if (needle) {
-      const index = this.index ??= candidates(this.savedEntries());
-      const exact = index.filter(hit => hit.text.toLowerCase().includes(needle));
-      this.hits = exact.length ? exact.map(hit => ({ ...hit, exact: true })) : fuzzyFilter(index, query, hit => hit.text);
-    }
-    const retained = !queryChanged && old ? this.hits.findIndex(hit => hit.entry.source === old.entry.source &&
-      hit.entry.label === old.entry.label && hit.line === old.line && hit.text === old.text) : -1;
-    this.selected = Math.max(0, retained);
     this.query = query;
-    if (queryChanged || retained < 0 || old?.entry.text !== this.hits[this.selected]?.entry.text ||
-      old?.exact !== this.hits[this.selected]?.exact) {
-      this.match(this.hits[this.selected], query);
-    }
-    this.tui.requestRender();
+    const index = query.trim() ? this.index ??= candidates(this.savedEntries()) : [];
+    const apply = (matches: LineMatch[]): void => {
+      if (this.generation !== generation) return;
+      this.pending = undefined;
+      this.hits = matches.map(hit => ({ ...index[hit.index], ranges: hit.ranges }));
+      const retained = !queryChanged && old ? this.hits.findIndex(hit => hit.entry.source === old.entry.source &&
+        hit.entry.label === old.entry.label && hit.line === old.line && hit.text === old.text) : -1;
+      this.selected = Math.max(0, retained);
+      if (queryChanged || retained < 0 || old?.entry.text !== this.hits[this.selected]?.entry.text) {
+        this.match(this.hits[this.selected], query);
+      }
+      this.tui.requestRender();
+    };
+    const failed = (error: unknown): void => {
+      if (this.generation !== generation) return;
+      this.pending = undefined;
+      this.hits = [];
+      this.error = (error instanceof Error ? error.message : String(error))
+        .replace(/^Invalid Boolean search query at column (\d+): /, "Column $1: ");
+      this.match(undefined, query);
+      this.tui.requestRender();
+    };
+    try {
+      const controller = new AbortController();
+      const result = matchSearchLines(index.map(hit => hit.text), query, controller.signal);
+      if (Array.isArray(result)) apply(result);
+      else {
+        this.pending = controller;
+        if (queryChanged) {
+          this.hits = [];
+          this.match(undefined, query);
+        }
+        this.tui.requestRender();
+        void result.then(apply, failed);
+      }
+    } catch (error) { failed(error); }
   }
 
   private step(direction: number): void {
     this.refresh();
-    if (!this.hits.length) return;
+    if (this.pending || !this.hits.length) return;
     this.selected = (this.selected + direction + this.hits.length) % this.hits.length;
     this.match(this.hits[this.selected], this.query);
     this.tui.requestRender();

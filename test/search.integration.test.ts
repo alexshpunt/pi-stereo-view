@@ -51,6 +51,14 @@ test.each(["columns", "rows"] as const)("searches Conversation with keyboard and
   expect(clean(frames.keyboard)[search]).toMatch(/│.*Search:.*\[↓\].*\[×\].*│/);
   expect(clean(frames.keyboard)[search + 1]).toMatch(/└─+┘/);
   expect(clean(frames.exact).join("\n")).toContain("1/2");
+
+  expect(clean(frames.noFuzzy).join("\n")).toContain("0/0");
+  for (const name of ["boolean", "regex", "afterCancel"]) {
+    expect(clean(frames[name]).join("\n")).toContain("1/2");
+    expect(clean(frames[name]).join("\n")).toContain("deployment runtime ready");
+  }
+  expect(clean(frames.invalid).join("\n")).toContain("!");
+  expect(clean(frames.invalid).join("\n")).toContain("[×]");
   expect(clean(frames.keyboard).join("\n")).not.toContain("Search Conversation");
   expect(clean(frames.query).join("\n")).toContain("deployment runtime ready");
   expect(clean(frames.query).join("\n")).toContain("1/2");

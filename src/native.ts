@@ -27,7 +27,7 @@ class SearchHighlight implements Component {
     if (cache && cache.lines === lines && cache.width === width && cache.query === query &&
       cache.hit === hit && cache.revision === revision) return cache.result;
     const clock = this.component instanceof CompactMessage ? this.component.searchClock() : undefined;
-    const result = highlightSearchRows(lines, hit, query, this.theme(), clock);
+    const result = highlightSearchRows(lines, hit, this.theme(), clock);
     this.cache = { lines, result, width, query, hit, revision };
     return result;
   }
@@ -218,10 +218,16 @@ export class NativeDocument extends Container {
   }
 
   /** Add a temporary fragment when the renderer does not display the saved matching text. */
-  showSearchExcerpt(hit: SearchHit): void { this.excerpt = hit; }
+  showSearchExcerpt(hit: SearchHit): void {
+    this.excerpt = hit;
+    this.frameWidth = undefined;
+  }
 
   /** Locate the selected occurrence after native wrapping, padding and timestamp decoration. */
   searchRow(hit: SearchHit): number | undefined {
+    // Async regex can complete between paints. Measure this document at its last
+    // allocated width instead of assuming requestRender already emitted a frame.
+    if (this.searchAnchor === hit && this.frameWidth === undefined) this.render(this.lastWidth);
     const block = this.positions.get(hit.entry.source);
     if (!block) return undefined;
     if (block.excerptRow !== undefined) return block.excerptRow;

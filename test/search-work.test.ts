@@ -6,7 +6,65 @@ import { PanelSearch, type SearchHit } from "../src/search.js";
 const theme = () => ({ fg: (_color: string, value: string) => value }) as Theme;
 const tui = { requestRender() {}, setFocus() {} } as unknown as TUI;
 
-test("prefers literal case-insensitive phrases across the panel and uses fuzzy only without them", () => {
+test("errors stay within the frame and editing to a valid query clears them", () => {
+  const entry = { source: new Text("", 0, 0), label: "User", text: "worker ready" };
+  let selected: SearchHit | undefined;
+  const bar = new PanelSearch(() => [entry], tui, theme, hit => { selected = hit; }, () => {});
+  bar.input.handleInput("worker AND");
+  expect(selected).toBeUndefined();
+  expect(bar.render(45).join("\n")).toContain("expected");
+  expect(bar.render(45)).toHaveLength(3);
+  bar.input.handleInput("\x15");
+  bar.input.handleInput("worker AND ready");
+  expect(selected?.ranges).toEqual([{ start: 0, end: 6 }, { start: 7, end: 12 }]);
+  expect(bar.render(45).join("\n")).not.toContain("expected");
+});
+
+test("cancelled regex results cannot replace a newer literal query or revive a retired search", async () => {
+  const entry = { source: new Text("", 0, 0), label: "User", text: "worker ready" };
+  const calls: (SearchHit | undefined)[] = [];
+  const bar = new PanelSearch(() => [entry], tui, theme, hit => calls.push(hit), () => {});
+  bar.input.handleInput("regex:worker(?= ready)");
+  expect(bar.render(45).join("\n")).toContain("…");
+  bar.input.handleInput("\x15");
+  bar.input.handleInput("ready");
+  const count = calls.length;
+  await new Promise(resolve => setTimeout(resolve, 100));
+  expect(calls).toHaveLength(count);
+  expect(calls.at(-1)?.ranges).toEqual([{ start: 7, end: 12 }]);
+  bar.input.handleInput("\x15");
+  bar.input.handleInput("regex:worker");
+  bar.retire(() => {});
+  const retired = calls.length;
+  await new Promise(resolve => setTimeout(resolve, 100));
+  expect(calls).toHaveLength(retired);
+});
+
+test("refreshing an unchanged regex match keeps its highlight and does not jump again", async () => {
+  const entry = { source: new Text("", 0, 0), label: "User", text: "worker ready" };
+  let other = "unrelated";
+  const calls: (SearchHit | undefined)[] = [];
+  const bar = new PanelSearch(() => [entry, { source: new Text("", 0, 0), label: "Other", text: other }],
+    tui, theme, hit => calls.push(hit), () => {});
+  const settled = async (): Promise<void> => {
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline) {
+      if (bar.render(45).join("\n").includes("1/1")) return;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    throw new Error("Regex did not settle");
+  };
+  bar.input.handleInput("regex:worker(?= ready)");
+  await settled();
+  const count = calls.length;
+  other = "unrelated streamed update";
+  bar.markDirty();
+  bar.render(45);
+  await settled();
+  expect(calls, "Unchanged selected text must stay highlighted without another jump").toHaveLength(count);
+  expect(calls.at(-1)?.text).toBe("worker ready");
+});
+test("uses only literal case-insensitive phrases across the panel", () => {
   const entries = ["r-e-a-d-y", "already READY", "ready now", "red sky"].map(text => ({
     source: new Text("", 0, 0), label: text, text,
   }));
@@ -21,7 +79,8 @@ test("prefers literal case-insensitive phrases across the panel and uses fuzzy o
   expect(selected?.text, "Fuzzy-only lines must not join exact results").toBe("ready now");
   bar.input.handleInput("\x15");
   bar.input.handleInput("rdy nw");
-  expect(selected?.text).toBe("ready now");
+  expect(selected).toBeUndefined();
+  expect(bar.render(45).join("\n")).toContain("0/0");
   bar.input.handleInput("\x15");
   bar.input.handleInput("ready now");
   expect(bar.render(45).join("\n")).toContain("1/1");
@@ -47,7 +106,7 @@ test("indexes an open nonempty search once, not on ordinary frames or query edit
   expect(reads, "Opening an empty field must not scan the transcript").toBe(0);
   bar.input.handleInput("d");
   bar.render(45);
-  bar.input.handleInput("p");
+  bar.input.handleInput("e");
   for (let i = 0; i < 10; i++) bar.render(45);
   expect(reads).toBe(1);
   expect(calls.at(-1)?.text).toBe("deployment runtime ready");
@@ -120,7 +179,7 @@ test("moves through repeated matches without closing and drops the highlight on 
   const calls: (SearchHit | undefined)[] = [];
   let closed = 0;
   const bar = new PanelSearch(() => entries, tui, theme, hit => calls.push(hit), () => { closed++; });
-  bar.input.handleInput("smphrs");
+  bar.input.handleInput("same phrase");
   expect(calls.at(-1)?.entry.label).toBe("newer");
   bar.input.handleInput("\r");
   expect(calls.at(-1)?.entry.label).toBe("older");
