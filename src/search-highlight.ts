@@ -48,25 +48,6 @@ function locate(lines: string[], hit: SearchHit, lettersOnly: boolean, clock?: S
 export function searchHitRow(lines: string[], hit: SearchHit, clock?: SearchClock): number | undefined {
   return (locate(lines, hit, false, clock) ?? locate(lines, hit, true, clock))?.positions[0]?.row;
 }
-function tokenPositions(text: string, token: string): number[] | undefined {
-  const match = (query: string): number[] | undefined => {
-    const positions: number[] = [];
-    let previous = -1;
-    for (let offset = 0; offset < query.length; offset++) {
-      const index = text.indexOf(query[offset], previous + 1);
-      if (index < 0) return undefined;
-      positions.push(index);
-      previous = index;
-    }
-    return positions;
-  };
-  const primary = match(token);
-  if (primary) return primary;
-  // Pi's fuzzyMatch accepts number/letter tokens in either order.
-  const parts = token.match(/^([a-z]+)([0-9]+)$/) ?? token.match(/^([0-9]+)([a-z]+)$/);
-  return parts ? match(parts[2] + parts[1]) : undefined;
-}
-
 function decorate(line: string, selected: Position[], theme: Theme): string {
   let output = "";
   let offset = 0;
@@ -100,51 +81,51 @@ function decorate(line: string, selected: Position[], theme: Theme): string {
 }
 
 /**
- * Highlight exact query spans, or fuzzy query characters, in one saved line's native rows.
- * Native visible text, widths, links and markers stay unchanged. Rows containing
- * image placement, an empty query or an unmappable saved fragment are left alone.
- * For a standalone temporary excerpt, pass that excerpt as the hit's sole saved line.
+ * Highlight the matcher's positive saved-text spans in native rows. Visible text,
+ * widths, links and markers stay unchanged; images and unmapped fragments are skipped.
+ * No query parsing or matching happens during rendering.
  */
-export function highlightSearchRows(lines: string[], hit: SearchHit, query: string, theme: Theme, clock?: SearchClock): string[] {
-  const tokens = query.trim().split(/[\s/]+/).filter(Boolean);
-  if (!query.trim() || lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;") || line.includes("\x1bP"))) return lines;
+export function highlightSearchRows(lines: string[], hit: SearchHit, theme: Theme, clock?: SearchClock): string[] {
+  if (!hit.ranges?.length || lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;") || line.includes("\x1bP"))) return lines;
   let lettersOnly = false;
   let found = locate(lines, hit, false, clock);
   if (!found) { lettersOnly = true; found = locate(lines, hit, true, clock); }
   if (!found) return lines;
-  const byRow = new Map<number, Map<number, Position>>();
-  const add = (position: Position): void => {
-    let selected = byRow.get(position.row);
-    if (!selected) { selected = new Map(); byRow.set(position.row, selected); }
-    selected.set(position.start, position);
-  };
-  if (hit.exact) {
-    const needle = query.trim().toLowerCase();
-    const saved = hit.text.toLowerCase();
-    for (let start = saved.indexOf(needle); start >= 0; start = saved.indexOf(needle, start + needle.length)) {
-      const offset = normalize(saved.slice(0, start), lettersOnly).length;
-      const positions = found.positions.slice(offset, offset + normalize(query.trim(), lettersOnly).length);
-      const spans = new Map<number, Position>();
-      for (const position of positions) {
-        const span = spans.get(position.row);
-        if (span) span.end = Math.max(span.end, position.end);
-        else spans.set(position.row, { ...position });
+  const byRow = new Map<number, Position[]>();
+  const savedGraphemes = [...graphemes.segment(hit.text)];
+  for (const range of hit.ranges) {
+    if (range.end <= range.start) continue;
+    // A regex may select only the combining mark inside a visible grapheme.
+    const selectedGraphemes = savedGraphemes.filter(part => part.index < range.end &&
+      part.index + part.segment.length > range.start);
+    if (!selectedGraphemes.length) continue;
+    const first = selectedGraphemes[0];
+    const last = selectedGraphemes[selectedGraphemes.length - 1];
+    const start = normalize(hit.text.slice(0, first.index), lettersOnly).length;
+    const end = normalize(hit.text.slice(0, last.index + last.segment.length), lettersOnly).length;
+    const spans = new Map<number, Position>();
+    if (start === end && /^\s+$/u.test(hit.text.slice(range.start, range.end))) {
+      const before = found.positions[start - 1];
+      const after = found.positions[end];
+      if (before && after && before.row === after.row && before.end < after.start) {
+        spans.set(before.row, { row: before.row, start: before.end, end: after.start });
       }
-      // Include the phrase's visible spaces, not unrelated earlier fuzzy letters.
-      for (const span of spans.values()) add(span);
     }
-  } else {
-    for (const token of tokens) {
-      const normalized = normalize(token, lettersOnly);
-      if (!normalized) continue;
-      const matched = tokenPositions(found.text, normalized);
-      if (!matched) return lines;
-      for (const index of matched) add(found.positions[index]);
+    for (const position of found.positions.slice(start, end)) {
+      const span = spans.get(position.row);
+      if (span) span.end = Math.max(span.end, position.end);
+      else spans.set(position.row, { ...position });
+    }
+    // Include visible spaces within each contiguous match, not between Boolean terms.
+    for (const [row, span] of spans) {
+      const selected = byRow.get(row) ?? [];
+      selected.push(span);
+      byRow.set(row, selected);
     }
   }
   if (!byRow.size) return lines;
   return lines.map((line, row) => {
     const selected = byRow.get(row);
-    return selected ? decorate(line, [...selected.values()], theme) : line;
+    return selected ? decorate(line, selected, theme) : line;
   });
 }

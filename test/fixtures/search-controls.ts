@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
+import { emittedFrame } from "./emitted-frame.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, Input, ScrollView, stripTerminalSequences, Text, visibleWidth, type Component, type TUI } from "@earendil-works/pi-tui";
 
@@ -15,9 +16,7 @@ type Host = TUI & {
 export default function searchControls(pi: ExtensionAPI): void {
   let tui: Host;
   const capture = async (): Promise<string[]> => {
-    tui.requestRender(true);
-    await setImmediate();
-    await setImmediate();
+    await emittedFrame(tui, () => tui.requestRender(true));
     return tui.getScreenLines();
   };
   const input = async (data: string): Promise<void> => {
@@ -66,7 +65,7 @@ export default function searchControls(pi: ExtensionAPI): void {
       await input("\x1b");
       return;
     }
-    for (const character of "dplyrntm") await input(character);
+    for (const character of "deployment runtime") await input(character);
     frames.query = await capture();
     const queryLines = frames.query.map(stripTerminalSequences);
     let selectedRow = -1;
@@ -87,8 +86,35 @@ export default function searchControls(pi: ExtensionAPI): void {
     await input("\x15");
     await input("DEPLOYMENT RUNTIME");
     frames.exact = await capture();
+
     await input("\x15");
     await input("dplyrntm");
+    frames.noFuzzy = await capture();
+    await input("\x15");
+    await input("deployment AND runtime NOT failed");
+    frames.boolean = await capture();
+    await input("\x15");
+    await input("regex:deployment(?= runtime)");
+    const waitCount = async (count: string): Promise<string[]> => {
+      const deadline = Date.now() + 2500;
+      while (Date.now() < deadline) {
+        const frame = await capture();
+        if (frame.some(line => stripTerminalSequences(line).includes(count))) return frame;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      throw new Error("Search did not finish with counter " + count);
+    };
+    frames.regex = await waitCount("1/2");
+    await input("\x15");
+    await input("regex:[");
+    frames.invalid = await waitCount("! [↓]");
+    await input("\x15");
+    await input("regex:.+");
+    await input("\x15");
+    await input("deployment runtime");
+    frames.afterCancel = await capture();
+    await input("\x15");
+    await input("deployment runtime");
     await input("\x06");
     frames.refocused = await capture();
     await input("\r");
@@ -104,7 +130,7 @@ export default function searchControls(pi: ExtensionAPI): void {
     ctx.ui.setEditorText("UNSENT SEARCH DRAFT");
     await click("[ ⌕ ]", "Conversation");
     frames.header = await capture();
-    await input("dplyrntm");
+    await input("deployment runtime");
     frames.headerQuery = await capture();
     await click("[×]", "Search:");
     frames.closed = await capture();
