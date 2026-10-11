@@ -119,6 +119,8 @@ test("keeps native compaction in Conversation and classic Combined while retaini
   await writeFile(path.resolve("tmp/test-runs/compaction-routing/session.jsonl"),
     await readFile(path.join(cwd, "timestamp-session.jsonl"), "utf8"));
   expect(chat.join("\n")).toContain("[compaction]");
+  expect(chat.join("\n")).toContain("Session compacted");
+  expect(activity.join("\n")).not.toContain("Session compacted");
   expect(activity.join("\n")).not.toContain("[compaction]");
   expect(clean(frames.chat).join("\n")).toContain("[compaction]");
   expect(clean(frames.chatExpanded).join("\n")).toContain("SAVED COMPACTION CONTEXT");

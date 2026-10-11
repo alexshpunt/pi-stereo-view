@@ -1,5 +1,5 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, stripTerminalSequences, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.js";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.js";
@@ -42,8 +42,24 @@ interface NativeAssistant extends Container {
   hasToolCalls: boolean;
 }
 const nameOf = (component: Component): string => component.constructor.name;
-const messagePane = (name: string): Pane =>
-  name === "UserMessageComponent" || name === "Image" || name === "CompactionSummaryMessageComponent" ? "chat" : "activity";
+const noticeKinds = new WeakMap<Component, { text: string; compaction?: string }>();
+
+/** Classify only Pi's compaction status; refresh lazy native text only after invalidation. */
+function compactionNotice(component: Component, name: string, width: number): string | undefined {
+  if (name !== "ThemedText") return undefined;
+  const native = component as Component & { stale?: boolean; text?: string };
+  if (native.stale) component.render(width);
+  if (typeof native.text !== "string") throw new Error("Pi's status text metadata is not supported");
+  const cached = noticeKinds.get(component);
+  if (cached?.text === native.text) return cached.compaction;
+  const text = stripTerminalSequences(native.text).trim();
+  const compaction = /^Session compacted \d+ times?$/.test(text) ? text : undefined;
+  noticeKinds.set(component, { text: native.text, compaction });
+  return compaction;
+}
+const messagePane = (name: string, compaction?: string): Pane =>
+  name === "UserMessageComponent" || name === "Image" || name === "CompactionSummaryMessageComponent" ||
+    compaction !== undefined ? "chat" : "activity";
 
 function assistant(component: Component): NativeAssistant | undefined {
   if (nameOf(component) !== "AssistantMessageComponent") return undefined;
@@ -143,6 +159,7 @@ export class NativeDocument extends Container {
         .map(block => block.text).join("\n") : "";
     for (const component of (this.source.children[2] as Container).children) {
       const name = nameOf(component);
+      const notice = compactionNotice(component, name, this.lastWidth);
       const native = component as Component & {
         text?: string; lastMessage?: { content: { type: string; text?: string; thinking?: string }[] };
         toolName?: string; args?: unknown; result?: { content?: unknown };
@@ -175,7 +192,9 @@ export class NativeDocument extends Container {
         add(component, "Shell", [native.command, ...native.outputLines].join("\n"), () => native.setExpanded?.(true));
       } else if (name === "CompactionSummaryMessageComponent" && this.pane === "chat") {
         add(component, "Compaction", native.message?.summary ?? "", () => native.setExpanded?.(true));
-      } else if (this.pane === "activity" && messagePane(name) === "activity" && name !== "Spacer") {
+      } else if (notice !== undefined && this.pane === "chat") {
+        add(component, "Compaction", notice);
+      } else if (this.pane === "activity" && messagePane(name, notice) === "activity" && name !== "Spacer") {
         add(component, name.replace(/(?:Message)?Component$/, ""),
           contentText(native.message?.content) || native.message?.summary || searchText(component.render(this.lastWidth).join("\n")));
       }
@@ -287,7 +306,7 @@ export class NativeDocument extends Container {
           routed = view;
         }
       } else {
-        if (messagePane(name) === this.pane) routed = component;
+        if (messagePane(name, compactionNotice(component, name, width)) === this.pane) routed = component;
       }
       if (routed) {
         const start = result.length;
