@@ -1,17 +1,17 @@
 <!-- The project banner will be added when the logo is ready. -->
 
-<h1 align="center">Pi Agent Transcript</h1>
+<h1 align="center">pi-stereo-view</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/pi-agent-transcript"><img src="https://img.shields.io/npm/v/pi-agent-transcript" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/pi-agent-transcript"><img src="https://img.shields.io/npm/dm/pi-agent-transcript" alt="npm downloads"></a>
-  <a href="https://github.com/alexshpunt/pi-agent-transcript/actions/workflows/ci.yml"><img src="https://github.com/alexshpunt/pi-agent-transcript/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/pi-agent-transcript" alt="MIT license"></a>
+  <a href="https://www.npmjs.com/package/pi-stereo-view"><img src="https://img.shields.io/npm/v/pi-stereo-view" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/pi-stereo-view"><img src="https://img.shields.io/npm/dm/pi-stereo-view" alt="npm downloads"></a>
+  <a href="https://github.com/alexshpunt/pi-stereo-view/actions/workflows/ci.yml"><img src="https://github.com/alexshpunt/pi-stereo-view/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/pi-stereo-view" alt="MIT license"></a>
 </p>
 
 You come back to a chat and can't remember what you were talking about?
 
-**Split tool output from the agent's replies with Pi Agent Transcript.**
+**Split tool output from the agent's replies with pi-stereo-view.**
 
 The chat becomes two zones: your conversation with the agent, and the agent's work where it calls tools.
 
@@ -25,7 +25,7 @@ Pi's native message and tool renderers stay the same. Only history changes; the 
 ## Install
 
 ```sh
-pi install npm:pi-agent-transcript
+pi install npm:pi-stereo-view
 ```
 
 Split history needs Pi's **fullscreen** mode. Choose it in `/settings`, or start Pi with:
@@ -49,7 +49,7 @@ Everything is controlled from the TUI. Click the toolbar and the buttons in each
 
 **Resize:** drag the double line between the zones — `═` in rows, `║` in columns.
 
-In Rows, Conversation starts with automatic height. It grows with its content up to half the history area, excluding the toolbar, input and footer. After that it scrolls to new messages without growing. Dragging, a height shortcut or `/transcript height <rows>` saves a manual maximum instead. Use **Conversation height: auto** in `≡` or `/transcript height auto` to restore automatic height. Old saved numeric heights stay manual unless you switch them to auto.
+In Rows, Conversation starts with automatic height. It grows with its content up to half the history area, excluding the toolbar, input and footer. After that it scrolls to new messages without growing. Dragging, a height shortcut or `/stereo-view height <rows>` saves a manual maximum instead. Use **Conversation height: auto** in `≡` or `/stereo-view height auto` to restore automatic height. Old saved numeric heights stay manual unless you switch them to auto.
 
 Both panels use only the space their content needs. When history fills up, Activity shrinks first while Conversation keeps its limit. Expanded panels fit their content up to the available screen height. Long histories scroll without pushing the input off screen.
 
@@ -81,7 +81,7 @@ New tool calls keep their start time through streaming, completion, and session 
 
 Clocks work in split and expanded fullscreen panels. Combined history does not show extension clocks; returning to split restores the saved clock setting. They do not decorate regular scrollback, the input dock, startup headers, or widgets. Tool-start metadata does not enter the model's conversation.
 
-Use `≡` or `/transcript settings` to hide or show clocks. Hiding also removes the clock gutter or extra clock rows. The setting survives restart; tool-start times are still collected and return unchanged when clocks are shown again.
+Use `≡` or `/stereo-view settings` to hide or show clocks. Hiding also removes the clock gutter or extra clock rows. The setting survives restart; tool-start times are still collected and return unchanged when clocks are shown again.
 
 ## Commands
 
@@ -89,16 +89,16 @@ The same controls are available without the mouse:
 
 | Action | Command |
 | --- | --- |
-| Split off / on | `/transcript` |
-| Swap zones | `/transcript swap` |
-| Rows / columns | `/transcript layout rows` / `/transcript layout columns` |
-| Conversation height / width | `/transcript height 12` / `/transcript width 40` |
-| Automatic Conversation height | `/transcript height auto` |
-| Scroll a zone | `/transcript scroll chat -10` / `/transcript scroll activity -10` |
-| Zoom / restore Conversation | `/transcript zoom chat` |
-| Zoom / restore Activity | `/transcript zoom activity` |
-| Timestamp settings | `/transcript settings` |
-| Button legend | `/transcript help` |
+| Split off / on | `/stereo-view` |
+| Swap zones | `/stereo-view swap` |
+| Rows / columns | `/stereo-view layout rows` / `/stereo-view layout columns` |
+| Conversation height / width | `/stereo-view height 12` / `/stereo-view width 40` |
+| Automatic Conversation height | `/stereo-view height auto` |
+| Scroll a zone | `/stereo-view scroll chat -10` / `/stereo-view scroll activity -10` |
+| Zoom / restore Conversation | `/stereo-view zoom chat` |
+| Zoom / restore Activity | `/stereo-view zoom activity` |
+| Timestamp settings | `/stereo-view settings` |
+| Button legend | `/stereo-view help` |
 
 `Ctrl+Alt+T` toggles split, `Ctrl+Alt+S` swaps zones, and `Ctrl+Alt+Left/Right` resizes Conversation along the current split axis.
 
@@ -132,7 +132,7 @@ To try source changes without also loading an installed copy:
 pi -ne --tui-mode fullscreen -e ./src/index.ts
 ```
 
-Run `/reload` after source changes. For a task session with normal extensions, use the [local development skill](.pi/skills/develop-transcript/SKILL.md). It loads only the current worktree's Transcript using a temporary project override and loader, with startup checks and cleanup.
+Run `/reload` after source changes. For a task session with normal extensions, use the [local development skill](.pi/skills/develop-stereo-view/SKILL.md). It loads only the current worktree's pi-stereo-view using a temporary project override and loader, with startup checks and cleanup.
 
 ## License
 
