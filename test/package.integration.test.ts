@@ -25,8 +25,9 @@ test("ships only public runtime files and loads the installed archive in real Pi
     });
     const [archive]: { filename: string; files: { path: string }[] }[] = JSON.parse(packed.stdout);
     const paths = archive.files.map(file => file.path).sort();
-    expect(paths.filter(file => !/^(package\.json|README\.md|LICENSE|src\/.+\.ts)$/.test(file))).toEqual([]);
+    expect(paths.filter(file => !/^(package\.json|README\.md|CHANGELOG\.md|LICENSE|src\/.+\.ts)$/.test(file))).toEqual([]);
     expect(paths).toContain("LICENSE");
+    expect(paths).toContain("CHANGELOG.md");
     expect(paths).toContain("src/index.ts");
 
     await writeFile(path.join(runtime, "package.json"), JSON.stringify({ private: true }));
