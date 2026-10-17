@@ -19,7 +19,10 @@
     "coding-agent",
     "transcript",
     "tui",
-    "split-pane"
+    "split-pane",
+    "pi-extension",
+    "pi-coding-agent",
+    "terminal-ui"
   ],
   "engines": {
     "node": ">=22.19.0"
@@ -27,12 +30,15 @@
   "files": [
     "src",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "pi": {
     "extensions": [
       "./src/index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/alexshpunt/pi-stereo-view/main/assets/logo-wordmark.png",
+    "video": "https://github.com/alexshpunt/pi-stereo-view/releases/download/v0.1.0/demo.mp4"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
