@@ -3,4 +3,7 @@ dist/
 coverage/
 tmp/
 .agents/tmp/
+/.agents/verification/
+/.pi/
+/.linear-project
 images/.pi-image/
