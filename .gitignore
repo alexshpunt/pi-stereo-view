@@ -7,3 +7,5 @@ tmp/
 /.pi/
 /.linear-project
 images/.pi-image/
+assets/*.mp4
+*:Zone.Identifier
