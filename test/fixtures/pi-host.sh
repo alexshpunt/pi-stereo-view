@@ -1,4 +1,6 @@
 #!/bin/sh
+# Scripted UI checks must not receive automatic update or catalog notifications.
+export PI_OFFLINE=1
 if [ -n "${PI_TRANSCRIPT_IDE_PATH:-}" ]; then
   set -- -e "$PI_TRANSCRIPT_IDE_PATH/src/pi-agent-ide.ts" "$@"
 fi
