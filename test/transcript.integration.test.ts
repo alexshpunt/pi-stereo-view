@@ -307,18 +307,22 @@ test.each(["columns", "rows"])("keeps selection, copy, and independent scrolling
   }).run("USER MARKER");
   const observation: {
     copied: string[]; beforeWheel: string[]; activityWheel: string[]; chatWheel: string[]; headerWheel: string[];
+    chatPage: string[]; activityPage: string[]; cycledBack: string[];
   } =
     JSON.parse(await readFile(path.join(cwd, "selection-observation.json"), "utf8"));
   expect(observation.copied).toContain("CHAT_COPY_MARKER");
   expect(observation.copied).toContain("NATIVE CALL MARKER");
   expect(observation.copied.every(value => value === "CHAT_COPY_MARKER" || value === "NATIVE CALL MARKER")).toBe(true);
+  // Pi draws its jump-to-latest indicator over the active panel's last row, scrollbar included;
+  // compare panel content without the indicator and scrollbar column.
+  const content = (text: string): string => text.replace(/ ↓ Jump to latest message.*$/gm, "").replace(/ *[│┃]? *$/gm, "");
   const pane = (frame: string[], column: number): string => {
-    if (layout === "columns") return frame.slice(4, -6)
+    if (layout === "columns") return content(frame.slice(4, -6)
       .map(line => stripTerminalSequences(sliceByColumn(line, column === 0 ? 0 : 80, column === 0 ? 78 : 39)))
-      .join("\n");
+      .join("\n"));
     const chatHeader = frame.findIndex(line => stripTerminalSequences(line).includes("Conversation"));
     expect(chatHeader).toBeGreaterThan(1);
-    return clean(column === 0 ? frame.slice(4, chatHeader - 1) : frame.slice(chatHeader + 2, -6));
+    return content(clean(column === 0 ? frame.slice(4, chatHeader - 1) : frame.slice(chatHeader + 2, -6)));
   };
   // Activity tracking changes headers, not the other panel's document or scroll position.
   expect(clean(observation.activityWheel)).toContain("● Activity");
@@ -330,4 +334,11 @@ test.each(["columns", "rows"])("keeps selection, copy, and independent scrolling
   // Wheel over the Conversation header moves Conversation, never Activity.
   expect(pane(observation.headerWheel, 0)).toBe(pane(observation.chatWheel, 0));
   expect(pane(observation.headerWheel, 1)).not.toBe(pane(observation.chatWheel, 1));
+  // Page keys scroll the active panel; Ctrl+Alt+Up switches it, and pressing it again switches back.
+  expect(pane(observation.chatPage, 0)).toBe(pane(observation.headerWheel, 0));
+  expect(pane(observation.chatPage, 1)).not.toBe(pane(observation.headerWheel, 1));
+  expect(clean(observation.activityPage)).toContain("● Activity");
+  expect(pane(observation.activityPage, 0)).not.toBe(pane(observation.chatPage, 0));
+  expect(pane(observation.activityPage, 1)).toBe(pane(observation.chatPage, 1));
+  expect(clean(observation.cycledBack)).toContain("● Conversation");
 }, 150_000);

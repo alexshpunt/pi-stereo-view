@@ -143,8 +143,18 @@ export default function nativeProbe(pi: ExtensionAPI): void {
         // A header has no ScrollView; native routing would pass this wheel to Activity.
         await wheelAt("Conversation");
         const headerWheel = await capture();
+        // Page keys follow the active panel: Conversation now, then Activity chosen with Ctrl+Alt+Up.
+        tui.handleTerminalInput("\x1b[6~");
+        const chatPage = await capture();
+        tui.handleTerminalInput("\x1b[1;7A");
+        await capture();
+        tui.handleTerminalInput("\x1b[6~");
+        const activityPage = await capture();
+        // The same shortcut again loops back to Conversation.
+        tui.handleTerminalInput("\x1b[1;7A");
+        const cycledBack = await capture();
         await writeFile(path.join(ctx.cwd, "selection-observation.json"),
-          JSON.stringify({ copied, beforeWheel, activityWheel, chatWheel, headerWheel }));
+          JSON.stringify({ copied, beforeWheel, activityWheel, chatWheel, headerWheel, chatPage, activityPage, cycledBack }));
       } finally {
         tui.copyTextToClipboard = copy;
       }

@@ -154,7 +154,7 @@ export default function transcript(pi: ExtensionAPI): void {
       if (action === "toggle" || action === "") toggle();
       else if (action === "settings") await openSettings(ctx);
       else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ≡ settings. Ctrl+F searches the active panel. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("pi-stereo-view icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ≡ settings. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);
@@ -173,6 +173,11 @@ export default function transcript(pi: ExtensionAPI): void {
   });
   pi.registerShortcut("ctrl+alt+t", { description: "Toggle split history", handler: async () => toggle() });
   pi.registerShortcut("ctrl+alt+s", { description: "Swap stereo-view panels", handler: async () => layout?.swap() });
+  for (const key of ["ctrl+alt+up", "ctrl+alt+down"] as const) {
+    pi.registerShortcut(key, { description: "Move keyboard scrolling to the other stereo-view panel", handler: async () => {
+      layout?.cyclePanel();
+    } });
+  }
   pi.registerShortcut("ctrl+alt+left", { description: "Shrink conversation along the split axis", handler: async () => {
     layout?.resize(-1);
   } });

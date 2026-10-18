@@ -20,8 +20,10 @@ const MIN_ROWS = 4;
 const BUTTON_WIDTH = 5;
 
 class PanelScrollView extends ScrollView {
-  constructor(component: Component, options: ScrollViewOptions, private readonly interact: () => void) {
+  constructor(component: Component, options: ScrollViewOptions, private readonly interact: () => void, active: () => boolean) {
     super(component, options);
+    // Pi sends keyboard scrolling and native search to the primary ScrollView; follow the active panel.
+    Object.defineProperty(this, "primary", { get: active });
   }
 
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
@@ -185,8 +187,9 @@ export class TranscriptLayout {
       scrollbarTrackStyle: scroll.scrollbarTrackStyle,
       scrollbarThumbStyle: scroll.scrollbarThumbStyle,
     };
-    this.activity = new PanelScrollView(activityDocument, { ...scrollOptions, primary: true }, () => this.activate("activity"));
-    this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"));
+    this.activity = new PanelScrollView(activityDocument, scrollOptions, () => this.activate("activity"),
+      () => this.searchPane() === "activity");
+    this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"), () => this.searchPane() === "chat");
     let historyHeight = 0;
     const shown = ({ width, height }: { width: number; height: number }): boolean => {
       const previousHeight = historyHeight;
@@ -566,6 +569,13 @@ export class TranscriptLayout {
     this.drag = undefined;
     this.preferences.side = this.preferences.side === "left" ? "right" : "left";
     this.changed();
+  }
+
+  /** Cycle keyboard scrolling and search to the other panel. */
+  cyclePanel(): void {
+    const pane = this.searchPane();
+    if (!pane || this.preferences.zoom) return;
+    this.activate(pane === "chat" ? "activity" : "chat");
   }
 
   /** Scroll one native pane without moving the other. */

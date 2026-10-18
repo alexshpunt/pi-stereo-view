@@ -128,6 +128,8 @@ The same controls are available without the mouse:
 
 `Ctrl+Alt+T` toggles split, `Ctrl+Alt+S` swaps panels, and `Ctrl+Alt+Left/Right` resizes Conversation along the current split direction.
 
+Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active panel, marked with `●`. Clicking or scrolling a panel makes it active. `Ctrl+Alt+Up` or `Ctrl+Alt+Down` switches to the other panel; press either again to switch back.
+
 ## Settings and limits
 
 Your layout, panel order, sizes, zoom, split on/off and timestamp settings are saved automatically and restored next time.
