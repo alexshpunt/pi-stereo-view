@@ -305,7 +305,9 @@ test.each(["columns", "rows"])("keeps selection, copy, and independent scrolling
         { chunks: { kind: "fixed", size: 5000 } })]),
     ],
   }).run("USER MARKER");
-  const observation: { copied: string[]; beforeWheel: string[]; activityWheel: string[]; chatWheel: string[] } =
+  const observation: {
+    copied: string[]; beforeWheel: string[]; activityWheel: string[]; chatWheel: string[]; headerWheel: string[];
+  } =
     JSON.parse(await readFile(path.join(cwd, "selection-observation.json"), "utf8"));
   expect(observation.copied).toContain("CHAT_COPY_MARKER");
   expect(observation.copied).toContain("NATIVE CALL MARKER");
@@ -325,4 +327,7 @@ test.each(["columns", "rows"])("keeps selection, copy, and independent scrolling
   expect(pane(observation.activityWheel, 1)).toBe(pane(observation.beforeWheel, 1));
   expect(pane(observation.chatWheel, 0)).toBe(pane(observation.activityWheel, 0));
   expect(pane(observation.chatWheel, 1)).not.toBe(pane(observation.activityWheel, 1));
+  // Wheel over the Conversation header moves Conversation, never Activity.
+  expect(pane(observation.headerWheel, 0)).toBe(pane(observation.chatWheel, 0));
+  expect(pane(observation.headerWheel, 1)).not.toBe(pane(observation.chatWheel, 1));
 }, 150_000);

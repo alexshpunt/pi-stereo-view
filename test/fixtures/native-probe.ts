@@ -140,7 +140,11 @@ export default function nativeProbe(pi: ExtensionAPI): void {
         const activityWheel = await capture();
         await wheelAt("CHAT_COPY_MARKER");
         const chatWheel = await capture();
-        await writeFile(path.join(ctx.cwd, "selection-observation.json"), JSON.stringify({ copied, beforeWheel, activityWheel, chatWheel }));
+        // A header has no ScrollView; native routing would pass this wheel to Activity.
+        await wheelAt("Conversation");
+        const headerWheel = await capture();
+        await writeFile(path.join(ctx.cwd, "selection-observation.json"),
+          JSON.stringify({ copied, beforeWheel, activityWheel, chatWheel, headerWheel }));
       } finally {
         tui.copyTextToClipboard = copy;
       }

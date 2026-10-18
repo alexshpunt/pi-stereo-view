@@ -59,6 +59,17 @@ class TranscriptPane extends VStack {
     ]);
   }
 
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+    if (event.type !== "wheel") return undefined;
+    // Native wheel routing gives any unused delta to the primary panel, Activity.
+    // Consume it here so the wheel only moves the panel under the pointer.
+    this.view.scrollBy(event.wheelDelta ?? 0);
+    return { handled: true, target: {
+      component: this, originX: event.screenX - event.x, originY: event.screenY - event.y,
+      width: event.width, height: event.height,
+    } };
+  }
+
   override render(width: number): string[] {
     // Native layout measures height here, then paints the original header and ScrollView.
     // Empty preview rows avoid composing colored history text in ancestor measurements.
