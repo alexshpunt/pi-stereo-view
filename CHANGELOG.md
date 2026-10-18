@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Mouse wheel over Conversation or its header no longer scrolls Activity when Conversation is too short to scroll.
+
 ## 0.1.0
 
 First release.
