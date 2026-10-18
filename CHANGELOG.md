@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- PgUp/PgDn and Pi's other keyboard scroll keys now move the active panel (marked with `●`) instead of always Activity. Pi's built-in history search follows the active panel too.
+- `Ctrl+Alt+Up` or `Ctrl+Alt+Down` switches the active panel; press again to switch back.
+
 ## 0.1.1
 
 - Mouse wheel over Conversation or its header no longer scrolls Activity when Conversation is too short to scroll.
