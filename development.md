@@ -42,7 +42,7 @@ Custom entries can identify their execution owner with `data.parentToolCallId`; 
 
 Split history reuses unchanged native blocks between frames. Custom renderers must invalidate changed components before requesting a render, as required by Pi's component API. Native text setters, history rebuilds, streaming, tool updates, expansion, width and theme changes refresh the affected output. Image placement blocks are never retained in this cache. Detaching the layout removes its invalidation observers.
 
-Timestamp decoration puts a local clock on the first line of each text block, with a small right gutter. One blank row separates messages and tool calls without removing paragraph breaks or tool formatting. Invisible tool blocks add no spacing. Image blocks retain their native placement rows and use a separate clock row. Assistant text and thinking share their original message time. Combined history uses Pi's original renderer without these decorations.
+Timestamp decoration puts a local clock on the first line of each text block, with a small right gutter. One blank row separates messages and tool calls without removing paragraph breaks or tool formatting. Tools whose custom call and result renderers use `renderShell: "self"` and show no content add no output, spacing or clock, even when their model-facing result contains images. Default and visibly rendered image blocks retain their native placement rows and use a separate clock row. Assistant text and thinking share their original message time. Combined history uses Pi's original renderer without these decorations.
 
 ## Search implementation
 
