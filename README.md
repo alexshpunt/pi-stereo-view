@@ -20,8 +20,10 @@ The chat becomes two zones: your conversation with the agent, and the agent's wo
 
 | Zone | What's in it |
 | --- | --- |
-| **Conversation** | Your messages, the LLM's replies, compaction summaries and notices, and startup information (welcome, loaded resources and extension notices). |
-| **Activity** | Tool calls and results, thinking, and operational notices after startup. |
+| **Conversation** | Your messages, the LLM's replies, summaries and system information, including welcome, loaded resources, warnings, errors and status notices at any time. |
+| **Activity** | Thinking, tool calls and results, related tool output, and shell execution. |
+
+Unrecognized content stays in Conversation unless its metadata links it to a known tool call.
 
 Messages and tools keep their familiar appearance. The input stays full width below both panels.
 
