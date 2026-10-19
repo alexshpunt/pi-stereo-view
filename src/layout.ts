@@ -53,6 +53,25 @@ class TranscriptRows extends VStack {
   }
 }
 
+class TranscriptRoot extends VStack {
+  private readonly owned: Component[];
+
+  constructor(children: StackChild[]) {
+    super(children);
+    this.owned = [...this.children];
+  }
+
+  unchanged(): boolean {
+    return this.children.length === this.owned.length && this.children.every((child, index) => child === this.owned[index]);
+  }
+
+  preserveForeignChildren(native: VStack): void {
+    for (const entry of this.entries) {
+      if (!this.owned.includes(entry.component)) native.addChild(entry.component, entry);
+    }
+  }
+}
+
 class TranscriptPane extends VStack {
   constructor(private readonly header: Component, private readonly view: ScrollView, private readonly height: () => number) {
     super([
@@ -144,7 +163,16 @@ export class TranscriptLayout {
       this.warn("pi-stereo-view split is unavailable: Pi's focus API is not supported.");
       return;
     }
-    if (host.layoutRoot === this.mounted && this.host) return;
+    if (host.layoutRoot === this.mounted && this.host) {
+      const mounted = this.mounted as TranscriptRoot;
+      if (mounted.unchanged()) return;
+      const original = this.original!;
+      mounted.preserveForeignChildren(original as VStack);
+      this.dispose();
+      this.rejectedRoots.add(original);
+      this.warn("pi-stereo-view split is unavailable: Pi's fullscreen layout is not supported.");
+      return;
+    }
     const root = host.layoutRoot;
     if (this.host) this.dispose();
     if (root && this.rejectedRoots.has(root)) return;
@@ -350,7 +378,7 @@ export class TranscriptLayout {
       }
     };
     this.rebuild();
-    const mounted = new VStack([
+    const mounted = new TranscriptRoot([
       { component: toolbar, basis: 1, shrink: 0, visible: () => {
         // Root visibility is evaluated once at the start of each native layout pass.
         this.timestamps.beginFrame();
