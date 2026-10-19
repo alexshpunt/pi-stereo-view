@@ -1,11 +1,10 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, stripTerminalSequences, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.js";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.js";
-import { StartupNotices } from "./startup-notices.js";
-
-export type Pane = "activity" | "chat";
+import { NativeContentIndex, type Pane } from "./content.js";
+export type { Pane } from "./content.js";
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
 class SearchHighlight implements Component {
@@ -38,56 +37,6 @@ class SearchHighlight implements Component {
     return this.component.handleMouse?.(event);
   }
 }
-interface NativeAssistant extends Container {
-  contentContainer: Container;
-  hasToolCalls: boolean;
-}
-const nameOf = (component: Component): string => component.constructor.name;
-const noticeKinds = new WeakMap<Component, { text: string; compaction?: string }>();
-
-/** Classify only Pi's compaction status; refresh lazy native text only after invalidation. */
-function compactionNotice(component: Component, name: string, width: number): string | undefined {
-  if (name !== "ThemedText") return undefined;
-  const native = component as Component & { stale?: boolean; text?: string };
-  if (native.stale) component.render(width);
-  if (typeof native.text !== "string") throw new Error("Pi's status text metadata is not supported");
-  const cached = noticeKinds.get(component);
-  if (cached?.text === native.text) return cached.compaction;
-  const text = stripTerminalSequences(native.text).trim();
-  const compaction = /^Session compacted \d+ times?$/.test(text) ? text : undefined;
-  noticeKinds.set(component, { text: native.text, compaction });
-  return compaction;
-}
-const messagePane = (name: string, compaction?: string, startup = false): Pane =>
-  name === "UserMessageComponent" || name === "Image" || name === "CompactionSummaryMessageComponent" ||
-    compaction !== undefined || startup ? "chat" : "activity";
-
-function assistant(component: Component): NativeAssistant | undefined {
-  if (nameOf(component) !== "AssistantMessageComponent") return undefined;
-  const source = component as NativeAssistant;
-  if (!Array.isArray(source.contentContainer?.children) || typeof source.hasToolCalls !== "boolean") {
-    throw new Error("Pi's assistant component is not supported");
-  }
-  return source;
-}
-
-function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
-  const result: Component[] = [];
-  let spacing: Component[] = [];
-  for (const component of source.contentContainer.children) {
-    const name = nameOf(component);
-    if (name === "Spacer") {
-      spacing.push(component);
-      continue;
-    }
-    const target = name === "Markdown" ? "chat" :
-      name === "MouseRegion" || name === "Text" ? "activity" : undefined;
-    if (!target) throw new Error("Pi's assistant content layout is not supported");
-    if (target === pane) result.push(...(pane === "chat" ? [] : spacing), component);
-    spacing = [];
-  }
-  return result;
-}
 
 /**
  * Project the live native component tree, not messages or renderer strings.
@@ -96,7 +45,6 @@ function assistantParts(source: NativeAssistant, pane: Pane): Component[] {
  * Set invalidatesSource to false only when a shared root owns source invalidation.
  */
 export class NativeDocument extends Container {
-  private readonly views = new WeakMap<NativeAssistant, Container>();
   private readonly stamped = new WeakMap<Component, CompactMessage>();
   private readonly compactBlocks = new Map<Component, CompactMessage>();
   private readonly positions = new Map<Component, { row: number; lines: string[]; clock?: SearchClock; excerptRow?: number }>();
@@ -120,7 +68,7 @@ export class NativeDocument extends Container {
     private readonly showTimestamps: () => boolean,
     private readonly interact: () => void = () => {},
     private readonly invalidatesSource = true,
-    private readonly startupNotices = new StartupNotices(),
+    private readonly index = new NativeContentIndex(source),
   ) {
     super();
   }
@@ -144,73 +92,22 @@ export class NativeDocument extends Container {
     if (!Array.isArray(chat?.children)) throw new Error("Pi's history document is not supported");
     for (const component of chat.children) {
       this.timestamps.check(component);
-      const native = assistant(component);
-      if (native) assistantParts(native, this.pane);
     }
+    this.index.entries(this.pane);
     this.checked = true;
   }
 
-  /** Freeze initialization notice routing after all session_start handlers complete. */
-  finishStartup(): void {
-    this.startupNotices.finish(this.source.children[2] as Container, this.lastWidth);
-  }
   /** Read full saved text from the current native branch, including collapsed blocks. */
   searchEntries(): SearchEntry[] {
-    const entries: SearchEntry[] = [];
-    const add = (source: Component, label: string, text: string, reveal?: () => void): void => {
-      if (text.trim()) entries.push({ source, label, text, reveal });
-    };
-    const contentText = (content: unknown): string => typeof content === "string" ? content :
-      Array.isArray(content) ? content.filter(block => block?.type === "text" && typeof block.text === "string")
-        .map(block => block.text).join("\n") : "";
-    for (const component of (this.source.children[2] as Container).children) {
-      const name = nameOf(component);
-      const notice = compactionNotice(component, name, this.lastWidth);
-      const native = component as Component & {
-        text?: string; lastMessage?: { content: { type: string; text?: string; thinking?: string }[] };
-        toolName?: string; args?: unknown; result?: { content?: unknown };
-        command?: string; outputLines?: string[]; message?: { content?: unknown; summary?: string };
-        setExpanded?: (expanded: boolean) => void; setHideThinkingBlock?: (hide: boolean) => void;
-      };
-      if (name === "UserMessageComponent" && this.pane === "chat") {
-        if (typeof native.text !== "string") throw new Error("Pi's user search text is not supported");
-        add(component, "User", native.text);
-      } else if (name === "AssistantMessageComponent") {
-        if (!Array.isArray(native.lastMessage?.content)) throw new Error("Pi's assistant search text is not supported");
-        const kind = this.pane === "chat" ? "text" : "thinking";
-        const text = native.lastMessage?.content.filter(block => block.type === kind)
-          .map(block => kind === "text" ? block.text ?? "" : block.thinking ?? "").join("\n\n") ?? "";
-        add(component, kind === "text" ? "Assistant" : "Thinking", text, kind === "thinking" ? () => {
-          if (typeof native.setHideThinkingBlock !== "function") throw new Error("Pi's thinking reveal is not supported");
-          native.setHideThinkingBlock(false);
-        } : undefined);
-      } else if (this.pane === "activity" && name === "ToolExecutionComponent") {
-        if (typeof native.toolName !== "string") throw new Error("Pi's tool search text is not supported");
-        add(component, native.toolName, [native.toolName, JSON.stringify(native.args, null, 2), contentText(native.result?.content)]
-          .filter(Boolean).join("\n"), () => {
-            if (typeof native.setExpanded !== "function") throw new Error("Pi's tool reveal is not supported");
-            native.setExpanded(true);
-          });
-      } else if (this.pane === "activity" && name === "BashExecutionComponent") {
-        if (typeof native.command !== "string" || !Array.isArray(native.outputLines)) {
-          throw new Error("Pi's shell search text is not supported");
-        }
-        add(component, "Shell", [native.command, ...native.outputLines].join("\n"), () => native.setExpanded?.(true));
-      } else if (name === "CompactionSummaryMessageComponent" && this.pane === "chat") {
-        add(component, "Compaction", native.message?.summary ?? "", () => native.setExpanded?.(true));
-      } else if (notice !== undefined && this.pane === "chat") {
-        add(component, "Compaction", notice);
-      } else if (messagePane(name, notice, this.startupNotices.contains(component, this.lastWidth)) === this.pane && name !== "Spacer") {
-        add(component, name.replace(/(?:Message)?Component$/, ""),
-          contentText(native.message?.content) || native.message?.summary || searchText(component.render(this.lastWidth).join("\n")));
-      }
-    }
-    return entries;
+    return this.index.entries(this.pane).flatMap(entry => {
+      const saved = entry.search(this.lastWidth);
+      return saved.text.trim() ? [{ source: entry.source, ...saved }] : [];
+    });
   }
 
   /** Reject hits whose native owner was removed by a branch change or history rebuild. */
   containsSearchHit(hit: SearchHit): boolean {
-    return (this.source.children[2] as Container).children.includes(hit.entry.source);
+    return this.index.contains(hit.entry.source);
   }
   /** Reveal one selected block without replacing its native renderer. */
   reveal(hit: SearchHit, query = ""): boolean {
@@ -280,79 +177,51 @@ export class NativeDocument extends Container {
     this.timestamps.prepare(chat.children);
     this.lastWidth = width;
     this.positions.clear();
-    if (this.excerpt && !chat.children.includes(this.excerpt.entry.source)) this.excerpt = undefined;
-    if (this.searchAnchor && !chat.children.includes(this.searchAnchor.entry.source)) this.searchAnchor = undefined;
-    const result: Component[] = this.pane === "chat" ? this.source.children.slice(0, 2) : [];
+    if (this.excerpt && !this.index.contains(this.excerpt.entry.source)) this.excerpt = undefined;
+    if (this.searchAnchor && !this.index.contains(this.searchAnchor.entry.source)) this.searchAnchor = undefined;
+    const result: Component[] = [];
     const locateMatch = this.searchAnchor !== undefined || this.excerpt !== undefined;
-    let row = locateMatch ? result.reduce((count, child) => count + child.render(width).length, 0) : 0;
-    let spacing: Component[] = [];
+    let row = 0;
     let visibleBlock = false;
-    for (const component of chat.children) {
-      const name = nameOf(component);
-      if (name === "Spacer") {
-        spacing.push(component);
-        continue;
+    for (const entry of this.index.entries(this.pane)) {
+      const component = entry.source;
+      const routed = entry.component;
+      const start = result.length;
+      const wasVisible = visibleBlock;
+      // Orientation keeps native padding; message projections share compact presentation.
+      if (!entry.compact) result.push(...entry.spacing, routed);
+      else {
+        let stamped = this.stamped.get(routed);
+        if (!stamped) {
+          stamped = new CompactMessage(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
+          this.stamped.set(routed, stamped);
+        }
+        this.compactBlocks.set(component, stamped);
+        visibleBlock = stamped.prepare(width, visibleBlock) || visibleBlock;
+        result.push(stamped);
       }
-      const native = assistant(component);
-      let routed: Component | undefined;
-      if (native) {
-        const parts = assistantParts(native, this.pane);
-        if (parts.length) {
-          let view = this.views.get(native);
-          if (!view) {
-            view = Object.create(native) as Container;
-            const content = new Container();
-            Object.assign(view, { children: [content], contentContainer: content });
-            this.views.set(native, view);
-          }
-          const content = view.children[0] as Container;
-          if (content.children.length !== parts.length || parts.some((part, index) => part !== content.children[index])) {
-            content.children = parts;
-          }
-          routed = view;
-        }
-      } else {
-        if (messagePane(name, compactionNotice(component, name, width), this.startupNotices.contains(component, width)) === this.pane) routed = component;
+      if (this.searchAnchor?.entry.source === component && !this.excerpt) {
+        const last = result.length - 1;
+        result[last] = this.highlighted(result[last]);
       }
-      if (routed) {
-        const start = result.length;
-        const wasVisible = visibleBlock;
-        // Empty native assistant shells do not need a detached timestamp row.
-        if (native && native.contentContainer.children.length === 0) result.push(...spacing, routed);
-        else {
-          let stamped = this.stamped.get(routed);
-          if (!stamped) {
-            stamped = new CompactMessage(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
-            this.stamped.set(routed, stamped);
+      if (locateMatch) {
+        const lines = result.slice(start).flatMap(child => child.render(width));
+        let excerptRow: number | undefined;
+        if (this.excerpt?.entry.source === component) {
+          const fragment = new Text(this.theme().fg("accent", "Search match: ") + searchText(this.excerpt.text), 1, 0);
+          if (!lines.length && wasVisible) {
+            result.push(new Spacer(1));
+            lines.push("");
           }
-          this.compactBlocks.set(component, stamped);
-          visibleBlock = stamped.prepare(width, visibleBlock) || visibleBlock;
-          result.push(stamped);
+          excerptRow = row + lines.length;
+          const decorated = this.highlighted(fragment, true);
+          result.push(decorated);
+          lines.push(...decorated.render(width));
+          visibleBlock = true;
         }
-        if (this.searchAnchor?.entry.source === component && !this.excerpt) {
-          const last = result.length - 1;
-          result[last] = this.highlighted(result[last]);
-        }
-        if (locateMatch) {
-          const lines = result.slice(start).flatMap(child => child.render(width));
-          let excerptRow: number | undefined;
-          if (this.excerpt?.entry.source === component) {
-            const fragment = new Text(this.theme().fg("accent", "Search match: ") + searchText(this.excerpt.text), 1, 0);
-            if (!lines.length && wasVisible) {
-              result.push(new Spacer(1));
-              lines.push("");
-            }
-            excerptRow = row + lines.length;
-            const decorated = this.highlighted(fragment, true);
-            result.push(decorated);
-            lines.push(...decorated.render(width));
-            visibleBlock = true;
-          }
-          this.positions.set(component, { row, lines, clock: this.compactBlocks.get(component)?.searchClock(), excerptRow });
-          row += lines.length;
-        }
+        this.positions.set(component, { row, lines, clock: this.compactBlocks.get(component)?.searchClock(), excerptRow });
+        row += lines.length;
       }
-      spacing = [];
     }
     // Native follow-end guidance overlays the bottom row. Keep the selected last line above it.
     if (this.searchAnchor) result.push(new Spacer(1));
