@@ -69,7 +69,7 @@ test.each(["columns", "rows"] as const)("routes real native diagnostics and syst
     expect(capture.reusedStatus).toBe(true);
     expect(chat).not.toContain("FIRST RUNTIME STATUS");
     expect(chatSearch).not.toContain("FIRST RUNTIME STATUS");
-    for (const marker of ["THINKING EXECUTION MARKER", "semantic-result.txt", "SHELL EXECUTION MARKER"]) {
+    for (const marker of ["THINKING EXECUTION MARKER", "semantic-result.txt", "SHELL EXECUTION MARKER", "LINKED TOOL OUTPUT MARKER"]) {
       expect(activity, marker).toContain(marker);
       expect(chat, marker).not.toContain(marker);
       expect(activitySearch, marker).toContain(marker);

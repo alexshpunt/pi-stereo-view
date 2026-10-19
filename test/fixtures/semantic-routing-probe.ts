@@ -51,6 +51,13 @@ export default function semanticRoutingProbe(pi: ExtensionAPI): void {
       content: [{ type: "thinking", thinking: "THINKING EXECUTION MARKER" }, ...event.message.content],
     } };
   });
+  pi.registerEntryRenderer<{ parentToolCallId: string }>("semantic-execution-output", () =>
+    new Text("LINKED TOOL OUTPUT MARKER", 0, 0));
+  pi.on("message_end", event => {
+    if (event.message.role === "toolResult") {
+      pi.appendEntry("semantic-execution-output", { parentToolCallId: event.message.toolCallId });
+    }
+  });
   pi.on("agent_before_settle", async (_event, ctx) => {
     ctx.ui.notify("RUNTIME WARNING MARKER", "warning");
     ctx.ui.notify("RUNTIME ERROR MARKER", "error");

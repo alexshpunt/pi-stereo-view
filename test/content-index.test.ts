@@ -4,6 +4,7 @@ import { NativeContentIndex } from "../src/content.js";
 
 class ToolExecutionComponent extends Text {
   toolName = "write";
+  toolCallId = "native-tool-owner";
   args = { path: "file" };
   result = { content: [{ type: "text", text: "SAVED TOOL RESULT" }] };
   setExpanded(): void {}
@@ -11,6 +12,9 @@ class ToolExecutionComponent extends Text {
 class BashExecutionComponent extends Text {
   command = "printf shell";
   outputLines = ["SAVED SHELL RESULT"];
+}
+class CustomEntryComponent extends Text {
+  constructor(text: string, readonly entry: { data: { parentToolCallId: string } }) { super(text, 0, 0); }
 }
 class Markdown extends Text {}
 class MouseRegion extends Container {}
@@ -124,4 +128,24 @@ test("invalidating a projected assistant does not restore the other pane into it
   expect(visible(refreshed.component as Container)).not.toContain("REASONING");
   expect(visible(index.entries("activity")[0].component as Container)).not.toContain("DIALOGUE");
   expect(assistant.contentContainer.children).toEqual(original);
+});
+
+test("custom output follows a known execution owner, while an unowned custom entry stays in Conversation", () => {
+  const tool = new ToolExecutionComponent("TOOL", 0, 0);
+  const output = new CustomEntryComponent("LINKED OUTPUT", { data: { parentToolCallId: tool.toolCallId } });
+  const orphan = new CustomEntryComponent("UNKNOWN OUTPUT", { data: { parentToolCallId: "missing-owner" } });
+  const { history, index } = setup(tool, output, orphan);
+  expect(index.entries("activity").map(entry => entry.source)).toEqual([tool, output]);
+  expect(index.entries("chat").filter(entry => entry.compact).map(entry => entry.source)).toEqual([orphan]);
+  const linked = index.entries("activity").find(entry => entry.source === output)!;
+  expect(linked.search(80).text).toContain("LINKED OUTPUT");
+  expect(linked.search(80).label).toBe("write");
+  expect(linked.owner).toBe(tool);
+  orphan.entry.data.parentToolCallId = tool.toolCallId;
+  expect(index.entries("activity").map(entry => entry.source)).toEqual([tool, output, orphan]);
+  expect(index.contains(orphan, "chat")).toBe(false);
+  history.removeChild(tool);
+  expect(index.entries("activity")).toEqual([]);
+  expect(index.entries("chat").filter(entry => entry.compact).map(entry => entry.source)).toEqual([output, orphan]);
+  expect(index.contains(output, "activity")).toBe(false);
 });
