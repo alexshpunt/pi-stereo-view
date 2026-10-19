@@ -50,13 +50,15 @@ test("fits Conversation to its content and puts clocks beside text without losin
   const cwd = await mkdtemp(path.resolve("tmp/compact-"));
   const agent = await mkdtemp(path.resolve("tmp/compact-agent-"));
   directories.push(cwd, agent);
+  await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
     mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: 100,
   }));
   const result = await new PiIntegrationTest({
     testName: "compact-conversation", artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-    environment: { PI_CODING_AGENT_DIR: agent, TZ: "UTC" },
+    // Keep native collapsed tools so the harness adds no startup expansion notice.
+    environment: { PI_CODING_AGENT_DIR: agent, PI_INTEGRATION_TEST_LIVE: "1", TZ: "UTC" },
     rawMode: false, tuiSize: { cols: 120, rows: 35 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/native-probe.ts")],
     tools: [], conversation: [assistantMessage([text("FIRST PARAGRAPH\n\nSECOND PARAGRAPH")])],
@@ -79,13 +81,17 @@ test("fits Conversation to its content and puts clocks beside text without losin
   expect(lines[second]).not.toMatch(/\d{2}:\d{2}:\d{2}/);
   expect(lines.slice(user, second + 1).filter(line => /\d{2}:\d{2}:\d{2}/.test(line))).toHaveLength(2);
   for (const line of frame) expect(visibleWidth(line)).toBeLessThanOrEqual(120);
-  expect(lines.slice(-5).some(line => line.includes("─".repeat(120)))).toBe(true);
+  const footer = lines.findIndex(line => line.includes(path.basename(cwd)));
+  expect(footer).toBeGreaterThan(2);
+  expect(lines[footer - 1]).toBe("─".repeat(120));
+  expect(lines[footer - 3]).toBe("─".repeat(120));
 });
 
 test.each([false, true])("keeps the full input visible when expanded Conversation is %s long", async long => {
   const cwd = await mkdtemp(path.resolve("tmp/compact-resize-"));
   const agent = await mkdtemp(path.resolve("tmp/compact-resize-agent-"));
   directories.push(cwd, agent);
+  await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
     mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: 100,
   }));
@@ -93,7 +99,8 @@ test.each([false, true])("keeps the full input visible when expanded Conversatio
   await new PiIntegrationTest({
     testName: long ? "compact-long-resize" : "compact-short-resize", artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-    environment: { PI_CODING_AGENT_DIR: agent, TZ: "UTC" },
+    // Keep native collapsed tools so the harness adds no startup expansion notice.
+    environment: { PI_CODING_AGENT_DIR: agent, PI_INTEGRATION_TEST_LIVE: "1", TZ: "UTC" },
     rawMode: false, tuiSize: { cols: 120, rows: 35 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/compact-probe.ts")],
     tools: [], conversation: [assistantMessage([text(answer)])],

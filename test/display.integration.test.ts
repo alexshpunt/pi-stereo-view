@@ -34,13 +34,15 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   const cwd = await mkdtemp(path.resolve("tmp/display-"));
   const agent = await mkdtemp(path.resolve("tmp/display-agent-"));
   directories.push(cwd, agent);
+  await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
     mode: "split", side: "left", chatWidth: 40, layout: "rows", chatHeight: null,
   }));
   const run = (name: string, controls: boolean) => new PiIntegrationTest({
     testName: name, artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-    environment: { PI_CODING_AGENT_DIR: agent, DISPLAY_SETTINGS_CONTROLS: controls ? "1" : "0", COLORTERM: "truecolor", DISPLAY_FRAMES_FILE: path.resolve("tmp/test-runs", name, "display-frames.json") },
+    // Keep native collapsed tools so the harness adds no startup expansion notice.
+    environment: { PI_CODING_AGENT_DIR: agent, PI_INTEGRATION_TEST_LIVE: "1", DISPLAY_SETTINGS_CONTROLS: controls ? "1" : "0", COLORTERM: "truecolor", DISPLAY_FRAMES_FILE: path.resolve("tmp/test-runs", name, "display-frames.json") },
     rawMode: false, tuiSize: { cols: 120, rows: 45 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/display-controls.ts")],
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
