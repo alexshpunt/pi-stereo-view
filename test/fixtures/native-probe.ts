@@ -44,7 +44,10 @@ export default function nativeProbe(pi: ExtensionAPI): void {
     });
   });
   pi.registerToolRenderer((name, next) => name === "write" ? {
-    renderCall: () => new Text("NATIVE CALL MARKER", 0, 0),
+    // Selection checks need scrollable activity of their own, not startup resources.
+    renderCall: () => new Text((process.env.TRANSCRIPT_PROBE_SELECTION === "1" ?
+      Array.from({ length: 45 }, (_, index) => "Activity line " + index).join("\n") + "\n" : "") +
+      "NATIVE CALL MARKER", 0, 0),
     renderResult: (_result, options) => new Text("NATIVE RESULT MARKER " + (options.expanded ? "expanded" : "collapsed"), 0, 0),
   } : next());
   pi.on("session_start", async (_event, ctx) => {

@@ -10,6 +10,7 @@ test("reloads twice with one clean split, stable history clocks and a full-width
   const cwd = await mkdtemp(path.resolve("tmp/reload-"));
   const agent = await mkdtemp(path.resolve("tmp/reload-agent-"));
   try {
+    await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
     const manager = SessionManager.create(cwd, cwd);
     manager.appendMessage({ role: "user", content: "SAVED USER", timestamp: Date.parse("2001-10-09T01:02:03Z") });
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
@@ -18,7 +19,8 @@ test("reloads twice with one clean split, stable history clocks and a full-width
     const run = await new PiIntegrationTest({
       testName: "two-reloads", artifactsDir: path.resolve("tmp/test-runs"), cwd,
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-      environment: { PI_CODING_AGENT_DIR: agent, TZ: "UTC", PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
+      // Keep native collapsed tools so the harness adds no startup expansion notice.
+      environment: { PI_CODING_AGENT_DIR: agent, PI_INTEGRATION_TEST_LIVE: "1", TZ: "UTC", PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         RELOAD_FRAMES_FILE: path.resolve("tmp/test-runs/two-reloads/reload-frames.json") },
       // Three startups and two reloads share one trace deadline, not a latency assertion.
       timeoutMs: 60_000, rawMode: false, tuiSize: { cols: 120, rows: 45 },
@@ -38,7 +40,10 @@ test("reloads twice with one clean split, stable history clocks and a full-width
       expect(lines.join("\n")).toContain("SAVED USER");
       expect(lines.join("\n")).not.toContain("pi-stereo-view split is unavailable");
       expect(lines.join("\n")).not.toContain("pi-stereo-view split disabled");
-      expect(lines.slice(-5).some(line => line.includes("─".repeat(120)))).toBe(true);
+      const footer = lines.findIndex(line => line.includes(path.basename(cwd)));
+      expect(footer).toBeGreaterThan(2);
+      expect(lines[footer - 1]).toBe("─".repeat(120));
+      expect(lines[footer - 3]).toBe("─".repeat(120));
     }
     expect(state.frames.at(-1)!.map(stripTerminalSequences).join("\n")).toContain("FRESH ANSWER");
   } finally {

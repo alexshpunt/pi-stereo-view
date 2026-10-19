@@ -4,6 +4,7 @@ import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type TUI 
 import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
+import { StartupNotices } from "./startup-notices.js";
 import { beforeFirstFrame } from "./startup.js";
 
 /** Split native fullscreen history without changing message content or the input dock. */
@@ -81,12 +82,12 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     });
   };
 
-  const createLayout = (tui: TUI, ui: ExtensionContext["ui"], session: ExtensionContext["sessionManager"]): void => {
+  const createLayout = (tui: TUI, ui: ExtensionContext["ui"], session: ExtensionContext["sessionManager"], initializing: boolean): void => {
     host = tui;
     timestamps = new TranscriptTimestamps(session);
     layout = new TranscriptLayout(preferences, () => ui.theme,
       message => ui.notify(message, "warning"), () => persist(ui), timestamps,
-      () => { void openSettings(ui).catch(error => ui.notify(String(error), "error")); });
+      () => { void openSettings(ui).catch(error => ui.notify(String(error), "error")); }, new StartupNotices(initializing));
     try { ensureLayout(); }
     catch (error) {
       layout.dispose();
@@ -99,7 +100,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   let earlySession: string | undefined;
   const releaseStartup = beforeFirstFrame((tui, ui, session) => {
     earlySession = session.getSessionId();
-    createLayout(tui, ui, session);
+    createLayout(tui, ui, session, true);
     const mounted = layout;
     return () => { mounted?.dispose(); };
   });
@@ -122,7 +123,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     let finish: () => void = () => {};
     await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
       if (early) host = tui;
-      else createLayout(tui, ctx.ui, ctx.sessionManager);
+      else createLayout(tui, ctx.ui, ctx.sessionManager, event.reason === "startup");
       finish = done;
       ensureLayout();
       return new Text("", 0, 0);
@@ -139,6 +140,9 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       }
       return undefined;
     });
+  });
+  pi.on("resources_discover", () => {
+    layout?.finishStartup();
   });
   pi.on("message_start", event => {
     timestamps?.observe(event.message);

@@ -5,6 +5,7 @@ import {
   type Color, type Component, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
+import { StartupNotices } from "./startup-notices.js";
 import type { Preferences } from "./preferences.js";
 import type { TranscriptTimestamps } from "./timestamps.js";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.js";
@@ -133,6 +134,7 @@ export class TranscriptLayout {
     private readonly save: () => void,
     private readonly timestamps: TranscriptTimestamps,
     private readonly openSettings: () => void,
+    private readonly startupNotices = new StartupNotices(),
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
@@ -152,6 +154,11 @@ export class TranscriptLayout {
     });
   }
 
+  /** Stop adopting notices when Pi finishes the extension initialization handlers. */
+  finishStartup(): void {
+    this.documents?.chat.finishStartup();
+    this.host?.requestRender();
+  }
   /** Mount controls only on a compatible native fullscreen history tree. */
   attach(tui: TUI): void {
     if (!isViewportTUI(tui)) {
@@ -199,9 +206,9 @@ export class TranscriptLayout {
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("activity"), false);
+      () => this.activate("activity"), false, this.startupNotices);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("chat"), false);
+      () => this.activate("chat"), false, this.startupNotices);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
