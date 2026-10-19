@@ -5,6 +5,7 @@ import {
   type Color, type Component, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
+import { NativeContentIndex } from "./content.js";
 import type { Preferences } from "./preferences.js";
 import type { TranscriptTimestamps } from "./timestamps.js";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.js";
@@ -49,6 +50,25 @@ class TranscriptRows extends VStack {
         entry.maxSize = height;
         entry.minSize = chatMinimum;
       } else if (entry.minSize !== undefined) entry.minSize = activityMinimum;
+    }
+  }
+}
+
+class TranscriptRoot extends VStack {
+  private readonly owned: Component[];
+
+  constructor(children: StackChild[]) {
+    super(children);
+    this.owned = [...this.children];
+  }
+
+  unchanged(): boolean {
+    return this.children.length === this.owned.length && this.children.every((child, index) => child === this.owned[index]);
+  }
+
+  preserveForeignChildren(native: VStack): void {
+    for (const entry of this.entries) {
+      if (!this.owned.includes(entry.component)) native.addChild(entry.component, entry);
     }
   }
 }
@@ -144,7 +164,16 @@ export class TranscriptLayout {
       this.warn("pi-stereo-view split is unavailable: Pi's focus API is not supported.");
       return;
     }
-    if (host.layoutRoot === this.mounted && this.host) return;
+    if (host.layoutRoot === this.mounted && this.host) {
+      const mounted = this.mounted as TranscriptRoot;
+      if (mounted.unchanged()) return;
+      const original = this.original!;
+      mounted.preserveForeignChildren(original as VStack);
+      this.dispose();
+      this.rejectedRoots.add(original);
+      this.warn("pi-stereo-view split is unavailable: Pi's fullscreen layout is not supported.");
+      return;
+    }
     const root = host.layoutRoot;
     if (this.host) this.dispose();
     if (root && this.rejectedRoots.has(root)) return;
@@ -170,10 +199,11 @@ export class TranscriptLayout {
     // Auto scrollbars overlay one native content column; keep clocks outside it.
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
+    const index = new NativeContentIndex(document);
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("activity"), false);
+      () => this.activate("activity"), false, index);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("chat"), false);
+      () => this.activate("chat"), false, index);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
@@ -350,7 +380,7 @@ export class TranscriptLayout {
       }
     };
     this.rebuild();
-    const mounted = new VStack([
+    const mounted = new TranscriptRoot([
       { component: toolbar, basis: 1, shrink: 0, visible: () => {
         // Root visibility is evaluated once at the start of each native layout pass.
         this.timestamps.beginFrame();

@@ -21,7 +21,7 @@ class ThemedText extends Text {
   }
 }
 
-test("routes compaction notices but not other native status text to Conversation", () => {
+test("keeps all native system text in Conversation without classifying its wording", () => {
   const notice = new ThemedText("\x1b[2mSession compacted 2 times\x1b[22m", 1, 0);
   const status = new ThemedText("Tool output: expanded", 1, 0);
   const history = new Container();
@@ -39,9 +39,9 @@ test("routes compaction notices but not other native status text to Conversation
   try {
     expect(chat.render(60).map(stripTerminalSequences).join("\n")).toContain("Session compacted 2 times");
     expect(activity.render(60).map(stripTerminalSequences).join("\n")).not.toContain("Session compacted");
-    expect(activity.render(60).map(stripTerminalSequences).join("\n")).toContain("Tool output: expanded");
-    expect(chat.searchEntries().map(entry => entry.text)).toEqual(["Session compacted 2 times"]);
-    expect(activity.searchEntries().map(entry => entry.text.trim())).toEqual(["Tool output: expanded"]);
+    expect(chat.render(60).map(stripTerminalSequences).join("\n")).toContain("Tool output: expanded");
+    expect(chat.searchEntries().map(entry => entry.text.trim())).toEqual(["Session compacted 2 times", "Tool output: expanded"]);
+    expect(activity.searchEntries()).toEqual([]);
     const renders = notice.renders;
     chat.beginFrame();
     activity.beginFrame();
@@ -51,8 +51,8 @@ test("routes compaction notices but not other native status text to Conversation
     notice.update("Tool output: collapsed");
     chat.invalidate();
     activity.invalidate();
-    expect(chat.render(60).map(stripTerminalSequences).join("\n")).not.toContain("Tool output:");
-    expect(activity.render(60).map(stripTerminalSequences).join("\n")).toContain("Tool output: collapsed");
+    expect(chat.render(60).map(stripTerminalSequences).join("\n")).toContain("Tool output: collapsed");
+    expect(activity.render(60).map(stripTerminalSequences).join("\n")).not.toContain("Tool output:");
   } finally {
     chat.dispose();
     activity.dispose();

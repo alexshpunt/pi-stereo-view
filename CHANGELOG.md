@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 - 2026-10-19
+
+- Show the saved split layout from the first visible frame, without briefly displaying the normal layout first.
+- Keep dialogue and system information, including startup and runtime warnings, errors and status notices, in Conversation. Activity contains thinking, tools and shell execution.
+- Use the same content classification for display and search. Related tool output stays with its tool; unrecognized content stays in Conversation.
+
 ## 0.1.2
 
 - PgUp/PgDn and Pi's other keyboard scroll keys now move the active panel (marked with `●`) instead of always Activity. Pi's built-in history search follows the active panel too.
