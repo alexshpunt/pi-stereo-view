@@ -45,7 +45,7 @@ class AssistantMessageComponent extends Container {
   setHideThinkingBlock(hidden: boolean): void { this.revealed = !hidden; }
 }
 
-function setup(...children: (Container | Text | Spacer)[]): { history: Container; index: NativeContentIndex } {
+function setup(...children: Component[]): { history: Container; index: NativeContentIndex } {
   const source = new Container();
   source.addChild(new Container());
   source.addChild(new Container());
@@ -128,6 +128,55 @@ test("invalidating a projected assistant does not restore the other pane into it
   expect(visible(refreshed.component as Container)).not.toContain("REASONING");
   expect(visible(index.entries("activity")[0].component as Container)).not.toContain("DIALOGUE");
   expect(assistant.contentContainer.children).toEqual(original);
+});
+
+test("late output stays directly after its owner without changing native history order", () => {
+  const first = new ToolExecutionComponent("FIRST TOOL", 0, 0);
+  first.toolCallId = "first";
+  const second = new ToolExecutionComponent("SECOND TOOL", 0, 0);
+  second.toolCallId = "second";
+  const shell = new BashExecutionComponent("SHELL", 0, 0);
+  const firstOutput = new CustomEntryComponent("FIRST OUTPUT", { data: { parentToolCallId: first.toolCallId } });
+  const secondOutput = new CustomEntryComponent("SECOND OUTPUT", { data: { parentToolCallId: second.toolCallId } });
+  const update = new CustomEntryComponent("LATER FIRST OUTPUT", { data: { parentToolCallId: first.toolCallId } });
+  const { history, index } = setup(first, second, shell);
+  expect(index.entries("activity").map(entry => entry.source)).toEqual([first, second, shell]);
+  history.addChild(secondOutput);
+  history.addChild(firstOutput);
+  history.addChild(update);
+  const nativeOrder = [...history.children];
+  expect(index.entries("activity").map(entry => entry.source)).toEqual([
+    first, firstOutput, update, second, secondOutput, shell,
+  ]);
+  expect(index.entries("activity").map(entry => entry.search(80).text)).toEqual([
+    expect.stringContaining("SAVED TOOL RESULT"), expect.stringContaining("FIRST OUTPUT"),
+    expect.stringContaining("LATER FIRST OUTPUT"), expect.stringContaining("SAVED TOOL RESULT"),
+    expect.stringContaining("SECOND OUTPUT"), expect.stringContaining("SAVED SHELL RESULT"),
+  ]);
+  expect(history.children).toEqual(nativeOrder);
+  // A resumed history rebuild derives the same grouping from saved entry metadata.
+  expect(setup(...nativeOrder).index.entries("activity").map(entry => entry.source)).toEqual([
+    first, firstOutput, update, second, secondOutput, shell,
+  ]);
+  // A branch without the old owner must not retain its grouping or search membership.
+  history.removeChild(first);
+  expect(index.entries("activity").map(entry => entry.source)).toEqual([second, secondOutput, shell]);
+  expect(index.contains(firstOutput, "activity")).toBe(false);
+  expect(index.contains(firstOutput, "chat")).toBe(true);
+});
+
+class CustomMessageComponent extends Text {
+  constructor(text: string, readonly message: { details: { parentToolCallId: string } }) { super(text, 0, 0); }
+}
+
+test("late custom messages use the same execution grouping as custom entries", () => {
+  const first = new ToolExecutionComponent("FIRST TOOL", 0, 0);
+  const second = new ToolExecutionComponent("SECOND TOOL", 0, 0);
+  second.toolCallId = "second";
+  const output = new CustomMessageComponent("MESSAGE OUTPUT", { details: { parentToolCallId: first.toolCallId } });
+  const { history, index } = setup(first, second, output);
+  expect(index.entries("activity").map(entry => entry.source)).toEqual([first, output, second]);
+  expect(history.children).toEqual([first, second, output]);
 });
 
 test("custom output follows a known execution owner, while an unowned custom entry stays in Conversation", () => {
