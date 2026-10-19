@@ -120,7 +120,16 @@ export class NativeContentIndex {
       }
       spacing = [];
     }
-    this.content = entries;
+    // Project late execution output beside its owner, never reorder native history.
+    const linked = new Map<Component, ContentEntry[]>();
+    for (const entry of entries) {
+      if (entry.owner === entry.source) continue;
+      const group = linked.get(entry.owner) ?? [];
+      group.push(entry);
+      linked.set(entry.owner, group);
+    }
+    this.content = entries.flatMap(entry => entry.owner === entry.source
+      ? [entry, ...(linked.get(entry.source) ?? [])] : []);
     this.signature = signature;
   }
 
