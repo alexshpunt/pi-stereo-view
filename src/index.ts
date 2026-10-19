@@ -4,6 +4,7 @@ import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type TUI 
 import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
+import { StartupNotices } from "./startup-notices.js";
 
 /** Split native fullscreen history without changing message content or the input dock. */
 export default function transcript(pi: ExtensionAPI): void {
@@ -71,7 +72,7 @@ export default function transcript(pi: ExtensionAPI): void {
     });
   };
 
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (event, ctx) => {
     if (ctx.mode !== "tui") return;
     closeSearch();
     layout?.dispose();
@@ -89,7 +90,8 @@ export default function transcript(pi: ExtensionAPI): void {
       finish = done;
       layout = new TranscriptLayout(preferences, () => ctx.ui.theme,
         message => ctx.ui.notify(message, "warning"), () => persist(ctx), timestamps!,
-        () => { void openSettings(ctx).catch(error => ctx.ui.notify(String(error), "error")); });
+        () => { void openSettings(ctx).catch(error => ctx.ui.notify(String(error), "error")); },
+        new StartupNotices(event.reason === "startup"));
       ensureLayout();
       return new Text("", 0, 0);
     }, {
@@ -105,6 +107,9 @@ export default function transcript(pi: ExtensionAPI): void {
       }
       return undefined;
     });
+  });
+  pi.on("resources_discover", () => {
+    layout?.finishStartup();
   });
   pi.on("message_start", event => {
     timestamps?.observe(event.message);

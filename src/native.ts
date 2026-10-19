@@ -3,6 +3,7 @@ import { Container, Spacer, Text, stripTerminalSequences, type Component, type T
 import { searchText, type SearchEntry, type SearchHit } from "./search.js";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.js";
+import { StartupNotices } from "./startup-notices.js";
 
 export type Pane = "activity" | "chat";
 
@@ -57,9 +58,9 @@ function compactionNotice(component: Component, name: string, width: number): st
   noticeKinds.set(component, { text: native.text, compaction });
   return compaction;
 }
-const messagePane = (name: string, compaction?: string): Pane =>
+const messagePane = (name: string, compaction?: string, startup = false): Pane =>
   name === "UserMessageComponent" || name === "Image" || name === "CompactionSummaryMessageComponent" ||
-    compaction !== undefined ? "chat" : "activity";
+    compaction !== undefined || startup ? "chat" : "activity";
 
 function assistant(component: Component): NativeAssistant | undefined {
   if (nameOf(component) !== "AssistantMessageComponent") return undefined;
@@ -119,6 +120,7 @@ export class NativeDocument extends Container {
     private readonly showTimestamps: () => boolean,
     private readonly interact: () => void = () => {},
     private readonly invalidatesSource = true,
+    private readonly startupNotices = new StartupNotices(),
   ) {
     super();
   }
@@ -148,6 +150,10 @@ export class NativeDocument extends Container {
     this.checked = true;
   }
 
+  /** Freeze initialization notice routing after all session_start handlers complete. */
+  finishStartup(): void {
+    this.startupNotices.finish(this.source.children[2] as Container, this.lastWidth);
+  }
   /** Read full saved text from the current native branch, including collapsed blocks. */
   searchEntries(): SearchEntry[] {
     const entries: SearchEntry[] = [];
@@ -194,7 +200,7 @@ export class NativeDocument extends Container {
         add(component, "Compaction", native.message?.summary ?? "", () => native.setExpanded?.(true));
       } else if (notice !== undefined && this.pane === "chat") {
         add(component, "Compaction", notice);
-      } else if (this.pane === "activity" && messagePane(name, notice) === "activity" && name !== "Spacer") {
+      } else if (messagePane(name, notice, this.startupNotices.contains(component, this.lastWidth)) === this.pane && name !== "Spacer") {
         add(component, name.replace(/(?:Message)?Component$/, ""),
           contentText(native.message?.content) || native.message?.summary || searchText(component.render(this.lastWidth).join("\n")));
       }
@@ -276,7 +282,7 @@ export class NativeDocument extends Container {
     this.positions.clear();
     if (this.excerpt && !chat.children.includes(this.excerpt.entry.source)) this.excerpt = undefined;
     if (this.searchAnchor && !chat.children.includes(this.searchAnchor.entry.source)) this.searchAnchor = undefined;
-    const result: Component[] = this.pane !== "chat" ? this.source.children.slice(0, 2) : [];
+    const result: Component[] = this.pane === "chat" ? this.source.children.slice(0, 2) : [];
     const locateMatch = this.searchAnchor !== undefined || this.excerpt !== undefined;
     let row = locateMatch ? result.reduce((count, child) => count + child.render(width).length, 0) : 0;
     let spacing: Component[] = [];
@@ -306,7 +312,7 @@ export class NativeDocument extends Container {
           routed = view;
         }
       } else {
-        if (messagePane(name, compactionNotice(component, name, width)) === this.pane) routed = component;
+        if (messagePane(name, compactionNotice(component, name, width), this.startupNotices.contains(component, width)) === this.pane) routed = component;
       }
       if (routed) {
         const start = result.length;
