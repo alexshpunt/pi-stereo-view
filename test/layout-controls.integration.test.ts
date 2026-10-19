@@ -51,6 +51,7 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   const cwd = await mkdtemp(path.resolve("tmp/buttons-"));
   const agent = await mkdtemp(path.resolve("tmp/button-agent-"));
   directories.push(cwd, agent);
+  await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify({ mode: "split", side: "left", chatWidth: 36 }));
   const run = (name: string, controls: boolean) => new PiIntegrationTest({
     testName: name,
@@ -58,7 +59,8 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
     cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"),
     isolateUserResources: false,
-    environment: { PI_CODING_AGENT_DIR: agent, TRANSCRIPT_BUTTON_CONTROLS: controls ? "1" : "0" },
+    // Keep native collapsed tools so the harness adds no startup expansion notice.
+    environment: { PI_CODING_AGENT_DIR: agent, PI_INTEGRATION_TEST_LIVE: "1", TRANSCRIPT_BUTTON_CONTROLS: controls ? "1" : "0" },
     rawMode: false,
     tuiSize: { cols: 120, rows: 35 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/native-probe.ts"), path.resolve("test/fixtures/panel-controls.ts")],
@@ -137,13 +139,15 @@ test("keeps the mouse return control after restarting in saved combined mode", a
   const cwd = await mkdtemp(path.resolve("tmp/combined-buttons-"));
   const agent = await mkdtemp(path.resolve("tmp/combined-agent-"));
   directories.push(cwd, agent);
+  await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
   const saved = { mode: "split", side: "left", chatWidth: 36, layout: "rows", chatHeight: 9, zoom: null };
   await writeFile(path.join(agent, "transcript.json"), JSON.stringify(saved));
   const run = (name: string) => new PiIntegrationTest({
     testName: name, artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"),
     isolateUserResources: false,
-    environment: { PI_CODING_AGENT_DIR: agent, TRANSCRIPT_BUTTON_TOGGLE: "1" },
+    // Keep native collapsed tools so the harness adds no startup expansion notice.
+    environment: { PI_CODING_AGENT_DIR: agent, PI_INTEGRATION_TEST_LIVE: "1", TRANSCRIPT_BUTTON_TOGGLE: "1" },
     rawMode: false, tuiSize: { cols: 120, rows: 35 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/panel-controls.ts")],
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
