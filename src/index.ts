@@ -5,9 +5,10 @@ import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
 import { StartupNotices } from "./startup-notices.js";
+import { beforeFirstFrame } from "./startup.js";
 
 /** Split native fullscreen history without changing message content or the input dock. */
-export default function transcript(pi: ExtensionAPI): void {
+export default async function transcript(pi: ExtensionAPI): Promise<void> {
   let layout: TranscriptLayout | undefined;
   let host: TUI | undefined;
   let timestamps: TranscriptTimestamps | undefined;
@@ -15,16 +16,25 @@ export default function transcript(pi: ExtensionAPI): void {
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
   const file = path.join(getAgentDir(), "transcript.json");
+  let preferenceWarning: string | undefined;
+  const readPreferences = async (): Promise<void> => {
+    try { preferences = await loadPreferences(file); }
+    catch (error) {
+      preferences = { ...defaults };
+      preferenceWarning = "Could not read pi-stereo-view preferences; using defaults: " + String(error);
+    }
+  };
+  await readPreferences();
 
   let settingsOpen = false;
   const closeSearch = (): void => { layout?.closeSearch(false); };
 
-  const openSettings = async (ctx: ExtensionContext): Promise<void> => {
+  const openSettings = async (ui: ExtensionContext["ui"]): Promise<void> => {
     if (settingsOpen) return;
     settingsOpen = true;
     closeSearch();
     try {
-      await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
+      await ui.custom<void>((tui, _theme, _keys, done) => {
         const list = new SettingsList([{
           id: "timestamps", label: "Show timestamps",
           description: "Hide clock rows without changing messages or recorded tool starts.",
@@ -40,11 +50,11 @@ export default function transcript(pi: ExtensionAPI): void {
         }, () => done());
         const content = new Container();
         content.addChild({
-          render: () => [ctx.ui.theme.fg("accent", ctx.ui.theme.bold("pi-stereo-view settings")), ""],
+          render: () => [ui.theme.fg("accent", ui.theme.bold("pi-stereo-view settings")), ""],
           invalidate() {},
         });
         content.addChild(list);
-        const box = new Box(1, 1, text => ctx.ui.theme.bg("customMessageBg", text));
+        const box = new Box(1, 1, text => ui.theme.bg("customMessageBg", text));
         box.addChild(content);
         return {
           render: (width: number) => box.render(width),
@@ -65,33 +75,56 @@ export default function transcript(pi: ExtensionAPI): void {
   const ensureLayout = (): void => {
     if (host) layout?.attach(host);
   };
-  const persist = (ctx: ExtensionContext): void => {
+  const persist = (ui: ExtensionContext["ui"]): void => {
     const snapshot = { ...preferences };
     writes = writes.then(() => savePreferences(file, snapshot)).catch(error => {
-      ctx.ui.notify("Could not save pi-stereo-view preferences: " + String(error), "error");
+      ui.notify("Could not save pi-stereo-view preferences: " + String(error), "error");
     });
   };
 
+  const createLayout = (tui: TUI, ui: ExtensionContext["ui"], session: ExtensionContext["sessionManager"], initializing: boolean): void => {
+    host = tui;
+    timestamps = new TranscriptTimestamps(session);
+    layout = new TranscriptLayout(preferences, () => ui.theme,
+      message => ui.notify(message, "warning"), () => persist(ui), timestamps,
+      () => { void openSettings(ui).catch(error => ui.notify(String(error), "error")); }, new StartupNotices(initializing));
+    try { ensureLayout(); }
+    catch (error) {
+      layout.dispose();
+      layout = undefined;
+      host = undefined;
+      timestamps = undefined;
+      throw error;
+    }
+  };
+  let earlySession: string | undefined;
+  const releaseStartup = beforeFirstFrame((tui, ui, session) => {
+    earlySession = session.getSessionId();
+    createLayout(tui, ui, session, true);
+    const mounted = layout;
+    return () => { mounted?.dispose(); };
+  });
+
   pi.on("session_start", async (event, ctx) => {
+    releaseStartup();
     if (ctx.mode !== "tui") return;
-    closeSearch();
-    layout?.dispose();
-    unsubscribeInput?.();
-    timestamps = new TranscriptTimestamps(ctx.sessionManager);
-    try {
-      preferences = await loadPreferences(file);
-    } catch (error) {
-      ctx.ui.notify("Could not read pi-stereo-view preferences; using defaults: " + String(error), "warning");
-      preferences = { ...defaults };
+    const early = event.reason === "startup" && earlySession === ctx.sessionManager.getSessionId() && layout !== undefined;
+    earlySession = undefined;
+    if (!early) {
+      closeSearch();
+      layout?.dispose();
+      unsubscribeInput?.();
+      await readPreferences();
+    }
+    if (preferenceWarning) {
+      ctx.ui.notify(preferenceWarning, "warning");
+      preferenceWarning = undefined;
     }
     let finish: () => void = () => {};
     await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
-      host = tui;
+      if (early) host = tui;
+      else createLayout(tui, ctx.ui, ctx.sessionManager, event.reason === "startup");
       finish = done;
-      layout = new TranscriptLayout(preferences, () => ctx.ui.theme,
-        message => ctx.ui.notify(message, "warning"), () => persist(ctx), timestamps!,
-        () => { void openSettings(ctx).catch(error => ctx.ui.notify(String(error), "error")); },
-        new StartupNotices(event.reason === "startup"));
       ensureLayout();
       return new Text("", 0, 0);
     }, {
@@ -134,6 +167,7 @@ export default function transcript(pi: ExtensionAPI): void {
   pi.on("session_tree", () => { closeSearch(); timestamps?.reset(); });
   pi.on("session_compact", () => { closeSearch(); timestamps?.reset(); });
   pi.on("session_shutdown", async () => {
+    releaseStartup();
     closeSearch();
     unsubscribeInput?.();
     unsubscribeInput = undefined;
@@ -157,7 +191,7 @@ export default function transcript(pi: ExtensionAPI): void {
       }
       const [action = "toggle", target, amount] = args.trim().split(/\s+/);
       if (action === "toggle" || action === "") toggle();
-      else if (action === "settings") await openSettings(ctx);
+      else if (action === "settings") await openSettings(ctx.ui);
       else if (action === "help") {
         ctx.ui.notify("pi-stereo-view icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ≡ settings. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
