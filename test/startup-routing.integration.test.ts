@@ -7,7 +7,7 @@ import { expect, test } from "vitest";
 const clean = (lines: string[]): string => lines.map(stripTerminalSequences).join("\n");
 
 for (const layout of ["columns", "rows"] as const) for (const probeFirst of [true, false]) {
-  test(`keeps startup information in Conversation in ${layout}, notifier ${probeFirst ? "before" : "after"} stereo-view`, async () => {
+  test(`keeps system information in Conversation in ${layout}, notifier ${probeFirst ? "before" : "after"} stereo-view`, async () => {
     await mkdir(path.resolve("tmp"), { recursive: true });
     const cwd = await mkdtemp(path.resolve("tmp/startup-routing-"));
     const agent = await mkdtemp(path.resolve("tmp/startup-agent-"));
@@ -36,8 +36,8 @@ for (const layout of ["columns", "rows"] as const) for (const probeFirst of [tru
         expect(chat, chat).toContain(marker);
         expect(activity, activity).not.toContain(marker);
       }
-      expect(activity).toContain("OPERATIONAL NOTICE");
-      expect(chat).not.toContain("OPERATIONAL NOTICE");
+      expect(chat).toContain("OPERATIONAL NOTICE");
+      expect(activity).not.toContain("OPERATIONAL NOTICE");
       expect(chat).toContain("USER MARKER");
       expect(chat).toContain("ANSWER MARKER");
       expect(clean(capture.screen)).toContain("Conversation");
@@ -48,7 +48,7 @@ for (const layout of ["columns", "rows"] as const) for (const probeFirst of [tru
   }, 45_000);
 }
 
-test("reload keeps orientation in Conversation without adopting operational notifications", async () => {
+test("reload keeps orientation and runtime system notifications in Conversation", async () => {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/startup-reload-"));
   const agent = await mkdtemp(path.resolve("tmp/startup-reload-agent-"));
@@ -73,8 +73,8 @@ test("reload keeps orientation in Conversation without adopting operational noti
     expect(state.reloads).toBe(2);
     expect(clean(capture.panes.chat)).toContain("Pi can explain its own features");
     expect(clean(capture.panes.chat)).toContain("[Extensions]");
-    expect(clean(capture.panes.chat)).not.toContain("OPERATIONAL NOTICE");
-    expect(clean(capture.panes.activity)).toContain("OPERATIONAL NOTICE");
+    expect(clean(capture.panes.chat)).toContain("OPERATIONAL NOTICE");
+    expect(clean(capture.panes.activity)).not.toContain("OPERATIONAL NOTICE");
     expect(clean(capture.panes.activity)).not.toContain("Pi can explain its own features");
   } finally {
     await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
