@@ -37,7 +37,12 @@ jobs:
           test "v$PACKAGE_VERSION" = "$RELEASE_TAG"
       - run: npm ci
       - name: Install search runtime
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep fd-find
+          mkdir -p "$RUNNER_TEMP/pi-stereo-view-bin"
+          ln -s "$(command -v fdfind)" "$RUNNER_TEMP/pi-stereo-view-bin/fd"
+          echo "$RUNNER_TEMP/pi-stereo-view-bin" >> "$GITHUB_PATH"
       - run: npm run check
       - run: npm pack --dry-run
       - run: npm publish --access public --provenance
