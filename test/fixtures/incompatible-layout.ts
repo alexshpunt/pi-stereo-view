@@ -8,7 +8,7 @@ export default function incompatibleLayout(pi: ExtensionAPI): void {
     let finish: () => void = () => {};
     await ctx.ui.custom<void>((tui, _theme, _keys, done) => {
       const root = (tui as TUI & { layoutRoot: VStack }).layoutRoot;
-      root.addChild(new Text("", 0, 0), { basis: 0, grow: 0, minSize: 0 });
+      root.addChild(new Text(process.env.TRANSCRIPT_FOREIGN_LAYOUT_TEXT ?? "", 0, 0), { basis: "auto", grow: 0, minSize: 0 });
       finish = done;
       return new Text("", 0, 0);
     }, {
