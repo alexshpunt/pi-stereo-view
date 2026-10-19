@@ -46,6 +46,7 @@ class SearchHighlight implements Component {
  */
 export class NativeDocument extends Container {
   private readonly stamped = new WeakMap<Component, CompactMessage>();
+  private readonly clockOwners = new WeakMap<Component, Component>();
   private readonly compactBlocks = new Map<Component, CompactMessage>();
   private readonly positions = new Map<Component, { row: number; lines: string[]; clock?: SearchClock; excerptRow?: number }>();
   private excerpt?: SearchHit;
@@ -107,7 +108,7 @@ export class NativeDocument extends Container {
 
   /** Reject hits whose native owner was removed by a branch change or history rebuild. */
   containsSearchHit(hit: SearchHit): boolean {
-    return this.index.contains(hit.entry.source);
+    return this.index.contains(hit.entry.source, this.pane);
   }
   /** Reveal one selected block without replacing its native renderer. */
   reveal(hit: SearchHit, query = ""): boolean {
@@ -177,8 +178,8 @@ export class NativeDocument extends Container {
     this.timestamps.prepare(chat.children);
     this.lastWidth = width;
     this.positions.clear();
-    if (this.excerpt && !this.index.contains(this.excerpt.entry.source)) this.excerpt = undefined;
-    if (this.searchAnchor && !this.index.contains(this.searchAnchor.entry.source)) this.searchAnchor = undefined;
+    if (this.excerpt && !this.index.contains(this.excerpt.entry.source, this.pane)) this.excerpt = undefined;
+    if (this.searchAnchor && !this.index.contains(this.searchAnchor.entry.source, this.pane)) this.searchAnchor = undefined;
     const result: Component[] = [];
     const locateMatch = this.searchAnchor !== undefined || this.excerpt !== undefined;
     let row = 0;
@@ -186,6 +187,7 @@ export class NativeDocument extends Container {
     for (const entry of this.index.entries(this.pane)) {
       const component = entry.source;
       const routed = entry.component;
+      this.clockOwners.set(component, entry.owner);
       const start = result.length;
       const wasVisible = visibleBlock;
       // Orientation keeps native padding; message projections share compact presentation.
@@ -193,7 +195,7 @@ export class NativeDocument extends Container {
       else {
         let stamped = this.stamped.get(routed);
         if (!stamped) {
-          stamped = new CompactMessage(routed, () => this.timestamps.label(component), this.theme, this.timestampGutter, this.showTimestamps);
+          stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component), this.theme, this.timestampGutter, this.showTimestamps);
           this.stamped.set(routed, stamped);
         }
         this.compactBlocks.set(component, stamped);

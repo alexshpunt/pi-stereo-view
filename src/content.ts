@@ -10,7 +10,9 @@ const panes: Record<ContentKind, Pane> = {
 
 interface NativeContent extends Component {
   text?: string;
-  message?: { content?: unknown; summary?: string };
+  message?: { content?: unknown; summary?: string; details?: { parentToolCallId?: unknown } };
+  entry?: { data?: { parentToolCallId?: unknown } };
+  toolCallId?: string;
   toolName?: string;
   args?: unknown;
   result?: { content?: unknown };
@@ -28,6 +30,7 @@ interface NativeAssistant extends Container {
 /** One native owner and its pane projection; spacing and search retain that same owner. */
 export interface ContentEntry {
   source: Component;
+  owner: Component;
   component: Component;
   kind: ContentKind;
   spacing: Component[];
@@ -74,9 +77,9 @@ export class NativeContentIndex {
   }
 
   /** A rebuilt history cannot retain search hits belonging to removed native owners. */
-  contains(source: Component): boolean {
+  contains(source: Component, pane?: Pane): boolean {
     this.refresh();
-    return this.content.some(entry => entry.source === source);
+    return this.content.some(entry => entry.source === source && (pane === undefined || panes[entry.kind] === pane));
   }
 
   private refresh(): void {
@@ -84,10 +87,20 @@ export class NativeContentIndex {
     if (!Array.isArray(history?.children)) throw new Error("Pi's history document is not supported");
     const signature: unknown[] = [...this.source.children, ...history.children];
     for (const component of history.children) {
+      const metadata = component as NativeContent;
+      signature.push(metadata.toolCallId, metadata.entry?.data?.parentToolCallId, metadata.message?.details?.parentToolCallId);
       const native = assistant(component);
       if (native) signature.push(native.lastMessage, ...native.contentContainer.children);
     }
     if (signature.length === this.signature.length && signature.every((value, index) => value === this.signature[index])) return;
+    const owners = new Map<string, NativeContent>();
+    for (const component of history.children) {
+      const adapter = nativeKinds[nameOf(component)];
+      const native = component as NativeContent;
+      if (adapter?.kind === "tool" && adapter.accepts(native) && typeof native.toolCallId === "string") {
+        owners.set(native.toolCallId, native);
+      }
+    }
     const entries = this.source.children.slice(0, 2).map(component => this.entry(component, "system", [], false));
     let spacing: Component[] = [];
     for (const component of history.children) {
@@ -98,8 +111,12 @@ export class NativeContentIndex {
       const native = assistant(component);
       if (native) entries.push(...this.assistantEntries(native, spacing));
       else {
-        const native = nativeKinds[nameOf(component)];
-        entries.push(this.entry(component, native?.accepts(component as NativeContent) ? native.kind : "system", spacing, true));
+        const adapter = nativeKinds[nameOf(component)];
+        const native = component as NativeContent;
+        const kind = adapter?.accepts(native) ? adapter.kind : "system";
+        const parentId = native.entry?.data?.parentToolCallId ?? native.message?.details?.parentToolCallId;
+        const owner = kind === "system" && typeof parentId === "string" ? owners.get(parentId) : undefined;
+        entries.push(this.entry(component, kind, spacing, true, owner));
       }
       spacing = [];
     }
@@ -107,8 +124,8 @@ export class NativeContentIndex {
     this.signature = signature;
   }
 
-  private entry(source: Component, kind: ContentKind, spacing: Component[], compact: boolean): ContentEntry {
-    return { source, component: source, kind, spacing, compact, search: width => {
+  private entry(source: Component, kind: ContentKind, spacing: Component[], compact: boolean, owner?: NativeContent): ContentEntry {
+    return { source, owner: owner ?? source, component: source, kind: owner ? "tool" : kind, spacing, compact, search: width => {
       const native = source as NativeContent;
       if (kind === "tool") {
         if (typeof native.toolName !== "string") throw new Error("Pi's tool metadata is not supported");
@@ -130,7 +147,7 @@ export class NativeContentIndex {
         return { label: "User", text: native.text };
       }
       return {
-        label: native.message?.summary !== undefined ? "Summary" : "System",
+        label: owner?.toolName ?? (native.message?.summary !== undefined ? "Summary" : "System"),
         text: contentText(native.message?.content) || native.message?.summary || searchText(source.render(width).join("\n")),
         reveal: typeof native.setExpanded === "function" ? () => native.setExpanded!(true) : undefined,
       };
@@ -185,7 +202,7 @@ export class NativeContentIndex {
       const content = view.children[0] as Container;
       content.children = parts;
       result.push({
-        source, component: view, kind: pane === "activity" ? "thinking" : runs.includes("dialogue") ? "dialogue" : "system", spacing, compact: true,
+        source, owner: source, component: view, kind: pane === "activity" ? "thinking" : runs.includes("dialogue") ? "dialogue" : "system", spacing, compact: true,
         search: width => {
           const kind = pane === "activity" ? "thinking" : "text";
           const saved = (source.lastMessage?.content ?? []).filter(block => block.type === kind)
