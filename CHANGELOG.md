@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4 - 2026-10-20
+
+### Fixed
+
+- Keep the split layout active while Pi-Bolt streams thinking or text. Later replies no longer require a restart to restore the panels; saved panel sizes and layout settings stay intact.
+- Hide empty self-rendered tool blocks without leaving blank spacing or timestamps, even when the tool returns images to the model. Normal tool output and visibly rendered images remain visible.
+
+### Changed
+
+- Show late output linked to a tool call directly below that call in Activity, even when other work has happened since. Activity search follows the same grouping; combined history keeps its original order.
+
 ## 0.1.3 - 2026-10-19
 
 - Show the saved split layout from the first visible frame, without briefly displaying the normal layout first.
