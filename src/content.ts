@@ -24,6 +24,8 @@ interface NativeAssistant extends Container {
   contentContainer: Container;
   hasToolCalls: boolean;
   lastMessage?: { content: { type: string; text?: string; thinking?: string }[] };
+  contentIsStale?: boolean;
+  buildContent?(message: NonNullable<NativeAssistant["lastMessage"]>): void;
   setHideThinkingBlock(hidden: boolean): void;
 }
 
@@ -49,6 +51,14 @@ function assistant(component: Component): NativeAssistant | undefined {
   if (!Array.isArray(native.contentContainer?.children) || typeof native.hasToolCalls !== "boolean" ||
     (native.lastMessage !== undefined && !Array.isArray(native.lastMessage.content))) {
     throw new Error("Pi's assistant content metadata is not supported");
+  }
+  // Pi-Bolt builds streamed children lazily. Synchronize the real owner before
+  // indexing or cloning it, so a pane cannot rebuild both content kinds itself.
+  if (native.contentIsStale === true) {
+    if (!native.lastMessage || typeof native.buildContent !== "function") {
+      throw new Error("Pi's deferred assistant content is not supported");
+    }
+    native.buildContent(native.lastMessage);
   }
   return native;
 }
@@ -120,7 +130,16 @@ export class NativeContentIndex {
       }
       spacing = [];
     }
-    this.content = entries;
+    // Project late execution output beside its owner, never reorder native history.
+    const linked = new Map<Component, ContentEntry[]>();
+    for (const entry of entries) {
+      if (entry.owner === entry.source) continue;
+      const group = linked.get(entry.owner) ?? [];
+      group.push(entry);
+      linked.set(entry.owner, group);
+    }
+    this.content = entries.flatMap(entry => entry.owner === entry.source
+      ? [entry, ...(linked.get(entry.source) ?? [])] : []);
     this.signature = signature;
   }
 

@@ -25,6 +25,8 @@ The chat becomes two zones: your conversation with the agent, and the agent's wo
 
 Unrecognized content stays in Conversation unless its metadata links it to a known tool call.
 
+Late output linked to a tool call appears directly below that call in Activity, even if other work has happened since. Combined history keeps its original order.
+
 Messages and tools keep their familiar appearance. The input stays full width below both panels.
 
 ## See it in action

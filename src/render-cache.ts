@@ -1,4 +1,23 @@
-import type { Component } from "@earendil-works/pi-tui";
+import { stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
+
+const imagePlacement = (line: string): boolean => line.includes("\x1b_G") || line.includes("\x1b]1337;File=");
+
+function nativeLines(component: Component, width: number): string[] {
+  const lines = component.render(width);
+  const tool = component as Component & {
+    toolDefinition?: { renderShell?: string; renderCall?: unknown; renderResult?: unknown };
+    selfRenderHeight?: number;
+  };
+  const definition = tool.toolDefinition;
+  const height = tool.selfRenderHeight;
+  if (component.constructor.name !== "ToolExecutionComponent" || definition?.renderShell !== "self" ||
+    typeof definition.renderCall !== "function" || typeof definition.renderResult !== "function" ||
+    typeof height !== "number" || !Number.isInteger(height) || height < 0) return lines;
+  // Native self shells prepend one row, then append result images outside the custom UI.
+  // An intentionally empty custom UI must not be made visible by those automatic images.
+  const content = height ? lines.slice(1, height + 1) : [];
+  return content.some(line => imagePlacement(line) || stripTerminalSequences(line).trim().length > 0) ? lines : [];
+}
 
 interface Subscription {
   original: Component["invalidate"];
@@ -180,9 +199,9 @@ export class NativeRenderCache {
     const initial = components(this.component);
     const observed = this.watch(initial);
     const before = this.revision;
-    const lines = this.component.render(width);
+    const lines = nativeLines(this.component, width);
     this.outputVersion++;
-    this.imagePlacement = lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="));
+    this.imagePlacement = lines.some(imagePlacement);
     const links: NodeLinks[] = [];
     const after = components(this.component, links);
     const stableGraph = initial.length === after.length &&
