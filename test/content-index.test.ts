@@ -198,3 +198,59 @@ test("custom output follows a known execution owner, while an unowned custom ent
   expect(index.entries("chat").filter(entry => entry.compact).map(entry => entry.source)).toEqual([output, orphan]);
   expect(index.contains(output, "activity")).toBe(false);
 });
+
+test("projects deferred native thinking and text after each streaming update without mixing panes", () => {
+  // Pi-Bolt defers rebuilding native children until its assistant is rendered.
+  class AssistantMessageComponent extends Container {
+    contentContainer = new Container();
+    hasToolCalls = false;
+    contentIsStale = true;
+    lastMessage: { content: { type: string; text?: string; thinking?: string }[] } = { content: [] };
+    constructor() { super(); this.addChild(this.contentContainer); }
+    buildContent(message: typeof this.lastMessage): void {
+      this.contentIsStale = false;
+      this.contentContainer.clear();
+      for (const block of message.content) {
+        if (block.type === "text" && block.text?.trim()) this.contentContainer.addChild(new Markdown(block.text, 0, 0));
+        if (block.type === "thinking" && block.thinking?.trim()) {
+          const region = new MouseRegion();
+          region.addChild(new Text(block.thinking, 0, 0));
+          this.contentContainer.addChild(region);
+        }
+      }
+    }
+    override render(width: number): string[] {
+      if (this.contentIsStale) this.buildContent(this.lastMessage);
+      return super.render(width);
+    }
+    setHideThinkingBlock(): void {}
+  }
+  const assistant = new AssistantMessageComponent();
+  const { index } = setup(assistant);
+  expect(index.entries("activity")).toEqual([]);
+  for (let turn = 1; turn <= 2; turn++) {
+    assistant.lastMessage = { content: [{ type: "thinking", thinking: `THINKING ${turn}` }] };
+    assistant.contentIsStale = true;
+    const thinking = index.entries("activity")[0];
+    expect(visible(thinking.component as Container)).toContain(`THINKING ${turn}`);
+    expect(index.entries("chat").some(entry => entry.source === assistant)).toBe(false);
+    // The provider can mutate a partial message in place between frames.
+    assistant.lastMessage.content.push({ type: "text", text: `ANSWER ${turn}` });
+    assistant.contentIsStale = true;
+    const chat = index.entries("chat").find(entry => entry.source === assistant)!;
+    const activity = index.entries("activity")[0];
+    expect(visible(chat.component as Container)).toContain(`ANSWER ${turn}`);
+    expect(visible(chat.component as Container)).not.toContain("THINKING");
+    expect(visible(activity.component as Container)).toContain(`THINKING ${turn}`);
+    expect(visible(activity.component as Container)).not.toContain("ANSWER");
+    expect(visible(assistant)).toContain(`THINKING ${turn}`);
+    expect(visible(assistant)).toContain(`ANSWER ${turn}`);
+    expect(assistant.contentContainer.children).toHaveLength(2);
+  }
+});
+
+test("rejects deferred assistant content without a native builder instead of silently misrouting it", () => {
+  const assistant = new AssistantMessageComponent();
+  Object.assign(assistant, { contentIsStale: true });
+  expect(() => setup(assistant).index.entries("chat")).toThrow("deferred assistant content is not supported");
+});
