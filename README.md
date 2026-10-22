@@ -105,6 +105,16 @@ A match is revealed in its own panel without moving the other one. If matching t
 
 Press **Escape** or `[×]` to close search and restore your previous scroll position. Your message draft stays unchanged. Close other dialogs before searching. Search is available in split fullscreen history; combined history and regular mode keep Pi's usual keyboard behaviour.
 
+## Copy a block
+
+Click `[⧉]` at the right edge of a message, thinking, tool or other history block to copy its text. Copy buttons work in split and zoomed panels, even with timestamps hidden.
+
+Messages and thinking keep their original text/Markdown, without terminal colours, clocks or copy buttons. Copying a tool includes its name, arguments, saved result and linked late output. A late-output block also has its own button to copy just that block. Collapsed and off-screen text is included.
+
+During streaming, each click copies the content available at that moment. Copy uses only text already available in Pi; it does not fetch omitted output or copy binary attachments. Custom blocks without source text fall back to plain rendered text.
+
+For keyboard access, run `/stereo-view copy` and choose a numbered block from the active panel. It copies the same text as that block's button.
+
 ## Timestamps
 
 Conversation and Activity can show a dim local `HH:mm:ss` clock beside messages and tool calls. New tool calls show their start time.
@@ -127,6 +137,7 @@ The same controls are available without the mouse:
 | Scroll a panel | `/stereo-view scroll chat -10` / `/stereo-view scroll activity -10` |
 | Zoom / restore Conversation | `/stereo-view zoom chat` |
 | Zoom / restore Activity | `/stereo-view zoom activity` |
+| Copy a block from the active panel | `/stereo-view copy` |
 | Timestamp settings | `/stereo-view settings` |
 | Button legend | `/stereo-view help` |
 
