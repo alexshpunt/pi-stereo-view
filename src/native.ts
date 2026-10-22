@@ -59,6 +59,7 @@ export class NativeDocument extends Container {
   private frameWidth?: number;
   private frameLines?: string[];
   private checked = false;
+  private disposed = false;
 
   constructor(
     private readonly source: Container,
@@ -70,6 +71,7 @@ export class NativeDocument extends Container {
     private readonly interact: () => void = () => {},
     private readonly invalidatesSource = true,
     private readonly index = new NativeContentIndex(source),
+    private readonly copy?: (text: string | undefined) => void,
   ) {
     super();
   }
@@ -106,6 +108,19 @@ export class NativeDocument extends Container {
     });
   }
 
+  /** Keyboard choices are built only when requested; callbacks recheck current ownership. */
+  copyBlocks(): { label: string; copy: () => void }[] {
+    return this.index.entries(this.pane).filter(entry => entry.compact).map((entry, index) => {
+      const saved = entry.search(this.lastWidth);
+      const preview = searchText(saved.text).replace(/\s+/g, " ").slice(0, 80);
+      return { label: `${index + 1}. ${saved.label}: ${preview}`, copy: () => this.copyBlock(entry.source) };
+    });
+  }
+
+  private copyBlock(source: Component): void {
+    const entry = this.disposed ? undefined : this.index.entries(this.pane).find(entry => entry.source === source);
+    this.copy?.(entry ? this.index.copy(entry, this.lastWidth) : undefined);
+  }
   /** Reject hits whose native owner was removed by a branch change or history rebuild. */
   containsSearchHit(hit: SearchHit): boolean {
     return this.index.contains(hit.entry.source, this.pane);
@@ -163,6 +178,7 @@ export class NativeDocument extends Container {
 
   /** Stop native observers when the layout is detached or falls back. */
   dispose(): void {
+    this.disposed = true;
     for (const block of this.compactBlocks.values()) block.dispose();
     this.compactBlocks.clear();
     this.frameWidth = undefined;
@@ -195,7 +211,8 @@ export class NativeDocument extends Container {
       else {
         let stamped = this.stamped.get(routed);
         if (!stamped) {
-          stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component), this.theme, this.timestampGutter, this.showTimestamps);
+          stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
+            this.theme, this.timestampGutter, this.showTimestamps, this.copy ? () => this.copyBlock(component) : undefined);
           this.stamped.set(routed, stamped);
         }
         this.compactBlocks.set(component, stamped);

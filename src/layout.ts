@@ -134,6 +134,7 @@ export class TranscriptLayout {
     private readonly save: () => void,
     private readonly timestamps: TranscriptTimestamps,
     private readonly openSettings: () => void,
+    private readonly copy?: (text: string | undefined) => void,
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
@@ -201,9 +202,9 @@ export class TranscriptLayout {
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
     const index = new NativeContentIndex(document);
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("activity"), false, index);
+      () => this.activate("activity"), false, index, this.copy);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("chat"), false, index);
+      () => this.activate("chat"), false, index, this.copy);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
@@ -417,6 +418,11 @@ export class TranscriptLayout {
     return this.preferences.zoom ?? this.activePane;
   }
 
+  /** Offer block copying only from a currently visible split panel. */
+  copyBlocks(): ReturnType<NativeDocument["copyBlocks"]> {
+    const pane = this.searchPane();
+    return pane ? this.documents?.[pane].copyBlocks() ?? [] : [];
+  }
   private canFocusSearch(): boolean {
     const focused = this.host?.getFocusedComponent();
     if (!focused || focused === this.search?.bar.input) return true;
