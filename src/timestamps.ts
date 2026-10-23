@@ -197,6 +197,8 @@ export class CompactMessage extends Container {
   private contentWidth = 0;
   private contentHeight = 0;
   private hasClock = false;
+  private copyColumn?: number;
+  private copyPressed = false;
   private leadingRows = 0;
   private prepared?: { width: number; content: string[]; lines: string[] };
   private readonly nativeCache: NativeRenderCache;
@@ -204,7 +206,7 @@ export class CompactMessage extends Container {
 
   constructor(private readonly component: Component, private readonly label: () => string,
     private readonly theme: () => Theme, private readonly gutter: () => number,
-    private readonly show: () => boolean) {
+    private readonly show: () => boolean, private readonly copy?: () => void) {
     super();
     this.addChild(component);
     this.nativeCache = new NativeRenderCache(component);
@@ -235,9 +237,12 @@ export class CompactMessage extends Container {
     const label = this.show() ? this.label() : "";
     const gutter = this.gutter();
     const theme = this.theme();
-    const time = width > label.length + gutter + 1 ? label : "";
-    this.hasClock = Boolean(time);
-    this.contentWidth = Math.max(1, width - (time ? time.length + 1 + gutter : 0));
+    const copy = this.copy && width > gutter + 5 ? "[⧉]" : "";
+    const time = width > label.length + (copy ? 4 : 0) + gutter + 1 ? label : "";
+    const controls = [copy, time].filter(Boolean).join(" ");
+    this.hasClock = Boolean(controls);
+    this.copyColumn = copy ? width - gutter - controls.length : undefined;
+    this.contentWidth = Math.max(1, width - (controls ? controls.length + 1 + gutter : 0));
     const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
     const cached = this.formatted;
@@ -249,8 +254,8 @@ export class CompactMessage extends Container {
     this.formatted = undefined;
     // Image protocols need every placement row. Keep their native block intact.
     if (this.nativeCache.hasImagePlacement) {
-      this.top = time ? -1 : 0;
-      return time ? [theme.fg("dim", time.padStart(width - gutter)), ...content] : content;
+      this.top = controls ? -1 : 0;
+      return controls ? [theme.fg("dim", controls.padStart(width - gutter)), ...content] : content;
     }
     this.top = 0;
     let end = content.length;
@@ -259,22 +264,40 @@ export class CompactMessage extends Container {
     const lines = content.slice(this.top, end);
     if (!lines.length) {
       this.hasClock = false;
+      this.copyColumn = undefined;
       return lines;
     }
     // User message zones live on native padding rows. Keep those shell markers.
     const zones = (rows: string[]): string => rows.join("").match(/\x1b\]133;[ABC](?:\x07|\x1b\\)/g)?.join("") ?? "";
     lines[0] = zones(content.slice(0, this.top)) + lines[0];
     lines[lines.length - 1] += zones(content.slice(end));
-    if (time) {
+    if (controls) {
       lines[0] += "\x1b[0m\x1b]8;;\x07" +
-        " ".repeat(Math.max(1, width - gutter - time.length - visibleWidth(lines[0]))) +
-        theme.fg("dim", time);
+        " ".repeat(Math.max(1, width - gutter - controls.length - visibleWidth(lines[0]))) +
+        theme.fg("dim", controls);
     }
     this.formatted = { width, time, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
     return lines;
   }
 
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+    const target = { component: this, originX: event.screenX - event.x, originY: event.screenY - event.y,
+      width: event.width, height: event.height };
+    const onCopy = this.copyColumn !== undefined && event.y === this.leadingRows &&
+      event.x >= this.copyColumn && event.x < this.copyColumn + 3 && event.button === "left";
+    if (onCopy && event.type === "press") {
+      this.copyPressed = true;
+      return { handled: true, capture: true, target };
+    }
+    if (onCopy && event.type === "click") {
+      this.copyPressed = false;
+      this.copy?.();
+      return { handled: true, target };
+    }
+    if (this.copyPressed) {
+      if (event.type === "release") this.copyPressed = false;
+      return { handled: true, target };
+    }
     if (event.y < this.leadingRows || event.x >= this.contentWidth) return undefined;
     return super.handleMouse({
       ...event, y: event.y - this.leadingRows + this.top, width: this.contentWidth, height: this.contentHeight,

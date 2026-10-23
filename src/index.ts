@@ -1,5 +1,5 @@
 import path from "node:path";
-import { getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type TUI } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
@@ -86,7 +86,18 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     timestamps = new TranscriptTimestamps(session);
     layout = new TranscriptLayout(preferences, () => ui.theme,
       message => ui.notify(message, "warning"), () => persist(ui), timestamps,
-      () => { void openSettings(ui).catch(error => ui.notify(String(error), "error")); });
+      () => { void openSettings(ui).catch(error => ui.notify(String(error), "error")); }, text => {
+        if (text === undefined) {
+          ui.notify("This block is no longer in the current history.", "warning");
+          return;
+        }
+        if (!text) {
+          ui.notify("This block has no text to copy.", "info");
+          return;
+        }
+        void copyToClipboard(text).then(() => ui.notify("Block sent to clipboard.", "info"),
+          error => ui.notify("Could not copy block: " + String(error), "error"));
+      });
     try { ensureLayout(); }
     catch (error) {
       layout.dispose();
@@ -179,7 +190,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     ensureLayout();
   };
   pi.registerCommand("stereo-view", {
-    description: "History: settings, toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
+    description: "History: copy, settings, toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
     handler: async (args, ctx) => {
       if (ctx.mode !== "tui" || !layout) {
         ctx.ui.notify("pi-stereo-view layout is available only in interactive Pi.", "warning");
@@ -188,8 +199,17 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       const [action = "toggle", target, amount] = args.trim().split(/\s+/);
       if (action === "toggle" || action === "") toggle();
       else if (action === "settings") await openSettings(ctx.ui);
-      else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ≡ settings. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
+      else if (action === "copy") {
+        const blocks = layout.copyBlocks();
+        if (!blocks.length) {
+          ctx.ui.notify("No blocks to copy in the active split panel.", "info");
+          return;
+        }
+        closeSearch();
+        const choice = await ctx.ui.select("Copy a block from the active panel", blocks.map(block => block.label));
+        blocks.find(block => block.label === choice)?.copy();
+      } else if (action === "help") {
+        ctx.ui.notify("pi-stereo-view icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ≡ settings, ⧉ copy block. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);
@@ -199,7 +219,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       else if (action === "scroll" && (target === "chat" || target === "activity") && /^-?\d+$/.test(amount ?? "")) {
         layout.scroll(target, Number(amount));
       } else {
-        ctx.ui.notify("Use /stereo-view [help|settings|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
+        ctx.ui.notify("Use /stereo-view [copy|help|settings|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
         return;
       }
       ensureLayout();
