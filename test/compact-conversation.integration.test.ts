@@ -32,10 +32,12 @@ test("keeps one blank row between tool calls and fits short Activity to its cont
   const second = lines.findIndex(line => line.includes("SECOND CALL MARKER"));
   for (const row of [first, second]) {
     expect(row).toBeGreaterThan(0);
-    expect(lines[row]).toMatch(/\d{2}:\d{2}:\d{2}\s*[┃│]?$/);
+    expect(lines[row - 1]).toMatch(/^ \d{2}:\d{2}:\d{2}\s*[┃│]?$/);
+    expect(lines[row]).not.toMatch(/\d{2}:\d{2}:\d{2}/);
   }
-  expect(lines[second - 1].trim()).toBe("");
-  expect(lines[second - 2]).toContain("CLOCK DONE MARKER");
+  expect(lines[second - 2].trim()).toBe("");
+  expect(lines[second - 3].trim()).toBe("⧉");
+  expect(lines[second - 4]).toContain("CLOCK DONE MARKER");
   const last = lines.reduce((found, line, row) => line.includes("CLOCK DONE MARKER") ? row : found, -1);
   const borders = lines.flatMap((line, row) => line.includes("─".repeat(120)) ? [row] : []).slice(-2);
   expect(borders[0] - last).toBeLessThanOrEqual(3);
@@ -46,7 +48,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true })));
 });
 
-test("fits Conversation to its content and puts clocks beside text without losing paragraphs", async () => {
+test("fits Conversation to clock headers and copy footers without losing paragraphs", async () => {
   const cwd = await mkdtemp(path.resolve("tmp/compact-"));
   const agent = await mkdtemp(path.resolve("tmp/compact-agent-"));
   directories.push(cwd, agent);
@@ -72,14 +74,20 @@ test("fits Conversation to its content and puts clocks beside text without losin
   const user = lines.findIndex(line => line.includes("USER MARKER"));
   const first = lines.findIndex(line => line.includes("FIRST PARAGRAPH"));
   const second = lines.findIndex(line => line.includes("SECOND PARAGRAPH"));
-  expect(user).toBe(header + 2);
-  expect(first).toBe(user + 2);
-  expect(lines[user + 1].trim()).toBe("");
+  expect(user).toBe(header + 3);
+  expect(first).toBe(user + 4);
+  expect(lines[user + 1].trim()).toBe("⧉");
+  expect(lines[user + 2].trim()).toBe("");
   expect(second).toBe(first + 2);
-  expect(activity).toBe(second + 2);
-  for (const row of [user, first]) expect(lines[row]).toMatch(/\d{2}:\d{2}:\d{2}\s*[┃│]?$/);
+  expect(lines[first + 1].trim()).toBe("");
+  expect(lines[second + 1].trim()).toBe("⧉");
+  expect(activity).toBe(second + 3);
+  for (const row of [user, first]) {
+    expect(lines[row - 1]).toMatch(/^ \d{2}:\d{2}:\d{2}\s*[┃│]?$/);
+    expect(lines[row]).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+  }
   expect(lines[second]).not.toMatch(/\d{2}:\d{2}:\d{2}/);
-  expect(lines.slice(user, second + 1).filter(line => /\d{2}:\d{2}:\d{2}/.test(line))).toHaveLength(2);
+  expect(lines.slice(user - 1, second + 1).filter(line => /\d{2}:\d{2}:\d{2}/.test(line))).toHaveLength(2);
   for (const line of frame) expect(visibleWidth(line)).toBeLessThanOrEqual(120);
   const footer = lines.findIndex(line => line.includes(path.basename(cwd)));
   expect(footer).toBeGreaterThan(2);
@@ -114,7 +122,8 @@ test.each([false, true])("keeps the full input visible when expanded Conversatio
     expect(lines.some(line => line.includes(long ? "Line 59" : "SHORT ANSWER"))).toBe(true);
     for (const line of frame) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
     if (name !== "rows") expect(lines.join("\n")).not.toContain("Activity");
-    if (!long && name === "zoom") expect(borders.at(-1)).toBeLessThan(12);
+    // Two short blocks each have one clock row and one copy row; the dock still hugs their content.
+    if (!long && name === "zoom") expect(borders.at(-1)).toBe(14);
     if (long) expect(borders.at(-1)).toBeLessThan(frame.length - 1);
   }
 });

@@ -1,4 +1,4 @@
-import { Container, type Component } from "@earendil-works/pi-tui";
+import { Container, Markdown, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry } from "./search.js";
 
 export type Pane = "activity" | "chat";
@@ -18,6 +18,7 @@ interface NativeContent extends Component {
   result?: { content?: unknown };
   command?: string;
   outputLines?: string[];
+  customComponent?: Component;
   setExpanded?: (expanded: boolean) => void;
 }
 interface NativeAssistant extends Container {
@@ -45,6 +46,12 @@ const contentText = (content: unknown): string => typeof content === "string" ? 
   Array.isArray(content) ? content.filter(block => block?.type === "text" && typeof block.text === "string")
     .map(block => block.text).join("\n") : "";
 
+/** Native text renderers retain their source before terminal wrapping and padding. */
+function componentText(component: Component): string | undefined {
+  if (!(component instanceof Text) && !(component instanceof Markdown)) return undefined;
+  const text: unknown = Reflect.get(component, "text");
+  return typeof text === "string" ? stripTerminalSequences(text) : undefined;
+}
 function assistant(component: Component): NativeAssistant | undefined {
   if (nameOf(component) !== "AssistantMessageComponent") return undefined;
   const native = component as NativeAssistant;
@@ -90,6 +97,17 @@ export class NativeContentIndex {
   contains(source: Component, pane?: Pane): boolean {
     this.refresh();
     return this.content.some(entry => entry.source === source && (pane === undefined || panes[entry.kind] === pane));
+  }
+
+  /** Build clipboard text only on demand, from this branch's current semantic block. */
+  copy(entry: ContentEntry, width: number): string | undefined {
+    this.refresh();
+    const current = this.content.find(candidate => candidate.source === entry.source && candidate.component === entry.component);
+    if (!current) return undefined;
+    const group = current.kind === "tool" && current.owner === current.source
+      ? this.content.filter(candidate => candidate === current || candidate.owner === current.source)
+      : [current];
+    return group.map(candidate => stripTerminalSequences(candidate.search(width).text)).filter(Boolean).join("\n\n");
   }
 
   private refresh(): void {
@@ -167,7 +185,8 @@ export class NativeContentIndex {
       }
       return {
         label: owner?.toolName ?? (native.message?.summary !== undefined ? "Summary" : "System"),
-        text: contentText(native.message?.content) || native.message?.summary || searchText(source.render(width).join("\n")),
+        text: contentText(native.message?.content) || native.message?.summary || componentText(native.customComponent ?? source) ||
+          searchText(source.render(width).join("\n")).split("\n").map(line => line.trimEnd()).join("\n").replace(/^\n+|\n+$/g, ""),
         reveal: typeof native.setExpanded === "function" ? () => native.setExpanded!(true) : undefined,
       };
     } };

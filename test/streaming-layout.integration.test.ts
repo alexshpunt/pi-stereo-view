@@ -25,7 +25,7 @@ for (const layout of ["columns", "rows"] as const) for (const thinking of [true,
     const cwd = await mkdtemp(path.resolve("tmp/streaming-layout-workspace-"));
     const agent = await mkdtemp(path.resolve("tmp/streaming-layout-agent-"));
     const name = `streaming-layout-${layout}-${thinking ? "thinking" : "text"}`;
-    const saved = { mode: "split", side: "right", chatWidth, layout, chatHeight: 12, zoom: null, showTimestamps: false };
+    const saved = { mode: "split", side: "right", chatWidth, layout, chatHeight: 12, zoom: null, showTimestamps: false, showCopyButtons: true };
     try {
       await writeFile(path.join(agent, "settings.json"), JSON.stringify({
         packages: [path.resolve(".")], quietStartup: true, hideThinkingBlock: false,

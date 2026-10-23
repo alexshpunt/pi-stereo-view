@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.5 - 2026-10-23
+
+### Added
+
+- Copy individual user messages, assistant replies and thinking blocks as original text/Markdown. Tool copies include their arguments, full saved results and linked late output, even when collapsed or off screen.
+- Use `/stereo-view copy` to choose and copy a block from the active panel with the keyboard.
+- Hide copy icons and their rows with **Show copy buttons** without disabling keyboard copying. The setting survives restart.
+
+### Changed
+
+- Show timestamps above blocks on the left and dim copy icons below on the right, without reserving a side column beside the text.
+
 ## 0.1.4 - 2026-10-20
 
 ### Fixed

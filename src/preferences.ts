@@ -14,10 +14,11 @@ export interface Preferences {
   chatHeight: number | null;
   zoom: "activity" | "chat" | null;
   showTimestamps: boolean;
+  showCopyButtons: boolean;
 }
 
 export const defaults: Preferences = {
-  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true,
+  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true,
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -36,16 +37,17 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const chatHeight = record.chatHeight === undefined ? defaults.chatHeight : record.chatHeight;
   const zoom = record.zoom === undefined ? defaults.zoom : record.zoom;
   const showTimestamps = record.showTimestamps === undefined ? defaults.showTimestamps : record.showTimestamps;
+  const showCopyButtons = record.showCopyButtons === undefined ? defaults.showCopyButtons : record.showCopyButtons;
   if ((record.mode !== "split" && record.mode !== "combined") ||
       (record.side !== "left" && record.side !== "right") ||
       (record.chatWidth !== null && (typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
         record.chatWidth < 24 || record.chatWidth > 240)) ||
       (layout !== "columns" && layout !== "rows") ||
       (chatHeight !== null && (typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240)) ||
-      (zoom !== null && zoom !== "activity" && zoom !== "chat") || typeof showTimestamps !== "boolean") {
+      (zoom !== null && zoom !== "activity" && zoom !== "chat") || typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean") {
     throw new Error("Invalid pi-stereo-view preferences");
   }
-  return { mode: record.mode, side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom, showTimestamps };
+  return { mode: record.mode, side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom, showTimestamps, showCopyButtons };
 }
 
 /** Atomically save only the display settings, never session messages. */

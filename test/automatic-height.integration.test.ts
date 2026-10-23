@@ -25,7 +25,7 @@ test.each(["left", "right"])("grows to half the history, then scrolls, and keeps
   const run = (phase: string, rows: number) => new PiIntegrationTest({
     testName: "automatic-height-" + side + "-" + phase, artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-    environment: { PI_CODING_AGENT_DIR: agent, AUTO_HEIGHT_PHASE: phase },
+    environment: { PI_CODING_AGENT_DIR: agent, AUTO_HEIGHT_PHASE: phase, PI_INTEGRATION_TEST_LIVE: "1" },
     // Cold extension loading shares this deadline with the scripted stream.
     timeoutMs: 60_000, rawMode: false, tuiSize: { cols: 120, rows },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/automatic-height-probe.ts")],
@@ -35,10 +35,11 @@ test.each(["left", "right"])("grows to half the history, then scrolls, and keeps
   expect(first.providerRequests).toHaveLength(1);
   const samples: Record<string, Sample> = JSON.parse(await readFile(path.join(cwd, "automatic-height-drag.json"), "utf8"));
   await writeFile(path.resolve("tmp/test-runs", "automatic-height-" + side + "-drag", "height-samples.json"), JSON.stringify(samples));
-  expect(samples.growth1.height).toBeLessThan(samples.final.height);
+  // The initial user-only frame is captured before assistant streaming can coalesce updates.
+  expect(samples.initial.height).toBeLessThan(samples.final.height);
   // Streaming updates may share a native frame. Check the content actually
   // painted, rather than assuming each threshold produces its own frame.
-  for (const name of ["growth1", "growth3", "growth10", "growth25"]) {
+  for (const name of ["initial", "growth1", "growth3", "growth10", "growth25"]) {
     const sample = samples[name];
     const header = side === "left" ? 3 : 2;
     expect(sample.height, name + " must fit its native content up to half history")
