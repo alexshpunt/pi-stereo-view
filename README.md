@@ -29,6 +29,14 @@ Late output linked to a tool call appears directly below that call in Activity, 
 
 Messages and tools keep their familiar appearance. The input stays full width below both panels.
 
+## Features
+
+- Arrange Conversation and Activity in columns or rows, swap or resize the panels, and zoom either one while keeping the input full width.
+- Copy an individual user message, assistant reply or thinking block with its own copy icon.
+- Copy a complete tool call with its arguments, saved result and linked late output, including collapsed and off-screen text.
+- Search panel history with literal text, Boolean expressions or regular expressions, then jump between matches.
+- Show or hide timestamps and copy icons independently. Layout and display settings survive restart.
+
 ## See it in action
 
 ![Switching layouts, swapping panels and resizing history](https://raw.githubusercontent.com/alexshpunt/pi-stereo-view/main/assets/demo.gif)
