@@ -252,10 +252,13 @@ export class CompactMessage extends Container {
       return cached.lines;
     }
     this.formatted = undefined;
+    const styledControls = (): string => [
+      copy && theme.style(copy, { fg: "dim", dim: true }), time && theme.fg("dim", time),
+    ].filter(Boolean).join(" ");
     // Image protocols need every placement row. Keep their native block intact.
     if (this.nativeCache.hasImagePlacement) {
       this.top = controls ? -1 : 0;
-      return controls ? [theme.fg("dim", controls.padStart(width - gutter)), ...content] : content;
+      return controls ? [" ".repeat(Math.max(0, width - gutter - controls.length)) + styledControls(), ...content] : content;
     }
     this.top = 0;
     let end = content.length;
@@ -274,7 +277,7 @@ export class CompactMessage extends Container {
     if (controls) {
       lines[0] += "\x1b[0m\x1b]8;;\x07" +
         " ".repeat(Math.max(1, width - gutter - controls.length - visibleWidth(lines[0]))) +
-        theme.fg("dim", controls);
+        styledControls();
     }
     this.formatted = { width, time, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
     return lines;
