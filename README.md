@@ -29,6 +29,14 @@ Late output linked to a tool call appears directly below that call in Activity, 
 
 Messages and tools keep their familiar appearance. The input stays full width below both panels.
 
+## Features
+
+- Arrange Conversation and Activity in columns or rows, swap or resize the panels, and zoom either one while keeping the input full width.
+- Copy an individual user message, assistant reply or thinking block with its own copy icon.
+- Copy a complete tool call with its arguments, saved result and linked late output, including collapsed and off-screen text.
+- Search panel history with literal text, Boolean expressions or regular expressions, then jump between matches.
+- Show or hide timestamps and copy icons independently. Layout and display settings survive restart.
+
 ## See it in action
 
 ![Switching layouts, swapping panels and resizing history](https://raw.githubusercontent.com/alexshpunt/pi-stereo-view/main/assets/demo.gif)
@@ -69,7 +77,7 @@ Click the toolbar and the buttons in each panel's header:
 | `[ ▤ ]` / `[ ▥ ]` | Switch between rows and columns. |
 | `[ ↕ ]` / `[ ↔ ]` | Swap the panels. |
 | `[ ↗ ]` / `[ ↙ ]` | Zoom a panel / restore the split. |
-| `[ ≡ ]` | Open settings to show or hide timestamps. |
+| `[ ≡ ]` | Open timestamp, copy-button and Conversation height settings. |
 | `[ ⌕ ]` | Search this panel. |
 
 **Resize:** drag the double line between the panels — `═` in rows, `║` in columns.
@@ -105,9 +113,21 @@ A match is revealed in its own panel without moving the other one. If matching t
 
 Press **Escape** or `[×]` to close search and restore your previous scroll position. Your message draft stays unchanged. Close other dialogs before searching. Search is available in split fullscreen history; combined history and regular mode keep Pi's usual keyboard behaviour.
 
+## Copy a block
+
+Click the dim `⧉` icon below the right corner of a message, thinking, tool or other history block to copy its text. Copy buttons work in split and zoomed panels, even with timestamps hidden.
+
+Messages and thinking keep their original text/Markdown, without terminal colours, clocks or copy buttons. Copying a tool includes its name, arguments, saved result and linked late output. A late-output block also has its own button to copy just that block. Collapsed and off-screen text is included.
+
+During streaming, each click copies the content available at that moment. Copy uses only text already available in Pi; it does not fetch omitted output or copy binary attachments. Custom blocks without source text fall back to plain rendered text.
+
+For keyboard access, run `/stereo-view copy` and choose a numbered block from the active panel. It copies the same text as that block's button.
+
+Use **Show copy buttons** in `≡` or `/stereo-view settings` to hide the icons and their rows. This choice survives restart. Keyboard copying stays available when the icons are hidden.
+
 ## Timestamps
 
-Conversation and Activity can show a dim local `HH:mm:ss` clock beside messages and tool calls. New tool calls show their start time.
+Conversation and Activity can show a dim local `HH:mm:ss` clock above each block on the left, with a small inset. The copy icon sits below the block on the right, so neither control takes width away from the text. New tool calls show their start time.
 
 Older tool calls may show `~HH:mm:ss` for an approximate time. `--:--:--` means the time is unknown.
 
@@ -127,7 +147,8 @@ The same controls are available without the mouse:
 | Scroll a panel | `/stereo-view scroll chat -10` / `/stereo-view scroll activity -10` |
 | Zoom / restore Conversation | `/stereo-view zoom chat` |
 | Zoom / restore Activity | `/stereo-view zoom activity` |
-| Timestamp settings | `/stereo-view settings` |
+| Copy a block from the active panel | `/stereo-view copy` |
+| Display settings | `/stereo-view settings` |
 | Button legend | `/stereo-view help` |
 
 `Ctrl+Alt+T` toggles split, `Ctrl+Alt+S` swaps panels, and `Ctrl+Alt+Left/Right` resizes Conversation along the current split direction.
@@ -136,7 +157,7 @@ Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active p
 
 ## Settings and limits
 
-Your layout, panel order, sizes, zoom, split on/off and timestamp settings are saved automatically and restored next time.
+Your layout, panel order, sizes, zoom, split on/off, timestamp and copy-button settings are saved automatically and restored next time.
 
 - Tested with Pi 1.1.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.

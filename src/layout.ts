@@ -134,6 +134,7 @@ export class TranscriptLayout {
     private readonly save: () => void,
     private readonly timestamps: TranscriptTimestamps,
     private readonly openSettings: () => void,
+    private readonly copy?: (text: string | undefined) => void,
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
@@ -199,11 +200,12 @@ export class TranscriptLayout {
     // Auto scrollbars overlay one native content column; keep clocks outside it.
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
+    const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
     const index = new NativeContentIndex(document);
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("activity"), false, index);
+      () => this.activate("activity"), false, index, this.copy, showCopyButtons);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("chat"), false, index);
+      () => this.activate("chat"), false, index, this.copy, showCopyButtons);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
@@ -417,6 +419,11 @@ export class TranscriptLayout {
     return this.preferences.zoom ?? this.activePane;
   }
 
+  /** Offer block copying only from a currently visible split panel. */
+  copyBlocks(): ReturnType<NativeDocument["copyBlocks"]> {
+    const pane = this.searchPane();
+    return pane ? this.documents?.[pane].copyBlocks() ?? [] : [];
+  }
   private canFocusSearch(): boolean {
     const focused = this.host?.getFocusedComponent();
     if (!focused || focused === this.search?.bar.input) return true;
@@ -534,6 +541,11 @@ export class TranscriptLayout {
     this.changed();
   }
 
+  /** Hide copy icons without disabling the keyboard copy picker. */
+  setCopyButtons(show: boolean): void {
+    this.preferences.showCopyButtons = show;
+    this.changed();
+  }
   private defaultWidth(width: number): number {
     return Math.max(MIN_CHAT, Math.floor((width - 1) * 0.2));
   }

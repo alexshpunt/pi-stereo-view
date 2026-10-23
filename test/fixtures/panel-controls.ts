@@ -105,8 +105,9 @@ export default function panelControls(pi: ExtensionAPI): void {
     const row = lines.findIndex((line, index) => index > 1 && line.startsWith("═".repeat(120)));
     if (row < 0) throw new Error("Missing draggable horizontal divider");
     await mouse(0, 10, row);
-    await mouse(32, 10, row - 3);
-    await mouse(0, 10, row - 3, "m");
+    // Drag beyond the minimum instead of assuming the initial content has a fixed height.
+    await mouse(32, 10, 2);
+    await mouse(0, 10, 2, "m");
     frames.rowDrag = await capture();
     await click("[ ↕ ]");
     frames.rowSwap = await capture();
