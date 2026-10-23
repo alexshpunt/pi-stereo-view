@@ -26,7 +26,7 @@ function setup(...components: Component[]) {
   source.addChild(history);
   return { source, history, index: new NativeContentIndex(source) };
 }
-const theme = { fg: (_color: string, value: string) => value } as Theme;
+const theme = { fg: (_color: string, value: string) => value, style: (value: string) => value } as unknown as Theme;
 const pointer = (type: TuiMouseEvent["type"], x: number, y = 0): TuiMouseEvent => ({
   type, button: "left", x, y, screenX: x, screenY: y, width: 40, height: 4,
   shift: false, alt: false, ctrl: false,
