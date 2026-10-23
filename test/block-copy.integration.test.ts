@@ -85,15 +85,15 @@ test.each([
     expect(observation.copies.firstTool).toContain("first full result line 69");
     for (const copied of Object.values(observation.copies)) {
       expect(copied).not.toContain("\x1b");
-      expect(copied).not.toContain("[⧉]");
+      expect(copied).not.toContain("[ ⧉ ]");
       expect(copied).not.toContain("keep this unsent draft");
     }
     const toolFrame = observation.frames.firstTool.join("\n");
     expect(toolFrame).toContain("COLLAPSED COPY RESULT");
     expect(toolFrame).not.toContain("first full result line 69");
     const userRow = observation.frames.user.find(line => line.includes("USER COPY"))!;
-    expect(userRow).toContain("[⧉]");
-    if (showTimestamps) expect(userRow).toMatch(/\[⧉\]\s+\d{2}:\d{2}:\d{2}/);
+    expect(userRow).toContain("[ ⧉ ]");
+    if (showTimestamps) expect(userRow).toMatch(/\[ ⧉ \]\s+\d{2}:\d{2}:\d{2}/);
     else expect(userRow).not.toMatch(/\d{2}:\d{2}:\d{2}/);
     expect(observation.draftBefore).toBe("keep this unsent draft");
     expect(observation.draftAfter).toBe(observation.draftBefore);

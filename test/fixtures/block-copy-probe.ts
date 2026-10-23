@@ -90,10 +90,10 @@ export default function blockCopyProbe(pi: ExtensionAPI): void {
     await reveal(pane, marker);
     const frame = await capture();
     observation.frames[name] = frame;
-    const y = frame.findIndex(line => line.includes(marker) && line.includes("[⧉]"));
+    const y = frame.findIndex(line => line.includes(marker) && line.includes("[ ⧉ ]"));
     if (y < 0) throw new Error("Copy target is not on screen: " + marker);
     const markerColumn = frame[y].indexOf(marker);
-    const index = frame[y].indexOf("[⧉]", markerColumn);
+    const index = frame[y].indexOf("[ ⧉ ]", markerColumn);
     if (index < 0) throw new Error("Missing copy control for " + marker);
     const x = visibleWidth(frame[y].slice(0, index)) + 1;
     const before = clipboard.length;

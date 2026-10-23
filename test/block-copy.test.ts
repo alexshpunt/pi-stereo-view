@@ -26,7 +26,7 @@ function setup(...components: Component[]) {
   source.addChild(history);
   return { source, history, index: new NativeContentIndex(source) };
 }
-const theme = { fg: (_color: string, value: string) => value } as Theme;
+const theme = { fg: (_color: string, value: string) => value, style: (value: string) => value } as unknown as Theme;
 const pointer = (type: TuiMouseEvent["type"], x: number, y = 0): TuiMouseEvent => ({
   type, button: "left", x, y, screenX: x, screenY: y, width: 40, height: 4,
   shift: false, alt: false, ctrl: false,
@@ -73,14 +73,16 @@ test.each([true, false])("copy hit testing preserves native selection with times
   const block = new CompactMessage(native, () => "12:34:56", () => theme, () => 1, () => show, () => { copies++; });
   block.prepare(40, true);
   const rows = block.render(40).map(stripTerminalSequences);
-  const x = rows[1].indexOf("[⧉]");
+  const x = rows[1].indexOf("[ ⧉ ]");
   expect(x).toBeGreaterThan(0);
   expect(rows[1].includes("12:34:56")).toBe(show);
   expect(block.handleMouse(pointer("press", x + 1, 1))).toMatchObject({ capture: true });
   block.handleMouse(pointer("click", x + 1, 1));
   expect(copies).toBe(1);
+  block.handleMouse(pointer("click", x + 4, 1));
+  expect(copies, "The closing bracket belongs to the full five-column button").toBe(2);
   block.handleMouse(pointer("click", x + 1, 2));
-  expect(copies).toBe(1);
+  expect(copies).toBe(2);
   block.handleMouse(pointer("press", 1, 1));
   expect(events.at(-1)).toMatchObject({ x: 1, y: 1 });
   expect(events).toHaveLength(1);
