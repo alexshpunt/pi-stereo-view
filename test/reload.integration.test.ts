@@ -36,7 +36,7 @@ test("reloads twice with one clean split, stable history clocks and a full-width
       expect(lines.filter(line => line.includes("[ ≡ ]"))).toHaveLength(1);
       expect(lines.filter(line => line.includes("Activity") && line.includes("[ ↗ ]"))).toHaveLength(1);
       expect(lines.filter(line => line.includes("Conversation") && line.includes("[ ↗ ]"))).toHaveLength(1);
-      expect(lines.filter(line => /SAVED USER\s+01:02:03\s*[┃│]?$/.test(line.trim())), lines.join("\n")).toHaveLength(1);
+      expect(lines.filter(line => /SAVED USER\s+\[⧉\]\s+01:02:03\s*[┃│]?$/.test(line.trim())), lines.join("\n")).toHaveLength(1);
       expect(lines.join("\n")).toContain("SAVED USER");
       expect(lines.join("\n")).not.toContain("pi-stereo-view split is unavailable");
       expect(lines.join("\n")).not.toContain("pi-stereo-view split disabled");
