@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setImmediate, setTimeout } from "node:timers/promises";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { ScrollView, stripTerminalSequences, Text, visibleWidth, type Component, type TUI } from "@earendil-works/pi-tui";
+import { ScrollView, sliceByColumn, stripTerminalSequences, Text, visibleWidth, type Component, type TUI } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { emittedFrame } from "./emitted-frame.js";
 
@@ -90,12 +90,25 @@ export default function blockCopyProbe(pi: ExtensionAPI): void {
     await reveal(pane, marker);
     const frame = await capture();
     observation.frames[name] = frame;
-    const y = frame.findIndex(line => line.includes(marker) && line.includes("[⧉]"));
-    if (y < 0) throw new Error("Copy target is not on screen: " + marker);
-    const markerColumn = frame[y].indexOf(marker);
-    const index = frame[y].indexOf("[⧉]", markerColumn);
-    if (index < 0) throw new Error("Missing copy control for " + marker);
-    const x = visibleWidth(frame[y].slice(0, index)) + 1;
+    const bodyRow = frame.findIndex(line => line.includes(marker) && !line.includes("Search:"));
+    if (bodyRow < 0) throw new Error("Copy target is not on screen: " + marker);
+    const markerColumn = visibleWidth(frame[bodyRow].slice(0, frame[bodyRow].indexOf(marker)));
+    const separator = frame[bodyRow].indexOf("║");
+    const divider = separator < 0 ? -1 : visibleWidth(frame[bodyRow].slice(0, separator));
+    const left = divider >= 0 && markerColumn > divider ? divider + 1 : 0;
+    const right = divider >= 0 && markerColumn < divider ? divider : tui.terminal.columns;
+    let y = -1;
+    let x = -1;
+    for (let row = bodyRow + 1; row < frame.length; row++) {
+      const region = sliceByColumn(frame[row], left, right);
+      const icon = region.indexOf("⧉");
+      if (icon < 0) continue;
+      y = row;
+      // Exercise the glyph overhang, not just its first terminal cell.
+      x = left + visibleWidth(region.slice(0, icon)) + 1;
+      break;
+    }
+    if (y < 0) throw new Error("Missing copy footer for " + marker);
     const before = clipboard.length;
     await clickAt(x, y);
     observation.copies[name] = await awaitCopy(before);
@@ -207,6 +220,12 @@ export default function blockCopyProbe(pi: ExtensionAPI): void {
       await input(`\x1b[<0;${x + 5};${y + 1}m`);
       observation.selection = tui.hasActiveSelection();
       tui.resetTextSelection();
+      await control("[ ≡ ]", "");
+      observation.frames.copySettings = await capture();
+      await input("\x1b[B");
+      await input(" ");
+      await input("\x1b");
+      observation.frames.copyIconsHidden = await capture();
       ctx.ui.setEditorText("/stereo-view copy");
       await input("\r");
       const picker = await capture();
@@ -217,6 +236,11 @@ export default function blockCopyProbe(pi: ExtensionAPI): void {
       const before = clipboard.length;
       await input("\r");
       observation.copies.keyboard = await awaitCopy(before);
+      await control("[ ≡ ]", "");
+      await input("\x1b[B");
+      await input(" ");
+      await input("\x1b");
+      observation.frames.copyIconsRestored = await capture();
       await save(ctx);
     } catch (error) {
       observation.error = String(error);

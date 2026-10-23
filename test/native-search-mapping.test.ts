@@ -128,8 +128,13 @@ test.each([false, true])("keeps genuine saved timestamps searchable with display
   const selected = { ...hit(1), ranges: [{ start: 12, end: 20 }] };
   document.reveal(selected, "12:34:56");
   const rows = document.render(50);
-  expect(document.searchRow(selected)).toBe(1);
-  expect(rows[1]).toContain("\x1b[30;43m1");
-  expect(stripTerminalSequences(rows[1]).trim()).toBe("finished at 12:34:56");
+  const savedRow = showTimestamps ? 2 : 1;
+  expect(document.searchRow(selected)).toBe(savedRow);
+  expect(rows[savedRow]).toContain("\x1b[30;43m1");
+  expect(stripTerminalSequences(rows[savedRow]).trim()).toBe("finished at 12:34:56");
+  if (showTimestamps) {
+    expect(rows[0]).not.toContain("\x1b[30;43m");
+    expect(stripTerminalSequences(rows[0])).toBe(" --:--:--");
+  }
   document.dispose();
 });

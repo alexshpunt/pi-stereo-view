@@ -26,7 +26,7 @@ function setup(...components: Component[]) {
   source.addChild(history);
   return { source, history, index: new NativeContentIndex(source) };
 }
-const theme = { fg: (_color: string, value: string) => value } as Theme;
+const theme = { fg: (_color: string, value: string) => value, style: (value: string) => value } as unknown as Theme;
 const pointer = (type: TuiMouseEvent["type"], x: number, y = 0): TuiMouseEvent => ({
   type, button: "left", x, y, screenX: x, screenY: y, width: 40, height: 4,
   shift: false, alt: false, ctrl: false,
@@ -73,16 +73,22 @@ test.each([true, false])("copy hit testing preserves native selection with times
   const block = new CompactMessage(native, () => "12:34:56", () => theme, () => 1, () => show, () => { copies++; });
   block.prepare(40, true);
   const rows = block.render(40).map(stripTerminalSequences);
-  const x = rows[1].indexOf("[⧉]");
-  expect(x).toBeGreaterThan(0);
-  expect(rows[1].includes("12:34:56")).toBe(show);
-  expect(block.handleMouse(pointer("press", x + 1, 1))).toMatchObject({ capture: true });
-  block.handleMouse(pointer("click", x + 1, 1));
-  expect(copies).toBe(1);
-  block.handleMouse(pointer("click", x + 1, 2));
-  expect(copies).toBe(1);
-  block.handleMouse(pointer("press", 1, 1));
-  expect(events.at(-1)).toMatchObject({ x: 1, y: 1 });
+  const bodyRow = show ? 2 : 1;
+  const copyRow = bodyRow + 2;
+  const x = rows[copyRow].indexOf("⧉");
+  expect(x).toBe(37);
+  expect(rows[copyRow].slice(x)).toBe("⧉ ");
+  expect(rows[1]).toBe(show ? " 12:34:56" : "**source**");
+  expect(rows[bodyRow]).toBe("**source**");
+  for (const column of [x, x + 1]) {
+    expect(block.handleMouse(pointer("press", column, copyRow))).toMatchObject({ capture: true });
+    block.handleMouse(pointer("click", column, copyRow));
+  }
+  expect(copies).toBe(2);
+  block.handleMouse(pointer("click", x, copyRow + 1));
+  expect(copies).toBe(2);
+  block.handleMouse(pointer("press", 1, bodyRow));
+  expect(events.at(-1)).toMatchObject({ x: 1, y: 1, width: 39, height: 4 });
   expect(events).toHaveLength(1);
   block.dispose();
 });

@@ -83,8 +83,8 @@ test("adds one separator only for a visible block and renders native content onc
   const native: Component = { render: () => { renders++; return content; }, invalidate() {} };
   const message = new CompactMessage(native, () => "12:34:56", theme, () => 0, () => true);
   expect(message.prepare(30, true)).toBe(true);
-  expect(message.render(30)).toHaveLength(4);
-  expect(message.render(30)[0]).toBe("");
+  expect(message.render(30)).toHaveLength(5);
+  expect(message.render(30).map(stripTerminalSequences)).toEqual(["", " 12:34:56", "first", "", "second"]);
   expect(renders).toBe(1);
   content = [];
   native.invalidate();
@@ -125,8 +125,7 @@ test("scans native output for image placement once per render, including image-t
       scans = 0;
       message.prepare(30, false);
       expect(scans).toBe(1);
-      expect(message.render(30)).toHaveLength(1);
-      expect(stripTerminalSequences(message.render(30)[0])).toMatch(/^updated body\s+12:34:56$/);
+      expect(message.render(30).map(stripTerminalSequences)).toEqual([" 12:34:56", "updated body"]);
     }
   } finally { message.dispose(); }
 });
@@ -146,20 +145,20 @@ test("keeps wide text intact across resizing and never overwrites it with the cl
   const message = new CompactMessage(new Text(source, 0, 1), () => "12:34:56", theme, () => 1, () => true);
   for (const width of [24, 60, 24]) {
     const lines = message.render(width).map(stripTerminalSequences);
-    expect(lines[0]).toMatch(/ 12:34:56$/);
+    expect(lines[0]).toBe(" 12:34:56");
     expect(lines.slice(1).join("")).not.toContain("12:34:56");
-    expect(lines.map((line, index) => index === 0 ? line.replace(/\s+12:34:56$/, "") : line)
-      .join("").replace(/\s/g, "")).toBe(source.replace(/\s/g, ""));
+    expect(lines.slice(1).join("").replace(/\s/g, "")).toBe(source.replace(/\s/g, ""));
     for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width - 1);
   }
 });
 
-test("hiding clocks restores the text width without restoring message padding", () => {
+test("hiding clocks removes the header without changing body width or restoring message padding", () => {
   let show = true;
   const message = new CompactMessage(new Text("abcdefghij", 0, 1), () => "12:34:56", theme, () => 0, () => show);
-  expect(message.render(16)).toHaveLength(2);
+  const shown = message.render(16).map(stripTerminalSequences);
+  expect(shown).toEqual([" 12:34:56", "abcdefghij".padEnd(16)]);
   show = false;
-  expect(message.render(16).map(stripTerminalSequences)).toEqual(["abcdefghij".padEnd(16)]);
+  expect(message.render(16).map(stripTerminalSequences)).toEqual(shown.slice(1));
 });
 
 test("maps mouse rows and width back to native content after trimming its edges", () => {
@@ -171,12 +170,16 @@ test("maps mouse rows and width back to native content after trimming its edges"
   };
   const message = new CompactMessage(native, () => "12:34:56", theme, () => 1, () => true);
   message.prepare(30, true);
-  expect(message.render(30)).toHaveLength(4);
-  const event = { x: 2, y: 3, width: 30, height: 4, screenX: 2, screenY: 100 } as TuiMouseEvent;
+  expect(message.render(30)).toHaveLength(5);
+  const event = { x: 2, y: 4, width: 30, height: 5, screenX: 2, screenY: 100 } as TuiMouseEvent;
   expect(message.handleMouse(event)).toMatchObject({ handled: true });
-  expect(message.handleMouse(event)?.target).toMatchObject({ originX: 0, originY: 97, width: 20, height: 5 });
-  expect(received).toMatchObject({ x: 2, y: 3, width: 20, height: 5 });
+  expect(message.handleMouse(event)?.target).toMatchObject({ originX: 0, originY: 97, width: 29, height: 5 });
+  expect(received).toMatchObject({ x: 2, y: 3, width: 29, height: 5 });
+  expect(message.handleMouse({ ...event, x: 28 })).toMatchObject({ handled: true });
+  expect(received).toMatchObject({ x: 28, y: 3, width: 29, height: 5 });
   received = undefined;
-  expect(message.handleMouse({ ...event, x: 25 })).toBeUndefined();
+  for (const outside of [{ ...event, x: 29 }, { ...event, y: 0 }, { ...event, y: 1 }, { ...event, y: 5 }]) {
+    expect(message.handleMouse(outside)).toBeUndefined();
+  }
   expect(received).toBeUndefined();
 });
