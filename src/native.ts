@@ -72,6 +72,7 @@ export class NativeDocument extends Container {
     private readonly invalidatesSource = true,
     private readonly index = new NativeContentIndex(source),
     private readonly copy?: (text: string | undefined) => void,
+    private readonly showCopy: () => boolean = () => true,
   ) {
     super();
   }
@@ -212,7 +213,7 @@ export class NativeDocument extends Container {
         let stamped = this.stamped.get(routed);
         if (!stamped) {
           stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
-            this.theme, this.timestampGutter, this.showTimestamps, this.copy ? () => this.copyBlock(component) : undefined);
+            this.theme, this.timestampGutter, this.showTimestamps, this.copy ? () => this.copyBlock(component) : undefined, this.showCopy);
           this.stamped.set(routed, stamped);
         }
         this.compactBlocks.set(component, stamped);
