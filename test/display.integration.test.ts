@@ -53,10 +53,14 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   expectFrame(frames.initial, "Conversation", "─");
   expectFrame(frames.initial, "Activity", "═");
   const initial = clean(frames.initial);
-  const clock = initial.findIndex(line => line.includes("USER MARKER") && /\d{2}:\d{2}:\d{2}\s*[┃│]?$/.test(line));
+  const clockHeader = /^ \d{2}:\d{2}:\d{2}\s*[┃│]?$/;
+  const clock = initial.findIndex(line => clockHeader.test(line));
   expect(clock).toBe(header(frames.initial, "Conversation") + 2);
-  expect(initial[clock + 1].trim()).toBe("");
-  expect(initial[clock + 2]).toContain("ANSWER MARKER");
+  expect(initial[clock + 1]).toContain("USER MARKER");
+  expect(initial[clock + 2].trim()).toBe("⧉");
+  expect(initial[clock + 3].trim()).toBe("");
+  expect(initial[clock + 4]).toMatch(clockHeader);
+  expect(initial[clock + 5]).toContain("ANSWER MARKER");
   expect(clean(frames.settings).join("\n")).toContain("Show timestamps");
   expect(clean(frames.commandMenu).join("\n")).toContain("Show timestamps");
   for (const frame of [frames.off, frames.offCombined, frames.savedOff]) {
@@ -98,10 +102,27 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   await run("display-settings-restarted", false);
   const restarted: Record<string, string[]> = JSON.parse(await readFile(path.resolve("tmp/test-runs/display-settings-restarted/display-frames.json"), "utf8"));
   expect(clean(restarted.initial).join("\n")).not.toMatch(/\d{2}:\d{2}:\d{2}/);
-  for (const frame of Object.values(frames)) {
+  const menuBackgrounds: Record<string, string[]> = {
+    settings: frames.initial, offMenu: frames.off, commandMenu: frames.off,
+  };
+  for (const [name, frame] of Object.entries(frames)) {
     const lines = clean(frame);
+    const background = menuBackgrounds[name];
+    if (background) {
+      // The centered menu can cover the cwd and middle of the dock borders.
+      // Its uncovered edges must still occupy the same rows as the closed menu.
+      const behind = clean(background);
+      const footer = behind.findIndex(line => line.includes(path.basename(cwd)));
+      expect(footer, name + " background footer").toBeGreaterThan(2);
+      for (const row of [footer - 1, footer - 3]) {
+        expect(lines[row].slice(0, 25), name + " left dock edge").toBe("─".repeat(25));
+        expect(lines[row].slice(-25), name + " right dock edge").toBe("─".repeat(25));
+      }
+      expect(lines[footer].slice(0, 25), name + " cwd prefix").toBe(behind[footer].slice(0, 25));
+      continue;
+    }
     const footer = lines.findIndex(line => line.includes(path.basename(cwd)));
-    expect(footer, "The native dock must remain directly above the cwd footer").toBeGreaterThan(2);
+    expect(footer, name + ": the native dock must remain directly above the cwd footer\n" + lines.join("\n")).toBeGreaterThan(2);
     expect(lines[footer - 1]).toBe("─".repeat(120));
     expect(lines[footer - 3]).toBe("─".repeat(120));
   }

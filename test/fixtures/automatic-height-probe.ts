@@ -55,6 +55,10 @@ export default function automaticHeightProbe(pi: ExtensionAPI): void {
       return new Text("", 0, 0);
     }, { overlay: true, overlayOptions: { visible: () => false, nonCapturing: true }, onHandle: () => finish() });
   });
+  pi.on("context", async () => {
+    // The native user block is mounted, but no assistant chunk has arrived yet.
+    if (process.env.AUTO_HEIGHT_PHASE === "drag" && !samples.initial) await sample("initial");
+  });
   pi.on("message_update", event => {
     if (process.env.AUTO_HEIGHT_PHASE !== "drag" || event.message.role !== "assistant") return;
     const content = event.message.content.filter(block => block.type === "text").map(block => block.text).join("");

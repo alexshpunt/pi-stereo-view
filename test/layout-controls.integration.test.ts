@@ -84,7 +84,8 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
   expect(headerRow(frames.canceledClick, "Conversation")).toBe(2);
   expect(headerRow(frames.canceledClick, "Activity")).toBe(2);
   expect(headerRow(frames.rows, "Conversation")).toBe(2);
-  expect(headerRow(frames.rows, "Activity")).toBe(8);
+  // Both one-line messages now occupy a clock, body and icon row.
+  expect(headerRow(frames.rows, "Activity")).toBe(12);
   expect(headerRow(frames.rowDrag, "Activity")).toBe(6);
   expect(headerRow(frames.rowSwap, "Activity")).toBeLessThan(headerRow(frames.rowSwap, "Conversation"));
   expect(stripTerminalSequences(frames.columnDrag[1]).indexOf("║")).toBe(75);
@@ -125,7 +126,7 @@ test("uses mouse buttons and both dividers, then restores the expanded panel on 
     expect(lines.slice(dockBorders[0]).some(line => line.includes("║"))).toBe(false);
   }
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({
-    mode: "split", side: "right", chatWidth: 44, layout: "rows", chatHeight: 4, zoom: "chat", showTimestamps: true,
+    mode: "split", side: "right", chatWidth: 44, layout: "rows", chatHeight: 4, zoom: "chat", showTimestamps: true, showCopyButtons: true,
   });
   await run("expanded-panel-restart", false);
   const restored: string[] = JSON.parse(await readFile(path.join(cwd, "native-snapshot.json"), "utf8"));
@@ -153,7 +154,7 @@ test("keeps the mouse return control after restarting in saved combined mode", a
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
   }).run("USER MARKER");
   await run("save-combined-buttons");
-  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, mode: "combined", showTimestamps: true });
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, mode: "combined", showTimestamps: true, showCopyButtons: true });
   await run("restore-combined-buttons");
   const frames: { before: string[]; after: string[] } = JSON.parse(await readFile(path.join(cwd, "button-toggle.json"), "utf8"));
   expect(clean(frames.before)).toContain("[ ◫ ]");
@@ -161,8 +162,8 @@ test("keeps the mouse return control after restarting in saved combined mode", a
   expect(clean(frames.before)).toContain("USER MARKER");
   expect(clean(frames.before)).toContain("ANSWER MARKER");
   expect(headerRow(frames.after, "Conversation")).toBe(2);
-  expect(headerRow(frames.after, "Activity")).toBe(8);
-  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, showTimestamps: true });
+  expect(headerRow(frames.after, "Activity")).toBe(saved.chatHeight + 2);
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, showTimestamps: true, showCopyButtons: true });
 });
 
 test("keeps mouse controls active while text and a real tool call stream", async () => {

@@ -46,9 +46,9 @@ test("visible native and custom image output retains its placement rows", () => 
     native.updateResult(imageResult());
     const message = compact(native);
     try {
-      const original = native.render(51);
+      const original = native.render(60);
       expect(message.prepare(60, false)).toBe(true);
-      expect(message.render(60)[0].trim()).toBe("12:34:56");
+      expect(message.render(60)[0]).toBe(" 12:34:56");
       expect(message.render(60).slice(1)).toEqual(original);
       expect(images(message.render(60))).toBe(true);
     } finally { message.dispose(); }

@@ -13,16 +13,14 @@ const utcTime = (timestamp: number): string => {
     .map(value => String(value).padStart(2, "0")).join(":");
 };
 const timeAbove = (lines: string[], marker: string, row = lines.findIndex(line => line.includes(marker))): string => {
-  const inline = row >= 0 ? lines[row].match(/(~?\d{2}:\d{2}:\d{2}|--:--:--)\s*[┃│]?$/)?.[1] : undefined;
-  if (inline) return inline;
   expect(row, "Native content must be visible: " + marker).toBeGreaterThanOrEqual(0);
   const previous = lines.slice(Math.max(0, row - 6), row).reverse()
     .map(line => line.replace(/[┃│]$/, ""))
     .find(line => /^\s+(?:~?\d{2}:\d{2}:\d{2}|--:--:--)\s*$/.test(line));
-  expect(previous, "A separate right-aligned timestamp must precede " + marker + "\n" +
+  expect(previous, "A separate left-aligned timestamp must precede " + marker + "\n" +
     lines.slice(Math.max(0, row - 6), row + 1).join("\n")).toBeDefined();
-  // One trailing cell may be reserved for Pi's native auto scrollbar overlay.
-  expect(previous!.length - previous!.trimEnd().length).toBeLessThanOrEqual(1);
+  // The clock header has a one-cell inset; the rest of its row remains available.
+  expect(previous!.length - previous!.trimStart().length).toBe(1);
   return previous!.trim();
 };
 
