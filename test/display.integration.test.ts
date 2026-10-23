@@ -102,10 +102,27 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   await run("display-settings-restarted", false);
   const restarted: Record<string, string[]> = JSON.parse(await readFile(path.resolve("tmp/test-runs/display-settings-restarted/display-frames.json"), "utf8"));
   expect(clean(restarted.initial).join("\n")).not.toMatch(/\d{2}:\d{2}:\d{2}/);
-  for (const frame of Object.values(frames)) {
+  const menuBackgrounds: Record<string, string[]> = {
+    settings: frames.initial, offMenu: frames.off, commandMenu: frames.off,
+  };
+  for (const [name, frame] of Object.entries(frames)) {
     const lines = clean(frame);
+    const background = menuBackgrounds[name];
+    if (background) {
+      // The centered menu can cover the cwd and middle of the dock borders.
+      // Its uncovered edges must still occupy the same rows as the closed menu.
+      const behind = clean(background);
+      const footer = behind.findIndex(line => line.includes(path.basename(cwd)));
+      expect(footer, name + " background footer").toBeGreaterThan(2);
+      for (const row of [footer - 1, footer - 3]) {
+        expect(lines[row].slice(0, 25), name + " left dock edge").toBe("─".repeat(25));
+        expect(lines[row].slice(-25), name + " right dock edge").toBe("─".repeat(25));
+      }
+      expect(lines[footer].slice(0, 25), name + " cwd prefix").toBe(behind[footer].slice(0, 25));
+      continue;
+    }
     const footer = lines.findIndex(line => line.includes(path.basename(cwd)));
-    expect(footer, "The native dock must remain directly above the cwd footer").toBeGreaterThan(2);
+    expect(footer, name + ": the native dock must remain directly above the cwd footer\n" + lines.join("\n")).toBeGreaterThan(2);
     expect(lines[footer - 1]).toBe("─".repeat(120));
     expect(lines[footer - 3]).toBe("─".repeat(120));
   }
