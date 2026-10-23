@@ -191,6 +191,7 @@ export class TranscriptTimestamps {
   }
 }
 
+const COPY_CONTROL = "[ ⧉ ]";
 /** Trim message edges and reserve a clock gutter without changing native text or mouse targets. */
 export class CompactMessage extends Container {
   private top = 0;
@@ -237,8 +238,8 @@ export class CompactMessage extends Container {
     const label = this.show() ? this.label() : "";
     const gutter = this.gutter();
     const theme = this.theme();
-    const copy = this.copy && width > gutter + 5 ? "[⧉]" : "";
-    const time = width > label.length + (copy ? 4 : 0) + gutter + 1 ? label : "";
+    const copy = this.copy && width > gutter + COPY_CONTROL.length + 2 ? COPY_CONTROL : "";
+    const time = width > label.length + (copy ? copy.length + 1 : 0) + gutter + 1 ? label : "";
     const controls = [copy, time].filter(Boolean).join(" ");
     this.hasClock = Boolean(controls);
     this.copyColumn = copy ? width - gutter - controls.length : undefined;
@@ -287,7 +288,7 @@ export class CompactMessage extends Container {
     const target = { component: this, originX: event.screenX - event.x, originY: event.screenY - event.y,
       width: event.width, height: event.height };
     const onCopy = this.copyColumn !== undefined && event.y === this.leadingRows &&
-      event.x >= this.copyColumn && event.x < this.copyColumn + 3 && event.button === "left";
+      event.x >= this.copyColumn && event.x < this.copyColumn + COPY_CONTROL.length && event.button === "left";
     if (onCopy && event.type === "press") {
       this.copyPressed = true;
       return { handled: true, capture: true, target };
