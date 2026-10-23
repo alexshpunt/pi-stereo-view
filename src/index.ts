@@ -39,11 +39,16 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Hide clock rows without changing messages or recorded tool starts.",
           currentValue: preferences.showTimestamps ? "on" : "off", values: ["on", "off"],
         }, {
+          id: "copyButtons", label: "Show copy buttons",
+          description: "Hide copy icons and their rows; keyboard copying stays available.",
+          currentValue: preferences.showCopyButtons ? "on" : "off", values: ["on", "off"],
+        }, {
           id: "height", label: "Conversation height",
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
         }], 3, getSettingsListTheme(), (id, value) => {
           if (id === "timestamps") layout?.setTimestamps(value === "on");
+          else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
           tui.requestRender();
         }, () => done());

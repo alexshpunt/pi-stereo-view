@@ -191,22 +191,29 @@ export class TranscriptTimestamps {
   }
 }
 
-/** Trim message edges and reserve a clock gutter without changing native text or mouse targets. */
+// Reserve the glyph's painted overhang, without a label or surrounding frame.
+const COPY_CONTROL = "⧉ ";
+const COPY_CONTROL_WIDTH = visibleWidth(COPY_CONTROL);
+/** Keep message text full-width, with a clock above and copy action below. */
 export class CompactMessage extends Container {
   private top = 0;
   private contentWidth = 0;
   private contentHeight = 0;
   private hasClock = false;
+  private headerRows = 0;
+  private bodyRows = 0;
+  private copyRow?: number;
   private copyColumn?: number;
   private copyPressed = false;
   private leadingRows = 0;
   private prepared?: { width: number; content: string[]; lines: string[] };
   private readonly nativeCache: NativeRenderCache;
-  private formatted?: { width: number; time: string; gutter: number; theme: Theme; version: number; top: number; lines: string[] };
+  private formatted?: { width: number; time: string; copy: string; gutter: number; theme: Theme; version: number; top: number; lines: string[] };
 
   constructor(private readonly component: Component, private readonly label: () => string,
     private readonly theme: () => Theme, private readonly gutter: () => number,
-    private readonly show: () => boolean, private readonly copy?: () => void) {
+    private readonly show: () => boolean, private readonly copy?: () => void,
+    private readonly showCopy: () => boolean = () => true) {
     super();
     this.addChild(component);
     this.nativeCache = new NativeRenderCache(component);
@@ -229,62 +236,70 @@ export class CompactMessage extends Container {
     return this.renderContent(width);
   }
 
-  /** Report only the clock actually inserted into the prepared block's rows. */
-  searchClock(): { row: number; column: number } | undefined {
-    return this.hasClock ? { row: this.leadingRows, column: this.nativeCache.hasImagePlacement ? 0 : this.contentWidth } : undefined;
+  /** Exclude presentation rows when mapping saved-text search matches. */
+  searchClock(): { row: number; column: number; footerRow?: number } | undefined {
+    if (!this.hasClock && this.copyRow === undefined) return undefined;
+    return {
+      row: this.hasClock ? this.leadingRows : -1, column: 0,
+      ...(this.copyRow === undefined ? {} : { footerRow: this.leadingRows + this.copyRow }),
+    };
   }
   private renderContent(width: number): string[] {
     const label = this.show() ? this.label() : "";
     const gutter = this.gutter();
     const theme = this.theme();
-    const copy = this.copy && width > gutter + 5 ? "[⧉]" : "";
-    const time = width > label.length + (copy ? 4 : 0) + gutter + 1 ? label : "";
-    const controls = [copy, time].filter(Boolean).join(" ");
-    this.hasClock = Boolean(controls);
-    this.copyColumn = copy ? width - gutter - controls.length : undefined;
-    this.contentWidth = Math.max(1, width - (controls ? controls.length + 1 + gutter : 0));
+    // Only the scrollbar needs a side gutter; controls have their own rows.
+    this.contentWidth = Math.max(1, width - gutter);
+    const time = label && visibleWidth(label) + 1 <= this.contentWidth ? " " + label : "";
+    const copy = this.copy && this.showCopy() && this.contentWidth >= COPY_CONTROL_WIDTH ? COPY_CONTROL : "";
     const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
     const cached = this.formatted;
-    if (cached?.width === width && cached.time === time && cached.gutter === gutter && cached.theme === theme &&
+    if (cached?.width === width && cached.time === time && cached.copy === copy && cached.gutter === gutter && cached.theme === theme &&
       cached.version === this.nativeCache.version) {
       this.top = cached.top;
       return cached.lines;
     }
     this.formatted = undefined;
-    // Image protocols need every placement row. Keep their native block intact.
-    if (this.nativeCache.hasImagePlacement) {
-      this.top = controls ? -1 : 0;
-      return controls ? [theme.fg("dim", controls.padStart(width - gutter)), ...content] : content;
-    }
     this.top = 0;
+    this.hasClock = false;
+    this.headerRows = 0;
+    this.bodyRows = 0;
+    this.copyRow = undefined;
+    this.copyColumn = undefined;
     let end = content.length;
-    while (this.top < end && blank(content[this.top])) this.top++;
-    while (end > this.top && blank(content[end - 1])) end--;
-    const lines = content.slice(this.top, end);
-    if (!lines.length) {
-      this.hasClock = false;
-      this.copyColumn = undefined;
-      return lines;
+    // Image protocols need every placement row. Keep their native block intact.
+    if (!this.nativeCache.hasImagePlacement) {
+      while (this.top < end && blank(content[this.top])) this.top++;
+      while (end > this.top && blank(content[end - 1])) end--;
     }
-    // User message zones live on native padding rows. Keep those shell markers.
-    const zones = (rows: string[]): string => rows.join("").match(/\x1b\]133;[ABC](?:\x07|\x1b\\)/g)?.join("") ?? "";
-    lines[0] = zones(content.slice(0, this.top)) + lines[0];
-    lines[lines.length - 1] += zones(content.slice(end));
-    if (controls) {
-      lines[0] += "\x1b[0m\x1b]8;;\x07" +
-        " ".repeat(Math.max(1, width - gutter - controls.length - visibleWidth(lines[0]))) +
-        theme.fg("dim", controls);
+    const body = content.slice(this.top, end);
+    if (!body.length) return body;
+    if (!this.nativeCache.hasImagePlacement) {
+      // User message zones live on native padding rows. Keep those shell markers.
+      const zones = (rows: string[]): string => rows.join("").match(/\x1b\]133;[ABC](?:\x07|\x1b\\)/g)?.join("") ?? "";
+      body[0] = zones(content.slice(0, this.top)) + body[0];
+      body[body.length - 1] += zones(content.slice(end));
     }
-    this.formatted = { width, time, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
+    this.hasClock = Boolean(time);
+    this.headerRows = time ? 1 : 0;
+    this.bodyRows = body.length;
+    const lines = time ? [theme.fg("dim", time), ...body] : body;
+    if (copy) {
+      this.copyRow = lines.length;
+      this.copyColumn = this.contentWidth - COPY_CONTROL_WIDTH;
+      lines.push(" ".repeat(this.copyColumn) + theme.style(copy, { fg: "dim", dim: true }));
+    }
+    this.formatted = { width, time, copy, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
     return lines;
   }
 
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
     const target = { component: this, originX: event.screenX - event.x, originY: event.screenY - event.y,
       width: event.width, height: event.height };
-    const onCopy = this.copyColumn !== undefined && event.y === this.leadingRows &&
-      event.x >= this.copyColumn && event.x < this.copyColumn + 3 && event.button === "left";
+    const onCopy = this.copyColumn !== undefined && this.copyRow !== undefined &&
+      event.y === this.leadingRows + this.copyRow && event.x >= this.copyColumn &&
+      event.x < this.copyColumn + COPY_CONTROL_WIDTH && event.button === "left";
     if (onCopy && event.type === "press") {
       this.copyPressed = true;
       return { handled: true, capture: true, target };
@@ -298,9 +313,10 @@ export class CompactMessage extends Container {
       if (event.type === "release") this.copyPressed = false;
       return { handled: true, target };
     }
-    if (event.y < this.leadingRows || event.x >= this.contentWidth) return undefined;
+    const bodyRow = event.y - this.leadingRows - this.headerRows;
+    if (bodyRow < 0 || bodyRow >= this.bodyRows || event.x >= this.contentWidth) return undefined;
     return super.handleMouse({
-      ...event, y: event.y - this.leadingRows + this.top, width: this.contentWidth, height: this.contentHeight,
+      ...event, y: bodyRow + this.top, width: this.contentWidth, height: this.contentHeight,
     });
   }
 
