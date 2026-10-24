@@ -56,7 +56,7 @@ If a custom tool renderer omits saved matching text, a temporary Search match fr
 
 Layout, panel order, sizes, zoom, split on/off and timestamp visibility are saved in `transcript.json` in Pi's agent directory. Saved numeric Conversation heights remain manual until the user selects automatic height. Saved arrangements are not reset when defaults change.
 
-Tool-start times are collected as display-only session metadata; they do not become messages in the model's context. New calls keep their recorded start time through streaming, completion and restart. Historical calls without that metadata use the agent message's time as an approximation, marked with `~`. Unknown times use `--:--:--`.
+Tool-start times are collected as display-only session metadata; they do not become messages in the model's context. New calls keep their recorded start time through streaming, completion and restart. Historical calls without that metadata use the agent message's time as an approximation, marked with `~`. Blocks with unknown times keep their native content without clock or copy-button rows, regardless of timestamp visibility.
 
 ## Releases
 
