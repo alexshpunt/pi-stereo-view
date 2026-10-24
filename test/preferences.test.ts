@@ -9,12 +9,14 @@ const arrangement = {
   showTimestamps: false, showCopyButtons: false,
 } as const;
 
-test.each(["chat", "activity", null] as const)("ignores legacy combined mode and %s zoom without losing the saved arrangement", async zoom => {
+test.each(["chat", "activity", null] as const)("ignores legacy temporary state with %s zoom without losing the saved arrangement", async zoom => {
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
-    await writeFile(file, JSON.stringify({ ...arrangement, mode: "combined", zoom }));
-    expect(await loadPreferences(file)).toEqual({ ...arrangement, mode: "split", zoom: null });
+    for (const mode of ["split", "combined"]) {
+      await writeFile(file, JSON.stringify({ ...arrangement, mode, zoom }));
+      expect(await loadPreferences(file)).toEqual({ ...arrangement, mode: "split", zoom: null });
+    }
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
