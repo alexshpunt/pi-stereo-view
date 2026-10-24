@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6 - 2026-10-24
+
+### Fixed
+
+- Hide clock placeholders and copy buttons for blocks without a known timestamp, including system notices. Their content remains visible without extra control rows.
+
 ## 0.1.5 - 2026-10-23
 
 ### Added

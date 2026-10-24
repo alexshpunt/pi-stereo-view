@@ -284,7 +284,7 @@ test("restores repeated messages, branch-local starts, legacy approximations and
   const freshRow = end.findIndex(line => line.includes("FRESH USER"));
   expect(unknownRow).toBeGreaterThanOrEqual(0);
   expect(freshRow).toBeGreaterThan(unknownRow);
-  expect(end[unknownRow - 1].trim()).toBe("");
+  expect(end[unknownRow - 1].replace(/[┃│]$/, "").trim()).toBe("");
   expect(end.slice(unknownRow, freshRow).join("\n")).not.toContain("⧉");
   const resumed = SessionManager.open(path.join(cwd, "timestamp-session.jsonl"));
   expect(resumed.getBranch().filter(entry => entry.type === "custom" && entry.customType === "pi-agent-transcript/tool-start")).toHaveLength(1);
