@@ -1,8 +1,9 @@
-"""Print baseline and approved icons for a pixel test in the native terminal.
+"""Print the full control set for pixel checks in each native terminal/font pair.
 
-Both sets have identical spacing. The approved icons passed the native screenshot
-check on FiraCode NFM Retina. Other terminals still need their own pixel check.
-Do not use a headless HTML capture as a native terminal screenshot.
+The copy row includes its complete two-cell control: CGJ joins the selected glyph,
+and the trailing blank reserves its overhang. Keep both when capturing that row.
+Historical approved fixtures cover eight toolbar icons, not every row below.
+A headless replay is not native font evidence.
 """
 
 icons = [
@@ -14,11 +15,20 @@ icons = [
     ("swap columns", "⇄", "↔"),
     ("expand", "⛶", "↗"),
     ("restore", "↙", "↙"),
+    ("search", "⌕", "⌕"),
+    ("settings", "≡", "≡"),
+    ("copy", "⧉ ", "⧉\u034f "),
 ]
 
-print("Native icon rendering test — baseline vs approved icons")
-print("Action           Baseline      Approved")
+
+def bracket(glyph, dim=False):
+    return "\033[38;2;131;165;152m" + ("\033[2m" if dim else "") + f"[ {glyph} ]\033[0m"
+
+
+print("Native icon rendering test — baseline vs selected controls")
+print("Action           Baseline      Approved      Approved dim")
 for name, baseline, approved in icons:
-    print(f"{name:12}     \033[38;2;131;165;152m[ {baseline} ]\033[0m"
-          f"         \033[38;2;131;165;152m[ {approved} ]\033[0m")
-print("ASCII control    \033[38;2;131;165;152m[ + ]\033[0m")
+    cells = 2 if name == "copy" else 1
+    gap = " " * (10 - cells)
+    print(f"{name:12}     " + bracket(baseline) + gap + bracket(approved) + gap + bracket(approved, dim=True))
+print("ASCII control    " + bracket("+"))
