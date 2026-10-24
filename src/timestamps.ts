@@ -32,7 +32,7 @@ const validTime = (value: unknown): number | undefined => {
 /** Format a reliable source in the process's local zone; never substitute now. */
 export function timestampLabel(value: unknown): string {
   const time = validTime(value);
-  if (time === undefined) return "--:--:--";
+  if (time === undefined) return "";
   const date = new Date(time);
   return [date.getHours(), date.getMinutes(), date.getSeconds()]
     .map(part => String(part).padStart(2, "0")).join(":");
@@ -176,15 +176,15 @@ export class TranscriptTimestamps {
       toolCallId?: string;
     };
     if (name === "UserMessageComponent" || name === "SkillInvocationMessageComponent" || name === "BashExecutionComponent") {
-      return this.orderedLabels.get(component) ?? "--:--:--";
+      return this.orderedLabels.get(component) ?? "";
     }
     if (name === "ToolExecutionComponent") {
       const id = native.toolCallId!;
       const start = this.starts.get(id);
       if (start !== undefined) return timestampLabel(start);
-      if (this.liveCalls.has(id)) return "--:--:--";
+      if (this.liveCalls.has(id)) return "";
       const owner = this.owners.get(id);
-      return validTime(owner) === undefined ? "--:--:--" : "~" + timestampLabel(owner);
+      return validTime(owner) === undefined ? "" : "~" + timestampLabel(owner);
     }
     const message = name === "AssistantMessageComponent" ? native.lastMessage : native.message;
     return timestampLabel(message ? validTime(message.timestamp) ?? this.messageTimes.get(message) : native.entry?.timestamp);
@@ -245,13 +245,13 @@ export class CompactMessage extends Container {
     };
   }
   private renderContent(width: number): string[] {
-    const label = this.show() ? this.label() : "";
+    const label = this.label();
     const gutter = this.gutter();
     const theme = this.theme();
     // Only the scrollbar needs a side gutter; controls have their own rows.
     this.contentWidth = Math.max(1, width - gutter);
-    const time = label && visibleWidth(label) + 1 <= this.contentWidth ? " " + label : "";
-    const copy = this.copy && this.showCopy() && this.contentWidth >= COPY_CONTROL_WIDTH ? COPY_CONTROL : "";
+    const time = label && this.show() && visibleWidth(label) + 1 <= this.contentWidth ? " " + label : "";
+    const copy = label && this.copy && this.showCopy() && this.contentWidth >= COPY_CONTROL_WIDTH ? COPY_CONTROL : "";
     const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
     const cached = this.formatted;
