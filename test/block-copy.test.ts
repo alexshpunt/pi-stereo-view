@@ -77,7 +77,7 @@ test.each([true, false])("copy hit testing preserves native selection with times
   const copyRow = bodyRow + 2;
   const x = rows[copyRow].indexOf("⧉");
   expect(x).toBe(37);
-  expect(rows[copyRow].slice(x)).toBe("⧉ ");
+  expect(rows[copyRow].slice(x)).toBe("⧉\u034f ");
   expect(rows[1]).toBe(show ? " 12:34:56" : "**source**");
   expect(rows[bodyRow]).toBe("**source**");
   for (const column of [x, x + 1]) {

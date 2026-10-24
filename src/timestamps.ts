@@ -191,8 +191,9 @@ export class TranscriptTimestamps {
   }
 }
 
-// Reserve the glyph's painted overhang, without a label or surrounding frame.
-const COPY_CONTROL = "⧉ ";
+// CGJ avoids xterm's single-codepoint rescaling without changing the visible glyph.
+// The trailing blank reserves its overhang and keeps the control two cells wide.
+const COPY_CONTROL = "⧉\u034f ";
 const COPY_CONTROL_WIDTH = visibleWidth(COPY_CONTROL);
 /** Keep message text full-width, with a clock above and copy action below. */
 export class CompactMessage extends Container {

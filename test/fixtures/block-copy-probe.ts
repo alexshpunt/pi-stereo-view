@@ -101,7 +101,7 @@ export default function blockCopyProbe(pi: ExtensionAPI): void {
     let x = -1;
     for (let row = bodyRow + 1; row < frame.length; row++) {
       const region = sliceByColumn(frame[row], left, right);
-      const icon = region.indexOf("⧉");
+      const icon = region.indexOf("⧉\u034f");
       if (icon < 0) continue;
       y = row;
       // Exercise the glyph overhang, not just its first terminal cell.

@@ -57,7 +57,7 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   const clock = initial.findIndex(line => clockHeader.test(line));
   expect(clock).toBe(header(frames.initial, "Conversation") + 2);
   expect(initial[clock + 1]).toContain("USER MARKER");
-  expect(initial[clock + 2].trim()).toBe("⧉");
+  expect(initial[clock + 2].trim()).toBe("⧉\u034f");
   expect(initial[clock + 3].trim()).toBe("");
   expect(initial[clock + 4]).toMatch(clockHeader);
   expect(initial[clock + 5]).toContain("ANSWER MARKER");

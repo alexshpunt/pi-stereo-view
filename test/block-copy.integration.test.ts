@@ -87,6 +87,7 @@ test.each([
     for (const copied of Object.values(observation.copies)) {
       expect(copied).not.toContain("\x1b");
       expect(copied).not.toContain("⧉");
+      expect(copied).not.toContain("\u034f");
       expect(copied).not.toContain("keep this unsent draft");
     }
     const toolFrame = observation.frames.firstTool.join("\n");
@@ -97,12 +98,14 @@ test.each([
     const userIndex = userFrame.findIndex(line => line.includes("USER COPY"));
     expect(userIndex).toBeGreaterThanOrEqual(0);
     expect(userFrame[userIndex]).not.toContain("⧉");
+    expect(userFrame[userIndex]).not.toContain("\u034f");
     const beforeUser = userFrame.slice(Math.max(0, userIndex - 3), userIndex).join("\n");
     if (showTimestamps) expect(beforeUser).toMatch(/\d{2}:\d{2}:\d{2}/);
     else expect(beforeUser).not.toMatch(/\d{2}:\d{2}:\d{2}/);
     expect(observation.frames.copySettings.join("\n")).toContain("Show copy buttons");
     expect(observation.frames.copyIconsHidden.join("\n")).not.toContain("⧉");
-    expect(observation.frames.copyIconsRestored.join("\n")).toContain("⧉");
+    expect(observation.frames.copyIconsHidden.join("\n")).not.toContain("\u034f");
+    expect(observation.frames.copyIconsRestored.join("\n")).toContain("⧉\u034f");
     expect(observation.draftBefore).toBe("keep this unsent draft");
     expect(observation.draftAfter).toBe(observation.draftBefore);
     expect(observation.selection).toBe(true);
