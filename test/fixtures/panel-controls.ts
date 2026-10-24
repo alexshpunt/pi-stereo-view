@@ -143,8 +143,8 @@ export default function panelControls(pi: ExtensionAPI): void {
       process.stdout.emit("resize");
     }
     frames.tallRows = await capture();
-    await click("[ ↗ ]", "Conversation");
-    frames.savedChat = await capture();
+    await click("[ ↗ ]", process.env.TRANSCRIPT_BUTTON_FINAL_ZOOM === "activity" ? "Activity" : "Conversation");
+    frames.savedZoom = await capture();
     await writeFile(path.join(ctx.cwd, "panel-controls.json"), JSON.stringify(frames));
   });
 }

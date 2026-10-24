@@ -12,11 +12,11 @@ test("keeps one blank row between tool calls and fits short Activity to its cont
   const agent = await mkdtemp(path.resolve("tmp/compact-activity-agent-"));
   directories.push(cwd, agent);
   await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
-  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({ mode: "split", side: "left", chatWidth: 40, layout: "rows", zoom: "activity" }));
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({ side: "left", chatWidth: 40, layout: "rows" }));
   const result = await new PiIntegrationTest({
     testName: "compact-activity", artifactsDir: path.resolve("tmp/test-runs"), cwd,
     piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-    environment: { PI_CODING_AGENT_DIR: agent, TZ: "UTC" },
+    environment: { PI_CODING_AGENT_DIR: agent, TZ: "UTC", TIMESTAMP_ZOOM_ACTIVITY: "1" },
     rawMode: false, tuiSize: { cols: 120, rows: 50 },
     extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/timestamp-probe.ts")],
     tools: ["clock_probe"], conversation: [
