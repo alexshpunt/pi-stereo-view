@@ -40,8 +40,9 @@ test.each([true, false])("reloads twice with stable clocks, a full-width dock an
       const savedRow = lines.findIndex(line => line.includes("SAVED USER"));
       expect(savedRow, lines.join("\n")).toBeGreaterThan(0);
       expect(lines[savedRow]).not.toContain("⧉");
+      expect(lines[savedRow]).not.toContain("\u034f");
       expect(lines.slice(Math.max(0, savedRow - 3), savedRow).join("\n")).toContain("01:02:03");
-      if (showCopyButtons) expect(lines.slice(savedRow + 1, savedRow + 4).join("\n")).toContain("⧉");
+      if (showCopyButtons) expect(lines.slice(savedRow + 1, savedRow + 4).join("\n")).toContain("⧉\u034f");
       else expect(lines.join("\n")).not.toContain("⧉");
       expect(lines.join("\n")).toContain("SAVED USER");
       expect(lines.join("\n")).not.toContain("pi-stereo-view split is unavailable");

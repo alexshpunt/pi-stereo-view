@@ -286,6 +286,7 @@ test("restores repeated messages, branch-local starts, legacy approximations and
   expect(freshRow).toBeGreaterThan(unknownRow);
   expect(end[unknownRow - 1].replace(/[┃│]$/, "").trim()).toBe("");
   expect(end.slice(unknownRow, freshRow).join("\n")).not.toContain("⧉");
+  expect(end.slice(unknownRow, freshRow).join("\n")).not.toContain("\u034f");
   const resumed = SessionManager.open(path.join(cwd, "timestamp-session.jsonl"));
   expect(resumed.getBranch().filter(entry => entry.type === "custom" && entry.customType === "pi-agent-transcript/tool-start")).toHaveLength(1);
 });
