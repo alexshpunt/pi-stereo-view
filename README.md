@@ -115,7 +115,7 @@ Press **Escape** or `[×]` to close search and restore your previous scroll posi
 
 ## Copy a block
 
-Click the dim `⧉` icon below the right corner of a message, thinking, tool or other history block to copy its text. Copy buttons work in split and zoomed panels, even with timestamps hidden.
+Click the dim `⧉` icon below the right corner of a message, thinking, tool or other history block to copy its text. Blocks without a known time have no copy button. Copy buttons work in split and zoomed panels, even with timestamps hidden.
 
 Messages and thinking keep their original text/Markdown, without terminal colours, clocks or copy buttons. Copying a tool includes its name, arguments, saved result and linked late output. A late-output block also has its own button to copy just that block. Collapsed and off-screen text is included.
 
@@ -129,7 +129,7 @@ Use **Show copy buttons** in `≡` or `/stereo-view settings` to hide the icons 
 
 Conversation and Activity can show a dim local `HH:mm:ss` clock above each block on the left, with a small inset. The copy icon sits below the block on the right, so neither control takes width away from the text. New tool calls show their start time.
 
-Older tool calls may show `~HH:mm:ss` for an approximate time. `--:--:--` means the time is unknown.
+Older tool calls may show `~HH:mm:ss` for an approximate time. Blocks without a known time show neither a clock nor a copy button; their content stays visible.
 
 Use `≡` or `/stereo-view settings` to hide or show clocks. This setting survives restart. Clocks appear in split and zoomed panels, not in combined history. They are display-only and are not added to the conversation sent to the model.
 

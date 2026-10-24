@@ -278,6 +278,14 @@ test("restores repeated messages, branch-local starts, legacy approximations and
   expect(timeAbove(clean(frames.chat), "FIRST ANSWER")).toBe("11:03:04");
   expect(timeAbove(clean(frames.activity), "LEGACY CALL MARKER")).toBe("~11:03:04");
   expect(timeAbove(clean(frames.rowsEnd), "[timestamp-note]")).toBe("15:07:08");
+  for (const frame of Object.values(frames)) expect(clean(frame).join("\n")).not.toContain("--:--:--");
+  const end = clean(frames.rowsEnd);
+  const unknownRow = end.findIndex(line => line.includes("UNKNOWN USER"));
+  const freshRow = end.findIndex(line => line.includes("FRESH USER"));
+  expect(unknownRow).toBeGreaterThanOrEqual(0);
+  expect(freshRow).toBeGreaterThan(unknownRow);
+  expect(end[unknownRow - 1].replace(/[┃│]$/, "").trim()).toBe("");
+  expect(end.slice(unknownRow, freshRow).join("\n")).not.toContain("⧉");
   const resumed = SessionManager.open(path.join(cwd, "timestamp-session.jsonl"));
   expect(resumed.getBranch().filter(entry => entry.type === "custom" && entry.customType === "pi-agent-transcript/tool-start")).toHaveLength(1);
 });

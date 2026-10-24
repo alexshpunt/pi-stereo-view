@@ -21,7 +21,10 @@ test("hides the footer immediately without hiding time or disabling keyboard cop
   history.addChild(user);
   const root = new Container();
   root.addChild(new Container()); root.addChild(new Container()); root.addChild(history);
-  const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
+  const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [{
+    type: "message", id: "user", parentId: null, timestamp: "2001-10-09T12:34:56Z",
+    message: { role: "user", content: "USER SOURCE", timestamp: Date.parse("2001-10-09T12:34:56Z") },
+  }], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
   let show = true;
   const copied: (string | undefined)[] = [];
   const document = new NativeDocument(root, "chat", timestamps, () => theme, () => 0, () => true,
@@ -32,7 +35,7 @@ test("hides the footer immediately without hiding time or disabling keyboard cop
     document.invalidate();
     const hidden = document.render(30).map(stripTerminalSequences);
     expect(hidden).toHaveLength(2);
-    expect(hidden[0]).toBe(" --:--:--");
+    expect(hidden[0]).toMatch(/^ \d{2}:\d{2}:\d{2}$/);
     expect(hidden.join("\n")).not.toContain("⧉");
     const choices = document.copyBlocks();
     expect(choices).toHaveLength(1);
@@ -42,6 +45,34 @@ test("hides the footer immediately without hiding time or disabling keyboard cop
     document.invalidate();
     expect(document.render(30).at(-1)?.trim()).toBe("⧉");
   } finally { document.dispose(); }
+});
+test.each([true, false])("leaves untimed blocks undecorated even when clocks are %s", show => {
+  let label = "";
+  let copies = 0;
+  const events: TuiMouseEvent[] = [];
+  const native: Component = {
+    render: () => ["", "Package updates are available.", ""], invalidate() {},
+    handleMouse: event => { events.push(event); return { handled: true }; },
+  };
+  const message = new CompactMessage(native, () => label, () => theme, () => 0, () => show, () => { copies++; });
+  try {
+    message.prepare(30, true);
+    expect(message.render(30)).toEqual(["", "Package updates are available."]);
+    expect(message.searchClock()).toBeUndefined();
+    message.handleMouse(pointer(28, 1));
+    expect(events.at(-1)).toMatchObject({ y: 1, width: 30, height: 3 });
+    message.handleMouse(pointer(28, 2));
+    expect(copies).toBe(0);
+    label = "12:34:56";
+    message.prepare(30, true);
+    expect(message.render(30).at(-1)?.trim()).toBe("⧉");
+    label = "";
+    message.prepare(30, true);
+    expect(message.render(30)).toEqual(["", "Package updates are available."]);
+    expect(message.searchClock()).toBeUndefined();
+    message.handleMouse(pointer(28, 2));
+    expect(copies).toBe(0);
+  } finally { message.dispose(); }
 });
 test.each([true, false])("places time above and the copy icon below without a side control gutter (clock %s)", show => {
   let nativeWidth = 0;
