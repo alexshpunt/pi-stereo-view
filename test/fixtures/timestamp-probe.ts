@@ -106,7 +106,9 @@ export default function timestampProbe(pi: ExtensionAPI): void {
         Reflect.set(user, "text", original);
       }
     }
+    if (process.env.TIMESTAMP_ZOOM_ACTIVITY === "1") await click("[ ↗ ]", "Activity");
     if (process.env.TIMESTAMP_SCROLLBAR === "1") {
+      await click("[ ↗ ]", "Conversation");
       for (const view of views()) {
         view.setScrollbar("auto");
         const lines = view.children[0].render(tui.terminal.columns).map(stripTerminalSequences);
@@ -121,6 +123,7 @@ export default function timestampProbe(pi: ExtensionAPI): void {
       frames.scrollbarVisible = views().map(view => String(view.isScrollbarVisible));
     }
     if (process.env.TIMESTAMP_LAYOUTS === "1") {
+      await click("[ ▣ ]");
       await inspect("combined");
       for (const view of views()) view.scrollTo(100_000);
       frames.combinedEnd = await capture();

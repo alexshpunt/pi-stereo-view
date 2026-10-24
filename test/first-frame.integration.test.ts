@@ -121,12 +121,40 @@ test("falls back without dropping a foreign startup layout entry", async () => {
   }
 });
 
-for (const fallback of ["combined", "regular", "narrow"] as const) {
+for (const layout of ["columns", "rows"] as const) for (const legacy of [
+  { name: "disabled", mode: "combined", zoom: null },
+  { name: "chat", mode: "split", zoom: "chat" },
+  { name: "activity", mode: "split", zoom: "activity" },
+] as const) {
+  test(`ignores legacy ${legacy.name} view in the first saved ${layout} frame`, async () => {
+    const { cwd, agent } = await workspace();
+    try {
+      await writeFile(path.join(agent, "settings.json"), JSON.stringify({ packages: [path.resolve(".")] }));
+      await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+        ...preferences(layout), mode: legacy.mode, zoom: legacy.zoom,
+      }));
+      const result = await new PiIntegrationTest({
+        testName: `first-frame-legacy-${layout}-${legacy.name}`, artifactsDir: path.resolve("tmp/test-runs"), cwd,
+        piCommand: path.resolve("test/fixtures/startup-host.sh"), isolateUserResources: false,
+        environment: { PI_CODING_AGENT_DIR: agent }, rawMode: false, tuiSize: { cols: 140, rows: 38 },
+        extensions: [], tools: [], conversation: [assistantMessage([text("LEGACY VIEW RESET")])],
+      }).run("LEGACY VIEW CHECK");
+      const frame = firstFrame(result.terminalOutput);
+      assertSplit(frame, layout);
+      expect(frame).not.toContain("[ ↙ ]");
+      expect(result.terminalOutput).toContain("LEGACY VIEW RESET");
+      expect(result.providerRequests).toHaveLength(1);
+    } finally {
+      await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
+    }
+  });
+}
+for (const fallback of ["regular", "narrow"] as const) {
   test(`keeps ${fallback} startup usable without forcing split`, async () => {
     const { cwd, agent } = await workspace();
     try {
       await writeFile(path.join(agent, "settings.json"), JSON.stringify({ packages: [path.resolve(".")] }));
-      await writeFile(path.join(agent, "transcript.json"), JSON.stringify(preferences("columns", fallback === "combined" ? "combined" : "split")));
+      await writeFile(path.join(agent, "transcript.json"), JSON.stringify(preferences("columns")));
       const result = await new PiIntegrationTest({
         testName: `first-frame-${fallback}`, artifactsDir: path.resolve("tmp/test-runs"), cwd,
         piCommand: path.resolve("test/fixtures/startup-host.sh"), isolateUserResources: false,
