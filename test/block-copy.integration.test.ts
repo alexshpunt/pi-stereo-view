@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { sliceByColumn } from "@earendil-works/pi-tui";
 import { assistantMessage, getToolExecution, getToolResultText, PiIntegrationTest, testArtifactsDir, text, toolCall } from "pi-coding-agent-test";
 import { expect, test } from "vitest";
 
@@ -91,10 +92,12 @@ test.each([
     const toolFrame = observation.frames.firstTool.join("\n");
     expect(toolFrame).toContain("COLLAPSED COPY RESULT");
     expect(toolFrame).not.toContain("first full result line 69");
-    const userIndex = observation.frames.user.findIndex(line => line.includes("USER COPY"));
+    // Activity may have a copy footer on the same screen row as Conversation text.
+    const userFrame = observation.frames.user.map(line => layout === "columns" ? sliceByColumn(line, 0, 70) : line);
+    const userIndex = userFrame.findIndex(line => line.includes("USER COPY"));
     expect(userIndex).toBeGreaterThanOrEqual(0);
-    expect(observation.frames.user[userIndex]).not.toContain("⧉");
-    const beforeUser = observation.frames.user.slice(Math.max(0, userIndex - 3), userIndex).join("\n");
+    expect(userFrame[userIndex]).not.toContain("⧉");
+    const beforeUser = userFrame.slice(Math.max(0, userIndex - 3), userIndex).join("\n");
     if (showTimestamps) expect(beforeUser).toMatch(/\d{2}:\d{2}:\d{2}/);
     else expect(beforeUser).not.toMatch(/\d{2}:\d{2}:\d{2}/);
     expect(observation.frames.copySettings.join("\n")).toContain("Show copy buttons");

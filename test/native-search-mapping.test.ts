@@ -104,7 +104,10 @@ const setup = (text: string, showTimestamps: boolean): { document: NativeDocumen
   source.addChild(new Container());
   source.addChild(new Container());
   source.addChild(history);
-  const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
+  const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [{
+    type: "message", id: "user", parentId: null, timestamp: "2001-10-09T12:34:56Z",
+    message: { role: "user", content: text, timestamp: Date.parse("2001-10-09T12:34:56Z") },
+  }], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
   const document = new NativeDocument(source, "chat", timestamps, () => colors, () => 0, () => showTimestamps);
   return { document, hit: line => ({ entry: { source: user, label: "User", text }, line, text: text.split("\n")[line] }) };
 };
@@ -134,7 +137,7 @@ test.each([false, true])("keeps genuine saved timestamps searchable with display
   expect(stripTerminalSequences(rows[savedRow]).trim()).toBe("finished at 12:34:56");
   if (showTimestamps) {
     expect(rows[0]).not.toContain("\x1b[30;43m");
-    expect(stripTerminalSequences(rows[0])).toBe(" --:--:--");
+    expect(stripTerminalSequences(rows[0])).toMatch(/^ \d{2}:\d{2}:\d{2}$/);
   }
   document.dispose();
 });
