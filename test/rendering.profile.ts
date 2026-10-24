@@ -41,7 +41,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
   try {
     await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true, hideThinkingBlock: false, fullscreenScrollbar: scrollbar, compaction: { enabled: false } }));
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
-      mode: mode === "combined" ? "combined" : "split", side: "left", chatWidth: Math.floor((width - 1) * 0.35),
+      mode: "split", side: "left", chatWidth: Math.floor((width - 1) * 0.35),
       layout: mode === "rows" ? "rows" : "columns", chatHeight: null, zoom: null, showTimestamps: true,
     }));
     const manager = SessionManager.create(cwd, cwd);

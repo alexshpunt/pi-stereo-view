@@ -125,6 +125,16 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     try {
       inspector.connect();
       await capture();
+      if (process.env.PROFILE_MODE === "combined") {
+        // Combined is a temporary view, so activate it before measuring that baseline.
+        const toolbar = stripTerminalSequences(tui.getScreenLines()[0]);
+        const button = toolbar.indexOf("[ ▣ ]");
+        if (button < 0) throw new Error("Missing split toggle for combined profile");
+        for (const suffix of ["M", "m"]) {
+          tui.handleTerminalInput(`\x1b[<0;${button + 3};1${suffix}`);
+          await capture();
+        }
+      }
       const mounted = containers();
       for (const pane of mounted.filter(component => component.children.length === 2 && isScrollView(component.children[1] as Container))) {
         const render = pane.render;
