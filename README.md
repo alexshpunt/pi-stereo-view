@@ -157,7 +157,7 @@ Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active p
 
 ## Settings and limits
 
-Your layout, panel order, sizes, zoom, split on/off, timestamp and copy-button settings are saved automatically and restored next time.
+Your layout, panel order, sizes, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
 
 - Tested with Pi 1.1.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.

@@ -54,7 +54,7 @@ If a custom tool renderer omits saved matching text, a temporary Search match fr
 
 ## Persisted settings and tool times
 
-Layout, panel order, sizes, zoom, split on/off and timestamp visibility are saved in `transcript.json` in Pi's agent directory. Saved numeric Conversation heights remain manual until the user selects automatic height. Saved arrangements are not reset when defaults change.
+Layout, panel order, sizes, timestamp visibility and copy-button visibility are saved in `transcript.json` in Pi's agent directory. Zoom and split on/off are session-only state and are excluded from that file. Every session starts split and unzoomed; legacy saved `mode` and `zoom` fields are ignored without discarding the saved arrangement. Saved numeric Conversation heights remain manual until the user selects automatic height. Saved arrangements are not reset when defaults change.
 
 Tool-start times are collected as display-only session metadata; they do not become messages in the model's context. New calls keep their recorded start time through streaming, completion and restart. Historical calls without that metadata use the agent message's time as an approximation, marked with `~`. Blocks with unknown times keep their native content without clock or copy-button rows, regardless of timestamp visibility.
 
