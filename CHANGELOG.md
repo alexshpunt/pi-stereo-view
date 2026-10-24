@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7 - 2026-10-24
+
+### Fixed
+
+- Keep panel zoom and split on/off temporary to the current session. New sessions always show both panels using the saved layout, order and sizes.
+- Ignore zoom and split-state values from older settings files without resetting panel sizes or timestamp and copy-button preferences.
+
 ## 0.1.6 - 2026-10-24
 
 ### Fixed
