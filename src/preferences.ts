@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
-/** Saved display settings only; they never become session messages. */
+/** Display state; mode and zoom are session-only, while arrangement and display choices are saved. */
 export interface Preferences {
   mode: "split" | "combined";
   /** Left means first: left in columns, top in rows. */
@@ -35,19 +35,18 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   // The first version only had columns; keep that saved arrangement.
   const layout = record.layout === undefined ? "columns" : record.layout;
   const chatHeight = record.chatHeight === undefined ? defaults.chatHeight : record.chatHeight;
-  const zoom = record.zoom === undefined ? defaults.zoom : record.zoom;
   const showTimestamps = record.showTimestamps === undefined ? defaults.showTimestamps : record.showTimestamps;
   const showCopyButtons = record.showCopyButtons === undefined ? defaults.showCopyButtons : record.showCopyButtons;
-  if ((record.mode !== "split" && record.mode !== "combined") ||
-      (record.side !== "left" && record.side !== "right") ||
+  if ((record.side !== "left" && record.side !== "right") ||
       (record.chatWidth !== null && (typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
         record.chatWidth < 24 || record.chatWidth > 240)) ||
       (layout !== "columns" && layout !== "rows") ||
       (chatHeight !== null && (typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240)) ||
-      (zoom !== null && zoom !== "activity" && zoom !== "chat") || typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean") {
+      typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean") {
     throw new Error("Invalid pi-stereo-view preferences");
   }
-  return { mode: record.mode, side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom, showTimestamps, showCopyButtons };
+  // Legacy files may contain mode/zoom. Every session starts with both panels visible.
+  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons };
 }
 
 /** Atomically save only the display settings, never session messages. */
@@ -55,7 +54,9 @@ export async function savePreferences(file: string, preferences: Preferences): P
   await mkdir(path.dirname(file), { recursive: true });
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
-    await writeFile(temporary, JSON.stringify(preferences, null, 2) + "\n", { mode: 0o600 });
+    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons } = preferences;
+    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons };
+    await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
   } finally {
     await rm(temporary, { force: true });
