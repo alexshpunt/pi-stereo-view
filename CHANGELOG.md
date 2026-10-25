@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8 - 2026-10-25
+
+### Fixed
+
+- Prevent horizontal squashing of the copy icon in VS Code terminals while preserving its monochrome glyph and two-cell click area.
+
 ## 0.1.7 - 2026-10-24
 
 ### Fixed

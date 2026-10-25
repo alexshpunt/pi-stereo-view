@@ -1,5 +1,5 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { stripTerminalSequences, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { stripTerminalSequences, visibleWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { CompactMessage } from "../src/timestamps.js";
 import { searchHitRow } from "../src/search-highlight.js";
@@ -14,6 +14,23 @@ const pointer = (x: number, y: number): TuiMouseEvent => ({
   width: 30, height: 10, shift: false, alt: false, ctrl: false,
 });
 
+test("keeps the copy control a composed grapheme inside its two-cell slot", () => {
+  const message = new CompactMessage({ render: () => ["body"], invalidate() {} },
+    () => "12:34:56", () => theme, () => 0, () => true, () => {});
+  try {
+    message.prepare(30, true);
+    const row = stripTerminalSequences(message.render(30).at(-1)!);
+    const graphemes = [...new Intl.Segmenter().segment(row.trimStart())].map(part => part.segment);
+    expect(graphemes).toHaveLength(2);
+    expect(graphemes[0].codePointAt(0)).toBe(0x29c9);
+    const markers = [...graphemes[0]].slice(1);
+    expect(markers.length).toBeGreaterThan(0);
+    expect(markers.every(marker => /\p{Default_Ignorable_Code_Point}/u.test(marker))).toBe(true);
+    expect(visibleWidth(graphemes[0])).toBe(1);
+    expect(graphemes[1]).toBe(" ");
+    expect(visibleWidth(row)).toBe(30);
+  } finally { message.dispose(); }
+});
 test("hides the footer immediately without hiding time or disabling keyboard copies", () => {
   class UserMessageComponent extends Text {}
   const user = new UserMessageComponent("USER SOURCE", 0, 0);
@@ -43,7 +60,7 @@ test("hides the footer immediately without hiding time or disabling keyboard cop
     expect(copied).toEqual(["USER SOURCE"]);
     show = true;
     document.invalidate();
-    expect(document.render(30).at(-1)?.trim()).toBe("⧉");
+    expect(document.render(30).at(-1)?.trim()).toBe("⧉\u034f");
   } finally { document.dispose(); }
 });
 test.each([true, false])("leaves untimed blocks undecorated even when clocks are %s", show => {
@@ -65,7 +82,7 @@ test.each([true, false])("leaves untimed blocks undecorated even when clocks are
     expect(copies).toBe(0);
     label = "12:34:56";
     message.prepare(30, true);
-    expect(message.render(30).at(-1)?.trim()).toBe("⧉");
+    expect(message.render(30).at(-1)?.trim()).toBe("⧉\u034f");
     label = "";
     message.prepare(30, true);
     expect(message.render(30)).toEqual(["", "Package updates are available."]);
@@ -88,7 +105,7 @@ test.each([true, false])("places time above and the copy icon below without a si
     const rows = message.render(30).map(stripTerminalSequences);
     const header = show ? [" 12:34:56"] : [];
     expect(nativeWidth).toBe(29);
-    expect(rows).toEqual(["", ...header, "a".repeat(29), "body", " ".repeat(27) + "⧉ "]);
+    expect(rows).toEqual(["", ...header, "a".repeat(29), "body", " ".repeat(27) + "⧉\u034f "]);
     const contentRow = 1 + header.length;
     message.handleMouse(pointer(28, contentRow));
     expect(events.at(-1)).toMatchObject({ x: 28, y: 1, width: 29, height: 4 });
@@ -121,7 +138,7 @@ test("keeps image protocol rows intact between the header and footer", () => {
     const rows = message.render(30);
     expect(rows[0]).toBe(" 12:34:56");
     expect(rows.slice(1, -1)).toEqual(content);
-    expect(rows.at(-1)?.trim()).toBe("⧉");
+    expect(rows.at(-1)?.trim()).toBe("⧉\u034f");
   } finally { message.dispose(); }
 });
 

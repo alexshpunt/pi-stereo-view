@@ -36,7 +36,7 @@ test("keeps one blank row between tool calls and fits short Activity to its cont
     expect(lines[row]).not.toMatch(/\d{2}:\d{2}:\d{2}/);
   }
   expect(lines[second - 2].trim()).toBe("");
-  expect(lines[second - 3].trim()).toBe("⧉");
+  expect(lines[second - 3].trim()).toBe("⧉\u034f");
   expect(lines[second - 4]).toContain("CLOCK DONE MARKER");
   const last = lines.reduce((found, line, row) => line.includes("CLOCK DONE MARKER") ? row : found, -1);
   const borders = lines.flatMap((line, row) => line.includes("─".repeat(120)) ? [row] : []).slice(-2);
@@ -76,11 +76,11 @@ test("fits Conversation to clock headers and copy footers without losing paragra
   const second = lines.findIndex(line => line.includes("SECOND PARAGRAPH"));
   expect(user).toBe(header + 3);
   expect(first).toBe(user + 4);
-  expect(lines[user + 1].trim()).toBe("⧉");
+  expect(lines[user + 1].trim()).toBe("⧉\u034f");
   expect(lines[user + 2].trim()).toBe("");
   expect(second).toBe(first + 2);
   expect(lines[first + 1].trim()).toBe("");
-  expect(lines[second + 1].trim()).toBe("⧉");
+  expect(lines[second + 1].trim()).toBe("⧉\u034f");
   expect(activity).toBe(second + 3);
   for (const row of [user, first]) {
     expect(lines[row - 1]).toMatch(/^ \d{2}:\d{2}:\d{2}\s*[┃│]?$/);

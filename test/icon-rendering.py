@@ -1,6 +1,9 @@
 """Check optical icon centering in actual terminal pixels, not string widths.
 
 Requires Pillow. Pass a tight crop containing one bracketed icon and no other text.
+By default, check optical centering. With --shape-reference, compare ink dimensions
+against the same encoded control/font in an unscaled native capture; this separate
+mode detects horizontal squashing and does not assert optical centering.
 A headless replay or inspect_tui HTML image is not a native terminal screenshot.
 """
 
@@ -56,7 +59,9 @@ def measure(image, foreground, tolerance):
         raise ValueError("Icon ink touches a bracket or crop contains unrelated content")
     expected = ((left[0] + left[2]) / 2 + (right[0] + right[2]) / 2) / 2
     actual = (min(part[0] for part in glyph) + max(part[2] for part in glyph)) / 2
-    return expected, actual
+    bounds = (min(part[0] for part in glyph), min(part[1] for part in glyph),
+              max(part[2] for part in glyph), max(part[3] for part in glyph))
+    return expected, actual, bounds
 
 
 def main():
@@ -65,6 +70,8 @@ def main():
     parser.add_argument("--foreground", default="131,165,152", help="Icon RGB color")
     parser.add_argument("--tolerance", type=int, default=55, help="Maximum RGB channel difference")
     parser.add_argument("--max-offset", type=float, default=.5, help="Allowed horizontal error in pixels")
+    parser.add_argument("--shape-reference", type=Path,
+                        help="Compare ink size, not centering, with an unscaled native bracketed glyph")
     parser.add_argument("--annotated", type=Path, help="Save a marked copy for visual inspection")
     args = parser.parse_args()
     foreground = tuple(map(int, args.foreground.split(",")))
@@ -74,18 +81,32 @@ def main():
         parser.error("Tolerance must be 0..255 and max-offset cannot be negative")
     image = Image.open(args.image).convert("RGB")
     try:
-        expected, actual = measure(image, foreground, args.tolerance)
+        expected, actual, bounds = measure(image, foreground, args.tolerance)
+        if args.shape_reference:
+            reference = Image.open(args.shape_reference).convert("RGB")
+            _, _, reference_bounds = measure(reference, foreground, args.tolerance)
     except ValueError as error:
         parser.error(str(error))
     offset = actual - expected
-    passed = abs(offset) <= args.max_offset
-    print(f"{'PASS' if passed else 'FAIL'} {args.image}: ink offset {offset:+.2f}px "
-          f"(allowed ±{args.max_offset:.2f}px); bracket center {expected:.2f}, icon center {actual:.2f}")
+    if args.shape_reference:
+        size = (bounds[2] - bounds[0] + 1, bounds[3] - bounds[1] + 1)
+        reference_size = (reference_bounds[2] - reference_bounds[0] + 1,
+                          reference_bounds[3] - reference_bounds[1] + 1)
+        passed = size == reference_size
+        print(f"{'PASS' if passed else 'FAIL'} {args.image}: ink size {size[0]}×{size[1]}px; "
+              f"reference {reference_size[0]}×{reference_size[1]}px; centering not evaluated")
+    else:
+        passed = abs(offset) <= args.max_offset
+        print(f"{'PASS' if passed else 'FAIL'} {args.image}: ink offset {offset:+.2f}px "
+              f"(allowed ±{args.max_offset:.2f}px); bracket center {expected:.2f}, icon center {actual:.2f}")
     if args.annotated:
         args.annotated.parent.mkdir(parents=True, exist_ok=True)
         draw = ImageDraw.Draw(image)
-        draw.line((expected, 0, expected, image.height - 1), fill="magenta")
-        draw.line((actual, 0, actual, image.height - 1), fill="cyan")
+        if args.shape_reference:
+            draw.rectangle(bounds, outline="cyan")
+        else:
+            draw.line((expected, 0, expected, image.height - 1), fill="magenta")
+            draw.line((actual, 0, actual, image.height - 1), fill="cyan")
         image.resize((image.width * 10, image.height * 10), Image.Resampling.NEAREST).save(args.annotated)
     return 0 if passed else 1
 
