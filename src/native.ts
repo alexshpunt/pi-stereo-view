@@ -1,10 +1,12 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
+import { Container, Spacer, Text, truncateToWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.js";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.js";
-import { NativeContentIndex, type Pane } from "./content.js";
+import { NativeContentIndex, type ContentEntry, type Pane } from "./content.js";
 import { CompactTool } from "./compact-tools.js";
+import { toolPresentations, type ToolPresentation } from "./tool-presentation.js";
+import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.js";
 export type { Pane } from "./content.js";
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
@@ -39,6 +41,28 @@ class SearchHighlight implements Component {
   }
 }
 
+/** Keep hierarchy guides outside native rendering, search and pointer coordinates. */
+class ToolIndent extends Container {
+  private readonly prefix: string;
+
+  constructor(component: Component, depth: number, body: boolean, private readonly theme: () => Theme) {
+    super();
+    this.addChild(component);
+    this.prefix = " │".repeat(depth) + (body ? " " : "");
+  }
+
+  override render(width: number): string[] {
+    const inset = Math.min(width, this.prefix.length);
+    const prefix = this.theme().fg("dim", this.prefix.slice(0, inset));
+    return super.render(Math.max(0, width - inset)).map(line => truncateToWidth(prefix + line, width, ""));
+  }
+
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+    const inset = Math.min(event.width, this.prefix.length);
+    if (event.x < inset) return undefined;
+    return super.handleMouse({ ...event, x: event.x - inset, width: Math.max(0, event.width - inset) });
+  }
+}
 /**
  * Project the live native component tree, not messages or renderer strings.
  * Assistant shells keep the native render method and original content components.
@@ -48,6 +72,13 @@ class SearchHighlight implements Component {
 export class NativeDocument extends Container {
   private readonly stamped = new WeakMap<Component, CompactMessage>();
   private readonly toolRows = new WeakMap<Component, CompactTool>();
+  private readonly groupRows = new WeakMap<Component, CompactTool>();
+  private readonly indented = new WeakMap<Component, ToolIndent[]>();
+  private readonly openGroups = new WeakSet<Component>();
+  private readonly openTools = new WeakSet<Component>();
+  private groups = new Map<Component, ToolGroup>();
+  private present: (name: string) => ToolPresentation = name => ({ name, key: name });
+  private searchTool?: Component;
   private readonly clockOwners = new WeakMap<Component, Component>();
   private readonly compactBlocks = new Map<Component, CompactMessage>();
   private readonly positions = new Map<Component, { row: number; lines: string[]; clock?: SearchClock; excerptRow?: number }>();
@@ -76,6 +107,8 @@ export class NativeDocument extends Container {
     private readonly copy?: (text: string | undefined) => void,
     private readonly showCopy: () => boolean = () => true,
     private readonly compactTools: () => boolean = () => false,
+    private readonly getTools: () => readonly ToolInfo[] = () => [],
+    private readonly beforeExpand: () => void = () => {},
   ) {
     super();
   }
@@ -143,6 +176,7 @@ export class NativeDocument extends Container {
 
   /** Clear search-only fragments, measurements and highlighting without invalidating native blocks. */
   clearSearch(): void {
+    this.searchTool = undefined;
     this.searchAnchor = undefined;
     this.excerpt = undefined;
     this.searchQuery = "";
@@ -192,6 +226,63 @@ export class NativeDocument extends Container {
     if (event.type === "wheel" || (event.type === "press" && event.button === "left")) this.interact();
     return super.handleMouse(event);
   }
+  private toolOpen(source: Component): boolean {
+    return this.openTools.has(source) || this.searchTool === source;
+  }
+  private groupOpen(group: ToolGroup): boolean {
+    return this.openGroups.has(group.calls[0].source) || (this.searchTool !== undefined && this.groups.get(this.searchTool) === group);
+  }
+  private compactRow(entry: ContentEntry): CompactTool {
+    let row = this.toolRows.get(entry.source);
+    if (!row) {
+      row = new CompactTool(() => {
+        const summary = entry.tool!();
+        return { ...summary, name: this.present(summary.name).name };
+      }, this.theme, {
+        clock: () => this.showTimestamps() ? this.timestamps.label(entry.source) : "",
+        gutter: this.timestampGutter,
+        expanded: () => this.toolOpen(entry.source),
+        toggle: () => {
+          if (!this.index.contains(entry.source, this.pane)) return;
+          this.beforeExpand();
+          if (this.toolOpen(entry.source)) { this.openTools.delete(entry.source); if (this.searchTool === entry.source) this.clearSearch(); }
+          else { this.openTools.add(entry.source); entry.search(this.lastWidth).reveal?.(); }
+          this.frameWidth = undefined;
+        },
+      });
+      this.toolRows.set(entry.source, row);
+    }
+    return row;
+  }
+  private indent(component: Component, depth: number, body = false): Component {
+    if (!depth) return component;
+    let levels = this.indented.get(component);
+    if (!levels) { levels = []; this.indented.set(component, levels); }
+    const inset = depth * 2 + (body ? 1 : 0);
+    return levels[inset] ??= new ToolIndent(component, depth, body, this.theme);
+  }
+  private groupRow(group: ToolGroup): CompactTool {
+    const source = group.calls[0].source;
+    let row = this.groupRows.get(source);
+    if (!row) {
+      row = new CompactTool(() => groupSummary(this.groups.get(source)!), this.theme, {
+        count: () => this.groups.get(source)!.calls.length,
+        clock: () => this.showTimestamps() ? this.timestamps.label(source) : "",
+        gutter: this.timestampGutter,
+        expanded: () => this.groupOpen(this.groups.get(source)!),
+        toggle: () => {
+          const current = this.groups.get(source);
+          if (!current || !this.index.contains(source, this.pane)) return;
+          this.beforeExpand();
+          if (this.groupOpen(current)) { this.openGroups.delete(source); if (current.calls.some(call => call.source === this.searchTool)) this.clearSearch(); }
+          else this.openGroups.add(source);
+          this.frameWidth = undefined;
+        },
+      });
+      this.groupRows.set(source, row);
+    }
+    return row;
+  }
   override render(width: number): string[] {
     if (this.frameActive && this.frameWidth === width && this.frameLines) return this.frameLines;
     const chat = this.source.children[2] as Container;
@@ -206,6 +297,26 @@ export class NativeDocument extends Container {
     let visibleBlock = false;
     let toolRun = false;
     const compactTools = this.pane === "activity" && this.compactTools();
+    this.present = toolPresentations(compactTools ? this.getTools() : []);
+    const groups = compactTools ? toolGroups(this.index.entries(), this.present) : new Map<Component, ToolGroup>();
+    // Carry visible expansion through state-driven splits and merges, without
+    // reopening explicitly collapsed runs. Read the old state before adding heads.
+    const opening: Component[] = [];
+    for (const [source, group] of groups) {
+      if (group.calls[0].source !== source || group.calls.length < 2 || this.openGroups.has(source)) continue;
+      if (group.calls.some(call => {
+        const previous = this.groups.get(call.source);
+        return previous && (previous.calls.length > 1 ? this.openGroups.has(previous.calls[0].source) : this.openTools.has(call.source));
+      })) opening.push(source);
+    }
+    if (compactTools) for (const [source, previous] of this.groups) {
+      const current = groups.get(source);
+      if (previous.calls[0].source === source && previous.calls.length > 1 &&
+        (!current || current.calls.length < 2 || current.calls[0].source !== source)) this.openGroups.delete(source);
+    }
+    for (const source of opening) this.openGroups.add(source);
+    this.groups = groups;
+    this.searchTool = this.searchAnchor ? this.index.entries(this.pane).find(entry => entry.source === this.searchAnchor!.entry.source)?.owner : undefined;
     for (const entry of this.index.entries(this.pane)) {
       const component = entry.source;
       const routed = entry.component;
@@ -213,32 +324,39 @@ export class NativeDocument extends Container {
       const start = result.length;
       const wasVisible = visibleBlock;
       let clock: SearchClock | undefined;
-      if (compactTools && entry.kind === "tool") {
+      let nativeBody = true;
+      let bodyDepth = 0;
+      const compactTool = compactTools && entry.kind === "tool";
+      if (compactTool) {
+        const group = this.groups.get(entry.owner);
+        const grouped = group !== undefined && group.calls.length > 1;
+        bodyDepth = grouped ? 2 : 1;
+        const members = !grouped || this.groupOpen(group);
         if (entry.tool) {
-          let tool = this.toolRows.get(component);
-          if (!tool) {
-            tool = new CompactTool(entry.tool, this.theme);
-            this.toolRows.set(component, tool);
-          }
           if (visibleBlock && !toolRun) result.push(new Spacer(1));
-          result.push(tool);
+          if (grouped && group.calls[0].source === component) result.push(this.groupRow(group));
+          if (members) result.push(this.indent(this.compactRow(entry), grouped ? 1 : 0));
           toolRun = true;
           visibleBlock = true;
         }
-        // Linked output is still indexed for search/copy, but has no compact body.
-      } else if (!entry.compact) {
+        nativeBody = members && this.toolOpen(entry.owner);
+      }
+      const contentStart = result.length;
+      const bodyWidth = Math.max(0, width - (bodyDepth ? bodyDepth * 2 + 1 : 0));
+      if (nativeBody && !entry.compact) {
         toolRun = false;
         result.push(...entry.spacing, routed);
-      } else {
-        toolRun = false;
+      } else if (nativeBody) {
+        if (!compactTool) toolRun = false;
         let stamped = this.stamped.get(routed);
         if (!stamped) {
           stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
-            this.theme, this.timestampGutter, this.showTimestamps, this.copy ? () => this.copyBlock(component) : undefined, this.showCopy);
+            this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.compactTools() && entry.kind === "tool"),
+            this.copy ? () => this.copyBlock(component) : undefined, this.showCopy);
           this.stamped.set(routed, stamped);
         }
         this.compactBlocks.set(component, stamped);
-        visibleBlock = stamped.prepare(width, visibleBlock) || visibleBlock;
+        visibleBlock = stamped.prepare(bodyWidth, compactTool ? false : visibleBlock) || visibleBlock;
         result.push(stamped);
         clock = stamped.searchClock();
       }
@@ -247,7 +365,8 @@ export class NativeDocument extends Container {
         result[last] = this.highlighted(result[last]);
       }
       if (locateMatch) {
-        const lines = result.slice(start).flatMap(child => child.render(width));
+        const prefix = result.slice(start, contentStart).flatMap(child => child.render(width));
+        const lines = [...prefix, ...result.slice(contentStart).flatMap(child => child.render(bodyWidth))];
         let excerptRow: number | undefined;
         if (this.excerpt?.entry.source === component) {
           const fragment = new Text(this.theme().fg("accent", "Search match: ") + searchText(this.excerpt.text), 1, 0);
@@ -258,12 +377,15 @@ export class NativeDocument extends Container {
           excerptRow = row + lines.length;
           const decorated = this.highlighted(fragment, true);
           result.push(decorated);
-          lines.push(...decorated.render(width));
+          lines.push(...decorated.render(bodyWidth));
           visibleBlock = true;
         }
-        this.positions.set(component, { row, lines, clock, excerptRow });
+        // Compact controls/clocks are not saved text. Search the original body only.
+        const prefixRows = prefix.length;
+        this.positions.set(component, { row: row + prefixRows, lines: lines.slice(prefixRows), clock, excerptRow });
         row += lines.length;
       }
+      for (let child = contentStart; child < result.length; child++) result[child] = this.indent(result[child], bodyDepth, true);
     }
     // Native follow-end guidance overlays the bottom row. Keep the selected last line above it.
     if (this.searchAnchor) result.push(new Spacer(1));

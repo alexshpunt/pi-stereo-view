@@ -44,7 +44,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           currentValue: preferences.showCopyButtons ? "on" : "off", values: ["on", "off"],
         }, {
           id: "compactTools", label: "Compact Activity tools",
-          description: "Show each tool call on one row and hide results. Full text stays searchable and copyable.",
+          description: "Group adjacent tools and expand individual calls inline. Full text stays searchable and copyable.",
           currentValue: preferences.compactTools ? "on" : "off", values: ["on", "off"],
         }, {
           id: "height", label: "Conversation height",
@@ -107,7 +107,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         }
         void copyToClipboard(text).then(() => ui.notify("Block sent to clipboard.", "info"),
           error => ui.notify("Could not copy block: " + String(error), "error"));
-      });
+      }, () => pi.getAllTools());
     try { ensureLayout(); }
     catch (error) {
       layout.dispose();
