@@ -32,6 +32,7 @@ Messages and tools keep their familiar appearance. The input stays full width be
 ## Features
 
 - Arrange Conversation and Activity in columns or rows, swap or resize the panels, and zoom either one while keeping the input full width.
+- Group consecutive Activity tools and expand individual calls inline while keeping thinking visible.
 - Copy an individual user message, assistant reply or thinking block with its own copy icon.
 - Copy a complete tool call with its arguments, saved result and linked late output, including collapsed and off-screen text.
 - Search panel history with literal text, Boolean expressions or regular expressions, then jump between matches.
@@ -77,8 +78,9 @@ Click the toolbar and the buttons in each panel's header:
 | `[ ▤ ]` / `[ ▥ ]` | Switch between rows and columns. |
 | `[ ↕ ]` / `[ ↔ ]` | Swap the panels. |
 | `[ ↗ ]` / `[ ↙ ]` | Zoom a panel / restore the split. |
-| `[ ≡ ]` | Open timestamp, copy-button and Conversation height settings. |
+| `[ ≡ ]` | Open display and Conversation height settings. |
 | `[ ⌕ ]` | Search this panel. |
+| `[ ⊟ ]` / `[ ⊞ ]` | Compact Activity tools / restore full tools. |
 
 **Resize:** drag the double line between the panels — `═` in rows, `║` in columns.
 
@@ -89,6 +91,16 @@ In Rows, Conversation grows with its messages up to half the available history a
 Panels fit short content and scroll when history fills up. Each panel has its own scrolling, text selection and copy.
 
 Swap the panels whenever you want. Zoom a panel to give it the whole history area; the input stays visible. Restore it to return to your split. Turning split off returns to one combined history; the toolbar stays available to turn it back on.
+
+## Compact Activity
+
+Click `⊟` beside Search and Maximize in the Activity header to show compact tool calls. Adjacent calls to the same tool in the same state share a header with a count; every failed call stays separate, even beside another failure. Click that header to show the individual compact rows, then click a row to open its original full card and linked output. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls. Thinking, Conversation content and different tools end a group.
+
+Each call row has a one-cell left gutter, a colored status dot, its tool name and a short argument description. A group shows its shared running or successful state. Failed calls expose their own status and argument preview without opening a group. Long descriptions are truncated, not the saved calls. Verified local MCP forwarding aliases use their native tool's name; foreign, ambiguous and unknown tools keep their original identity.
+
+Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. You can also click `⊞` in the Activity header to restore full tools. Conversation and combined history keep their normal display.
+
+Compact tools work in columns, rows and zoomed Activity. The choice survives restart and defaults to off. For keyboard access, run `/stereo-view settings` and change **Compact Activity tools**.
 
 ## Search history
 
@@ -129,6 +141,8 @@ Use **Show copy buttons** in `≡` or `/stereo-view settings` to hide the icons 
 
 Conversation and Activity can show a dim local `HH:mm:ss` clock above each block on the left, with a small inset. The copy icon sits below the block on the right, so neither control takes width away from the text. New tool calls show their start time.
 
+In compact Activity, clocks sit at the start of the same line on the left, before the status and tool name, when space permits. A group shows its first call's original time; expanded member rows show their own. Opening a full card does not repeat its clock.
+
 Older tool calls may show `~HH:mm:ss` for an approximate time. Blocks without a known time show neither a clock nor a copy button; their content stays visible.
 
 Use `≡` or `/stereo-view settings` to hide or show clocks. This setting survives restart. Clocks appear in split and zoomed panels, not in combined history. They are display-only and are not added to the conversation sent to the model.
@@ -157,7 +171,7 @@ Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active p
 
 ## Settings and limits
 
-Your layout, panel order, sizes, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
+Your layout, panel order, sizes, compact Activity choice, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
 
 - Tested with Pi 1.1.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.

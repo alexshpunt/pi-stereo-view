@@ -21,6 +21,14 @@ The test compares visible ink, not character count or `visibleWidth`. It refuses
 
 Do not use `inspect_tui` as native font proof: its installed implementation recreates the pane's ANSI text with headless Chromium and a different font stack. Likewise, an isolated font-file raster does not prove Windows Terminal's actual fallback behavior.
 
+## Cell geometry and glyph ink
+
+Header and toolbar buttons use the shared five-cell `[ glyph ]` renderer. Cell width and mouse targets stay consistent even when a fallback font draws the glyph off-center. Equal spaces on both sides cannot correct a fractional-pixel bearing inside a cell.
+
+Measure the complete current set, including search, settings and both compact/full tool controls, in enabled and disabled colors. The atlas includes them all. Preserve the encoded control when testing variation selectors or combining characters; they can change shaping without changing cell width. Check the actual application after any candidate change.
+
+[Unicode UAX #11](https://www.unicode.org/reports/tr11/) separates character width properties from font-dependent glyph dimensions. [Windows Terminal's overhang handling](https://github.com/microsoft/terminal/pull/13549) can also reposition or scale glyphs. A passing native sample establishes that terminal, font configuration and scale; it does not guarantee optical centering in every font.
+
 ## Approved native samples
 
 `native-atlas.png` preserves the complete unchanged screenshot. The eight crops use x=355..419 and y=97+22×row..119+22×row (exclusive end), in the table's action order. Linear removes embedded data-URL images from exported Markdown, so this tracked source preserves the native pixel evidence.

@@ -1,6 +1,6 @@
 {
   "name": "pi-stereo-view",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "description": "Keep Pi conversation separate from tool output and agent activity.",
   "license": "MIT",

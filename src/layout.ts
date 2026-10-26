@@ -1,5 +1,5 @@
 import { setImmediate } from "node:timers/promises";
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
 import {
   Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, VStack,
   type Color, type Component, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
@@ -135,6 +135,7 @@ export class TranscriptLayout {
     private readonly timestamps: TranscriptTimestamps,
     private readonly openSettings: () => void,
     private readonly copy?: (text: string | undefined) => void,
+    private readonly getTools: () => readonly ToolInfo[] = () => [],
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
@@ -203,7 +204,8 @@ export class TranscriptLayout {
     const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
     const index = new NativeContentIndex(document);
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("activity"), false, index, this.copy, showCopyButtons);
+      () => this.activate("activity"), false, index, this.copy, showCopyButtons, () => this.preferences.compactTools, this.getTools,
+      () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); });
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("chat"), false, index, this.copy, showCopyButtons);
     this.documents = { activity: activityDocument, chat: chatDocument };
@@ -305,6 +307,13 @@ export class TranscriptLayout {
           }
           return undefined;
         }), basis: 0, grow: 1, minSize: 1 },
+        ...(target === "activity" ? [{ component: this.button(
+          () => this.preferences.compactTools ? "⊞" : "⊟",
+          () => {
+            this.activate("activity");
+            this.setCompactTools(!this.preferences.compactTools);
+          }, () => true, () => palette().fill,
+        ), basis: BUTTON_WIDTH, shrink: 0 }] : []),
         { component: this.button(() => "⌕", () => {
           this.activate(target);
           this.openSearch(target);
@@ -544,6 +553,12 @@ export class TranscriptLayout {
   /** Hide copy icons without disabling the keyboard copy picker. */
   setCopyButtons(show: boolean): void {
     this.preferences.showCopyButtons = show;
+    this.changed();
+  }
+
+  /** Project tool calls as dense rows while retaining their full search and copy text. */
+  setCompactTools(compact: boolean): void {
+    this.preferences.compactTools = compact;
     this.changed();
   }
   private defaultWidth(width: number): number {
