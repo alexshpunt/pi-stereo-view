@@ -15,7 +15,8 @@ interface NativeContent extends Component {
   toolCallId?: string;
   toolName?: string;
   args?: unknown;
-  result?: { content?: unknown };
+  result?: { content?: unknown; isError?: boolean };
+  isPartial?: boolean;
   command?: string;
   outputLines?: string[];
   customComponent?: Component;
@@ -30,6 +31,11 @@ interface NativeAssistant extends Container {
   setHideThinkingBlock(hidden: boolean): void;
 }
 
+export interface ToolSummary {
+  name: string;
+  args: unknown;
+  status: "running" | "success" | "error";
+}
 /** One native owner and its pane projection; spacing and search retain that same owner. */
 export interface ContentEntry {
   source: Component;
@@ -39,6 +45,8 @@ export interface ContentEntry {
   spacing: Component[];
   compact: boolean;
   search(width: number): Omit<SearchEntry, "source">;
+  /** Live execution metadata exists only on calls, never on linked output. */
+  tool?(): ToolSummary;
 }
 
 const nameOf = (component: Component): string => component.constructor.name;
@@ -162,7 +170,14 @@ export class NativeContentIndex {
   }
 
   private entry(source: Component, kind: ContentKind, spacing: Component[], compact: boolean, owner?: NativeContent): ContentEntry {
-    return { source, owner: owner ?? source, component: source, kind: owner ? "tool" : kind, spacing, compact, search: width => {
+    const tool = kind === "tool" ? (): ToolSummary => {
+      const native = source as NativeContent;
+      return {
+        name: native.toolName!, args: native.args,
+        status: !native.result || native.isPartial !== false ? "running" : native.result.isError ? "error" : "success",
+      };
+    } : undefined;
+    return { source, owner: owner ?? source, component: source, kind: owner ? "tool" : kind, spacing, compact, tool, search: width => {
       const native = source as NativeContent;
       if (kind === "tool") {
         if (typeof native.toolName !== "string") throw new Error("Pi's tool metadata is not supported");
