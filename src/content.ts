@@ -96,9 +96,9 @@ export class NativeContentIndex {
   constructor(private readonly source: Container) {}
 
   /** Return the same classification until native ownership or assistant content changes. */
-  entries(pane: Pane): ContentEntry[] {
+  entries(pane?: Pane): ContentEntry[] {
     this.refresh();
-    return this.content.filter(entry => panes[entry.kind] === pane);
+    return pane === undefined ? this.content : this.content.filter(entry => panes[entry.kind] === pane);
   }
 
   /** A rebuilt history cannot retain search hits belonging to removed native owners. */
