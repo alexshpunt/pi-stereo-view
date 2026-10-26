@@ -295,6 +295,7 @@ export class TranscriptLayout {
         invalidate() {},
       };
       const label = new HStack([
+        { component: new Text(" ", 0, 0), basis: 1, shrink: 0 },
         { component: new MouseRegion({
           render: width => new Text(this.theme().style(truncateToWidth((this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
             fg: this.searchPane() === target ? "accent" : palette().text, bg: palette().fill,
@@ -322,6 +323,7 @@ export class TranscriptLayout {
           () => this.preferences.zoom === target ? "↙" : "↗",
           () => this.maximize(target), () => true, () => palette().fill,
         ), basis: BUTTON_WIDTH, shrink: 0 },
+        { component: new Text(" ", 0, 0), basis: 1, shrink: 0 },
       ]);
       const header = new VStack([
         { component: line, basis: 1, shrink: 0, visible: () =>
