@@ -127,7 +127,7 @@ test.each(["chat", "activity"])("uses mouse buttons and both dividers without re
     expect(lines.slice(dockBorders[0]).some(line => line.includes("║"))).toBe(false);
   }
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({
-    side: "right", chatWidth: 44, layout: "rows", chatHeight: 4, showTimestamps: true, showCopyButtons: true,
+    side: "right", chatWidth: 44, layout: "rows", chatHeight: 4, showTimestamps: true, showCopyButtons: true, compactTools: false,
   });
   await run("expanded-panel-restart-" + zoom, false);
   const restored: string[] = JSON.parse(await readFile(path.join(cwd, "native-snapshot.json"), "utf8"));
@@ -155,7 +155,7 @@ test("starts both panels in the saved arrangement after disabling split in anoth
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
   }).run("USER MARKER");
   await run("save-combined-buttons");
-  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual(saved);
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, compactTools: false });
   await run("restore-combined-buttons");
   const frames: { before: string[]; after: string[] } = JSON.parse(await readFile(path.join(cwd, "button-toggle.json"), "utf8"));
   expect(clean(frames.before)).toContain("[ ▣ ]");
@@ -168,7 +168,7 @@ test("starts both panels in the saved arrangement after disabling split in anoth
   expect(clean(frames.after)).toContain("[ ◫ ]");
   expect(clean(frames.after)).toContain("USER MARKER");
   expect(clean(frames.after)).toContain("ANSWER MARKER");
-  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual(saved);
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, compactTools: false });
 });
 
 test("keeps mouse controls active while text and a real tool call stream", async () => {
