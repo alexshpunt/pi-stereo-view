@@ -42,7 +42,7 @@ export class CompactTool implements Component {
     const dot = theme.fg(status === "running" ? "warning" : status, "●");
     const count = this.options.count?.();
     const description = count ? "" : toolDescription(args);
-    const control = this.options.toggle ? theme.fg("muted", this.options.expanded?.() ? "⊟" : "⊞") + " " : "";
+    const control = this.options.toggle ? theme.fg("muted", this.options.expanded?.() ? "▾" : "▸") + " " : "";
     const text = `${dot} ${control}${singleLine(name)}${count ? ` ×${count}` : ""}${description ? " " + theme.fg("muted", description) : ""}`;
     const label = this.options.clock?.() ?? "";
     const clock = label && width >= visibleWidth(label) + 8 ? label : "";
