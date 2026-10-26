@@ -4,6 +4,7 @@ import { searchText, type SearchEntry, type SearchHit } from "./search.js";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.js";
 import { NativeContentIndex, type Pane } from "./content.js";
+import { CompactTool } from "./compact-tools.js";
 export type { Pane } from "./content.js";
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
@@ -46,6 +47,7 @@ class SearchHighlight implements Component {
  */
 export class NativeDocument extends Container {
   private readonly stamped = new WeakMap<Component, CompactMessage>();
+  private readonly toolRows = new WeakMap<Component, CompactTool>();
   private readonly clockOwners = new WeakMap<Component, Component>();
   private readonly compactBlocks = new Map<Component, CompactMessage>();
   private readonly positions = new Map<Component, { row: number; lines: string[]; clock?: SearchClock; excerptRow?: number }>();
@@ -73,6 +75,7 @@ export class NativeDocument extends Container {
     private readonly index = new NativeContentIndex(source),
     private readonly copy?: (text: string | undefined) => void,
     private readonly showCopy: () => boolean = () => true,
+    private readonly compactTools: () => boolean = () => false,
   ) {
     super();
   }
@@ -201,15 +204,33 @@ export class NativeDocument extends Container {
     const locateMatch = this.searchAnchor !== undefined || this.excerpt !== undefined;
     let row = 0;
     let visibleBlock = false;
+    let toolRun = false;
+    const compactTools = this.pane === "activity" && this.compactTools();
     for (const entry of this.index.entries(this.pane)) {
       const component = entry.source;
       const routed = entry.component;
       this.clockOwners.set(component, entry.owner);
       const start = result.length;
       const wasVisible = visibleBlock;
-      // Orientation keeps native padding; message projections share compact presentation.
-      if (!entry.compact) result.push(...entry.spacing, routed);
-      else {
+      let clock: SearchClock | undefined;
+      if (compactTools && entry.kind === "tool") {
+        if (entry.tool) {
+          let tool = this.toolRows.get(component);
+          if (!tool) {
+            tool = new CompactTool(entry.tool, this.theme);
+            this.toolRows.set(component, tool);
+          }
+          if (visibleBlock && !toolRun) result.push(new Spacer(1));
+          result.push(tool);
+          toolRun = true;
+          visibleBlock = true;
+        }
+        // Linked output is still indexed for search/copy, but has no compact body.
+      } else if (!entry.compact) {
+        toolRun = false;
+        result.push(...entry.spacing, routed);
+      } else {
+        toolRun = false;
         let stamped = this.stamped.get(routed);
         if (!stamped) {
           stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
@@ -219,8 +240,9 @@ export class NativeDocument extends Container {
         this.compactBlocks.set(component, stamped);
         visibleBlock = stamped.prepare(width, visibleBlock) || visibleBlock;
         result.push(stamped);
+        clock = stamped.searchClock();
       }
-      if (this.searchAnchor?.entry.source === component && !this.excerpt) {
+      if (this.searchAnchor?.entry.source === component && !this.excerpt && result.length > start) {
         const last = result.length - 1;
         result[last] = this.highlighted(result[last]);
       }
@@ -239,7 +261,7 @@ export class NativeDocument extends Container {
           lines.push(...decorated.render(width));
           visibleBlock = true;
         }
-        this.positions.set(component, { row, lines, clock: this.compactBlocks.get(component)?.searchClock(), excerptRow });
+        this.positions.set(component, { row, lines, clock, excerptRow });
         row += lines.length;
       }
     }
