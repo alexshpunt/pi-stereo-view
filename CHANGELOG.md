@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.9 - 2026-10-26
+
+### Added
+
+- Optional **Compact tools** mode shows tool calls as single-line status, name and argument previews. Full arguments and results remain searchable and copyable.
+- Adjacent calls with the same verified tool identity and execution state form a group. Every failed call stays separate.
+- Expand groups into individual calls, then open each original tool card independently. Left guides show both nesting levels, and linked output stays with its tool.
+- Verified MCP forwarding calls show their original tool names. Unverified and custom tool names remain unchanged.
+
+### Changed
+
+- Show original tool timestamps inline-left, before the status and tool name. Expanded members retain their own start times.
+- Inset compact Activity rows by one cell from the panel border.
+
+### Fixed
+
+- Preserve opened cards and explicit group collapse when streaming calls form, split or merge groups.
+- Keep native card wrapping, mouse actions and search positions aligned inside nested guides.
+
 ## 0.1.8 - 2026-10-25
 
 ### Fixed
