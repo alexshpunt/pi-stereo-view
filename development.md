@@ -38,7 +38,7 @@ Run `/reload` after source changes. When using your normal extensions, disable t
 
 The extension uses a guarded runtime layout adapter without changing Pi's source. An unsupported fullscreen layout is left untouched with a warning. Native message and tool renderers remain unchanged; the adapter changes history layout, not the input dock.
 
-Compact Activity is a display-only projection over native tool metadata. Consecutive tool calls share a dense list, separated by thinking blocks. Every call has one row with its status, name and argument summary; truncation never hides calls. Tool results and owned late-output blocks stay in the semantic index for search and copying. Switching back restores native tool rendering. Conversation, combined history, saved messages and tool execution are unchanged.
+Compact Activity is a display-only projection over native tool metadata. Consecutive tool calls share a dense list, separated by thinking blocks. Every call has one row with a one-cell left gutter, its status, name and argument summary; truncation never hides calls. Tool results and owned late-output blocks stay in the semantic index for search and copying. Switching back restores native tool rendering. Conversation, combined history, saved messages and tool execution are unchanged.
 
 Custom entries can identify their execution owner with `data.parentToolCallId`; custom messages use `details.parentToolCallId`. When that ID matches a native tool call in the current branch, split history and search place the output after that call, in arrival order within its group. Missing owners keep the output in Conversation. Grouping never changes the native history tree or saved messages.
 
