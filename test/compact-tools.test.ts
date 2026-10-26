@@ -58,6 +58,24 @@ test("every consecutive call gets one row, with reasoning separating dense group
   expect(lines.join("\n")).not.toContain("BODY-");
 });
 
+test("compact rows keep one left cell while calls stream and panels narrow", () => {
+  const tool = new ToolExecutionComponent("gutter", { command: "GUTTER-FIXTURE " + "界".repeat(60) });
+  const { render } = setup(tool);
+  for (const final of [false, true]) {
+    tool.isPartial = !final;
+    tool.result = { content: [{ type: "text", text: "RESULT-FIXTURE" }], isError: false };
+    for (const width of [0, 1, 2, 24, 40, 80]) {
+      const lines = render(width);
+      expect(lines).toHaveLength(1);
+      expect(visibleWidth(lines[0])).toBeLessThanOrEqual(width);
+      if (width === 0) expect(lines[0]).toBe("");
+      else {
+        expect(lines[0][0]).toBe(" ");
+        if (width > 1) expect(lines[0][1]).not.toBe(" ");
+      }
+    }
+  }
+});
 test("partial and final results update status and arguments on the same row", () => {
   const tool = new ToolExecutionComponent("one", { path: "BEFORE-FIXTURE" });
   const { document, render, index } = setup(tool);
