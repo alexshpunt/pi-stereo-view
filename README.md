@@ -32,7 +32,7 @@ Messages and tools keep their familiar appearance. The input stays full width be
 ## Features
 
 - Arrange Conversation and Activity in columns or rows, swap or resize the panels, and zoom either one while keeping the input full width.
-- Switch Activity to compact tool rows with status dots and short descriptions while keeping thinking visible.
+- Group consecutive Activity tools and expand individual calls inline while keeping thinking visible.
 - Copy an individual user message, assistant reply or thinking block with its own copy icon.
 - Copy a complete tool call with its arguments, saved result and linked late output, including collapsed and off-screen text.
 - Search panel history with literal text, Boolean expressions or regular expressions, then jump between matches.
@@ -94,9 +94,11 @@ Swap the panels whenever you want. Zoom a panel to give it the whole history are
 
 ## Compact Activity
 
-Click `⊟` beside Search and Maximize in the Activity header to show tool calls as a dense list. Each call stays visible on one row with a colored status dot, its tool name and a short description from its arguments. The dot distinguishes running, successful and failed calls. Long descriptions end with an ellipsis; calls are never hidden behind a counter. Thinking blocks separate the lists.
+Click `⊟` beside Search and Maximize in the Activity header to show compact tool calls. Adjacent calls to the same tool in the same state share a header with a count; every failed call stays separate, even beside another failure. Click that header to show the individual compact rows, then click a row to open its original full card and linked output. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls. Thinking, Conversation content and different tools end a group.
 
-Tool results and linked late output stay hidden until you click `⊞` to restore full tools. Search and `/stereo-view copy` still include their full saved text. Conversation and combined history keep their normal display.
+Each call row has a one-cell left gutter, a colored status dot, its tool name and a short argument description. A group shows its shared running or successful state. Failed calls expose their own status and argument preview without opening a group. Long descriptions are truncated, not the saved calls. Verified local MCP forwarding aliases use their native tool's name; foreign, ambiguous and unknown tools keep their original identity.
+
+Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. You can also click `⊞` in the Activity header to restore full tools. Conversation and combined history keep their normal display.
 
 Compact tools work in columns, rows and zoomed Activity. The choice survives restart and defaults to off. For keyboard access, run `/stereo-view settings` and change **Compact Activity tools**.
 
@@ -138,6 +140,8 @@ Use **Show copy buttons** in `≡` or `/stereo-view settings` to hide the icons 
 ## Timestamps
 
 Conversation and Activity can show a dim local `HH:mm:ss` clock above each block on the left, with a small inset. The copy icon sits below the block on the right, so neither control takes width away from the text. New tool calls show their start time.
+
+In compact Activity, clocks sit at the start of the same line on the left, before the status and tool name, when space permits. A group shows its first call's original time; expanded member rows show their own. Opening a full card does not repeat its clock.
 
 Older tool calls may show `~HH:mm:ss` for an approximate time. Blocks without a known time show neither a clock nor a copy button; their content stays visible.
 
