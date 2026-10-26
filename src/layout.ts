@@ -297,7 +297,7 @@ export class TranscriptLayout {
       const label = new HStack([
         { component: new Text(" ", 0, 0), basis: 1, shrink: 0 },
         { component: new MouseRegion({
-          render: width => new Text(this.theme().style(truncateToWidth((this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
+          render: width => new Text(this.theme().style(truncateToWidth(" " + (this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
             fg: this.searchPane() === target ? "accent" : palette().text, bg: palette().fill,
           }), 0, 0).render(width),
           invalidate() {},

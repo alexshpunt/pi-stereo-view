@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.10 - 2026-10-26
+
+### Changed
+
+- Add a one-cell left inset before panel header content while keeping the colored background full width.
+- Use `▸` and `▾` for collapsed and expanded compact tool groups and calls. The Activity header keeps its existing `⊟` / `⊞` controls.
+
 ## 0.1.9 - 2026-10-26
 
 ### Added
