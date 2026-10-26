@@ -47,6 +47,18 @@ test("compacts live tools without losing calls, full search, copy or normal hist
     expect(call("partial", "FIRST-FIXTURE")).toBe(call("started", "FIRST-FIXTURE"));
     expect(call("firstFinished", "FIRST-FIXTURE")).not.toBe(call("started", "FIRST-FIXTURE"));
     expect(call("rows", "SECOND-FIXTURE")).not.toBe(call("firstFinished", "SECOND-FIXTURE"));
+    for (const name of ["started", "partial", "firstFinished", "rows", "zoom", "columns", "narrow", "again"]) {
+      const toolRows = frame(name).filter(line => ["FIRST-FIXTURE", "SECOND-FIXTURE", "THIRD-FIXTURE"].some(tag => line.includes(tag)));
+      expect(toolRows.length, name).toBeGreaterThan(0);
+      for (const line of toolRows) {
+        // This scenario keeps Activity on the right in Columns and full-width in Rows or zoom.
+        const columns = ["columns", "narrow", "again"].includes(name);
+        const divider = columns ? line.indexOf("║") : -1;
+        if (columns) expect(divider, name).toBeGreaterThanOrEqual(0);
+        const inset = line.slice(divider + 1).match(/^\s*/u)?.[0] ?? "";
+        expect(visibleWidth(inset), name).toBe(1);
+      }
+    }
     for (const name of ["rows", "zoom", "columns", "narrow", "again"]) {
       const rows = frame(name);
       const indices = ["FIRST-FIXTURE", "SECOND-FIXTURE", "THIRD-FIXTURE"].map(tag => rows.findIndex(line => line.includes("compact_probe") && line.includes(tag)));

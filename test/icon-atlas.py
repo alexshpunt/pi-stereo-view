@@ -17,6 +17,8 @@ icons = [
     ("restore", "↙", "↙"),
     ("search", "⌕", "⌕"),
     ("settings", "≡", "≡"),
+    ("compact", "⊟", "⊟"),
+    ("full tools", "⊞", "⊞"),
     ("copy", "⧉ ", "⧉\u034f "),
 ]
 
@@ -26,7 +28,7 @@ def bracket(glyph, dim=False):
 
 
 print("Native icon rendering test — baseline vs selected controls")
-print("Action           Baseline      Approved      Approved dim")
+print("Action           Baseline      Selected      Selected dim")
 for name, baseline, approved in icons:
     cells = 2 if name == "copy" else 1
     gap = " " * (10 - cells)
