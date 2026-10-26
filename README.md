@@ -32,6 +32,7 @@ Messages and tools keep their familiar appearance. The input stays full width be
 ## Features
 
 - Arrange Conversation and Activity in columns or rows, swap or resize the panels, and zoom either one while keeping the input full width.
+- Switch Activity to compact tool rows with status dots and short descriptions while keeping thinking visible.
 - Copy an individual user message, assistant reply or thinking block with its own copy icon.
 - Copy a complete tool call with its arguments, saved result and linked late output, including collapsed and off-screen text.
 - Search panel history with literal text, Boolean expressions or regular expressions, then jump between matches.
@@ -77,8 +78,9 @@ Click the toolbar and the buttons in each panel's header:
 | `[ ▤ ]` / `[ ▥ ]` | Switch between rows and columns. |
 | `[ ↕ ]` / `[ ↔ ]` | Swap the panels. |
 | `[ ↗ ]` / `[ ↙ ]` | Zoom a panel / restore the split. |
-| `[ ≡ ]` | Open timestamp, copy-button and Conversation height settings. |
+| `[ ≡ ]` | Open display and Conversation height settings. |
 | `[ ⌕ ]` | Search this panel. |
+| `[ ⊟ ]` / `[ ⊞ ]` | Compact Activity tools / restore full tools. |
 
 **Resize:** drag the double line between the panels — `═` in rows, `║` in columns.
 
@@ -89,6 +91,14 @@ In Rows, Conversation grows with its messages up to half the available history a
 Panels fit short content and scroll when history fills up. Each panel has its own scrolling, text selection and copy.
 
 Swap the panels whenever you want. Zoom a panel to give it the whole history area; the input stays visible. Restore it to return to your split. Turning split off returns to one combined history; the toolbar stays available to turn it back on.
+
+## Compact Activity
+
+Click `⊟` beside Search and Maximize in the Activity header to show tool calls as a dense list. Each call stays visible on one row with a colored status dot, its tool name and a short description from its arguments. The dot distinguishes running, successful and failed calls. Long descriptions end with an ellipsis; calls are never hidden behind a counter. Thinking blocks separate the lists.
+
+Tool results and linked late output stay hidden until you click `⊞` to restore full tools. Search and `/stereo-view copy` still include their full saved text. Conversation and combined history keep their normal display.
+
+Compact tools work in columns, rows and zoomed Activity. The choice survives restart and defaults to off. For keyboard access, run `/stereo-view settings` and change **Compact Activity tools**.
 
 ## Search history
 
@@ -157,7 +167,7 @@ Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active p
 
 ## Settings and limits
 
-Your layout, panel order, sizes, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
+Your layout, panel order, sizes, compact Activity choice, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
 
 - Tested with Pi 1.1.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.

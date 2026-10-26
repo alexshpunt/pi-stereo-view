@@ -38,6 +38,8 @@ Run `/reload` after source changes. When using your normal extensions, disable t
 
 The extension uses a guarded runtime layout adapter without changing Pi's source. An unsupported fullscreen layout is left untouched with a warning. Native message and tool renderers remain unchanged; the adapter changes history layout, not the input dock.
 
+Compact Activity is a display-only projection over native tool metadata. Consecutive tool calls share a dense list, separated by thinking blocks. Every call has one row with its status, name and argument summary; truncation never hides calls. Tool results and owned late-output blocks stay in the semantic index for search and copying. Switching back restores native tool rendering. Conversation, combined history, saved messages and tool execution are unchanged.
+
 Custom entries can identify their execution owner with `data.parentToolCallId`; custom messages use `details.parentToolCallId`. When that ID matches a native tool call in the current branch, split history and search place the output after that call, in arrival order within its group. Missing owners keep the output in Conversation. Grouping never changes the native history tree or saved messages.
 
 Split history reuses unchanged native blocks between frames. Custom renderers must invalidate changed components before requesting a render, as required by Pi's component API. Native text setters, history rebuilds, streaming, tool updates, expansion, width and theme changes refresh the affected output. Image placement blocks are never retained in this cache. Detaching the layout removes its invalidation observers.
@@ -54,7 +56,9 @@ If a custom tool renderer omits saved matching text, a temporary Search match fr
 
 ## Persisted settings and tool times
 
-Layout, panel order, sizes, timestamp visibility and copy-button visibility are saved in `transcript.json` in Pi's agent directory. Zoom and split on/off are session-only state and are excluded from that file. Every session starts split and unzoomed; legacy saved `mode` and `zoom` fields are ignored without discarding the saved arrangement. Saved numeric Conversation heights remain manual until the user selects automatic height. Saved arrangements are not reset when defaults change.
+`compactTools` is a boolean display preference. Missing values default to `false` so existing installations keep full tool rendering.
+
+Layout, panel order, sizes, compact Activity, timestamp visibility and copy-button visibility are saved in `transcript.json` in Pi's agent directory. Zoom and split on/off are session-only state and are excluded from that file. Every session starts split and unzoomed; legacy saved `mode` and `zoom` fields are ignored without discarding the saved arrangement. Saved numeric Conversation heights remain manual until the user selects automatic height. Saved arrangements are not reset when defaults change.
 
 Tool-start times are collected as display-only session metadata; they do not become messages in the model's context. New calls keep their recorded start time through streaming, completion and restart. Historical calls without that metadata use the agent message's time as an approximation, marked with `~`. Blocks with unknown times keep their native content without clock or copy-button rows, regardless of timestamp visibility.
 
