@@ -31,7 +31,7 @@ export class CompactTool implements Component {
     const theme = this.theme();
     const dot = theme.fg(status === "running" ? "warning" : status, "●");
     const description = toolDescription(args);
-    return [truncateToWidth(`${dot} ${singleLine(name)}${description ? " " + theme.fg("muted", description) : ""}`, Math.max(0, width), "…")];
+    return [(width > 0 ? " " : "") + truncateToWidth(`${dot} ${singleLine(name)}${description ? " " + theme.fg("muted", description) : ""}`, Math.max(0, width - 1), "…")];
   }
   invalidate(): void {}
 }
