@@ -118,7 +118,7 @@ export class NativeDocument extends Container {
     this.frameActive = true;
     this.frameWidth = undefined;
     if (this.compactBlocks.size) {
-      const present = new Set((this.source.children[2] as Container | undefined)?.children ?? []);
+      const present = new Set(this.index.entries(this.pane).map(entry => entry.source));
       for (const [component, block] of this.compactBlocks) if (!present.has(component)) {
         block.dispose();
         this.compactBlocks.delete(component);
@@ -316,7 +316,8 @@ export class NativeDocument extends Container {
     }
     for (const source of opening) this.openGroups.add(source);
     this.groups = groups;
-    this.searchTool = this.searchAnchor ? this.index.entries(this.pane).find(entry => entry.source === this.searchAnchor!.entry.source)?.owner : undefined;
+    const searched = this.searchAnchor ? this.index.entries(this.pane).find(entry => entry.source === this.searchAnchor!.entry.source) : undefined;
+    this.searchTool = searched?.nested ? searched.source : searched?.owner;
     for (const entry of this.index.entries(this.pane)) {
       const component = entry.source;
       const routed = entry.component;
@@ -328,18 +329,18 @@ export class NativeDocument extends Container {
       let bodyDepth = 0;
       const compactTool = compactTools && entry.kind === "tool";
       if (compactTool) {
-        const group = this.groups.get(entry.owner);
+        const group = entry.nested ? undefined : this.groups.get(entry.owner);
         const grouped = group !== undefined && group.calls.length > 1;
-        bodyDepth = grouped ? 2 : 1;
+        bodyDepth = entry.nested || grouped ? 2 : 1;
         const members = !grouped || this.groupOpen(group);
         if (entry.tool) {
           if (visibleBlock && !toolRun) result.push(new Spacer(1));
           if (grouped && group.calls[0].source === component) result.push(this.groupRow(group));
-          if (members) result.push(this.indent(this.compactRow(entry), grouped ? 1 : 0));
+          if (members) result.push(this.indent(this.compactRow(entry), entry.nested || grouped ? 1 : 0));
           toolRun = true;
           visibleBlock = true;
         }
-        nativeBody = members && this.toolOpen(entry.owner);
+        nativeBody = entry.nested && !entry.tool ? true : members && this.toolOpen(entry.nested ? component : entry.owner);
       }
       const contentStart = result.length;
       const bodyWidth = Math.max(0, width - (bodyDepth ? bodyDepth * 2 + 1 : 0));
