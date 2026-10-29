@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11 - 2026-10-29
+
+### Added
+
+- Show nested tool calls in Activity with their arguments, status and native result views. Recorded calls remain visible after reopening a session.
+
 ## 0.1.10 - 2026-10-26
 
 ### Changed
