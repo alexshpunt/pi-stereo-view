@@ -2,6 +2,7 @@ import path from "node:path";
 import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type TUI } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.js";
+import { NestedActivity } from "./nested-activity.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
 import { beforeFirstFrame } from "./startup.js";
@@ -11,6 +12,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   let layout: TranscriptLayout | undefined;
   let host: TUI | undefined;
   let timestamps: TranscriptTimestamps | undefined;
+  let nested: NestedActivity | undefined;
   let unsubscribeInput: (() => void) | undefined;
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
@@ -94,6 +96,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   const createLayout = (tui: TUI, ui: ExtensionContext["ui"], session: ExtensionContext["sessionManager"]): void => {
     host = tui;
     timestamps = new TranscriptTimestamps(session);
+    nested = new NestedActivity();
+    nested.restore(session.getBranch());
     layout = new TranscriptLayout(preferences, () => ui.theme,
       message => ui.notify(message, "warning"), () => persist(ui), timestamps,
       () => { void openSettings(ui).catch(error => ui.notify(String(error), "error")); }, text => {
@@ -107,7 +111,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         }
         void copyToClipboard(text).then(() => ui.notify("Block sent to clipboard.", "info"),
           error => ui.notify("Could not copy block: " + String(error), "error"));
-      }, () => pi.getAllTools());
+      }, () => pi.getAllTools(), nested);
     try { ensureLayout(); }
     catch (error) {
       layout.dispose();
@@ -163,6 +167,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   });
   pi.on("message_start", event => {
     timestamps?.observe(event.message);
+    if (event.message.role === "toolResult") nested?.absorb(event.message);
     layout?.refreshSearch();
   });
   pi.on("message_update", event => {
@@ -174,15 +179,25 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     timestamps?.observe(event.message, true);
     layout?.refreshSearch();
   });
-  pi.on("tool_execution_update", () => layout?.refreshSearch());
-  pi.on("tool_execution_end", () => layout?.refreshSearch());
+  pi.on("tool_execution_update", event => {
+    if (event.parentToolCallId) { nested?.update(event); host?.requestRender(); }
+    layout?.refreshSearch();
+  });
+  pi.on("tool_execution_end", event => {
+    if (event.parentToolCallId) { nested?.end({ ...event, parentToolCallId: event.parentToolCallId }); host?.requestRender(); }
+    layout?.refreshSearch();
+  });
   pi.on("tool_execution_start", event => {
-    if (!timestamps || event.parentToolCallId) return;
+    if (event.parentToolCallId) {
+      nested?.start({ ...event, parentToolCallId: event.parentToolCallId });
+      layout?.refreshSearch(); host?.requestRender(); return;
+    }
+    if (!timestamps) return;
     pi.appendEntry(TOOL_START_ENTRY, { toolCallId: event.toolCallId, time: Date.now() });
     host?.requestRender();
   });
-  pi.on("session_tree", () => { closeSearch(); timestamps?.reset(); });
-  pi.on("session_compact", () => { closeSearch(); timestamps?.reset(); });
+  pi.on("session_tree", (_event, ctx) => { closeSearch(); timestamps?.reset(); nested?.restore(ctx.sessionManager.getBranch()); host?.requestRender(); });
+  pi.on("session_compact", (_event, ctx) => { closeSearch(); timestamps?.reset(); nested?.restore(ctx.sessionManager.getBranch()); host?.requestRender(); });
   pi.on("session_shutdown", async () => {
     releaseStartup();
     closeSearch();
@@ -191,6 +206,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     layout?.dispose();
     layout = undefined;
     timestamps = undefined;
+    nested = undefined;
     host = undefined;
     await writes;
   });

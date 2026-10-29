@@ -1,5 +1,6 @@
 import { Container, Markdown, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry } from "./search.js";
+import type { NestedActivity } from "./nested-activity.js";
 
 export type Pane = "activity" | "chat";
 export type ContentKind = "dialogue" | "system" | "thinking" | "tool" | "shell";
@@ -34,7 +35,7 @@ interface NativeAssistant extends Container {
 export interface ToolSummary {
   name: string;
   args: unknown;
-  status: "running" | "success" | "error";
+  status: "running" | "success" | "error" | "unknown";
 }
 /** One native owner and its pane projection; spacing and search retain that same owner. */
 export interface ContentEntry {
@@ -44,6 +45,7 @@ export interface ContentEntry {
   kind: ContentKind;
   spacing: Component[];
   compact: boolean;
+  nested?: boolean;
   search(width: number): Omit<SearchEntry, "source">;
   /** Live execution metadata exists only on calls, never on linked output. */
   tool?(): ToolSummary;
@@ -93,7 +95,7 @@ export class NativeContentIndex {
   private content: ContentEntry[] = [];
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
 
-  constructor(private readonly source: Container) {}
+  constructor(private readonly source: Container, private readonly nested?: NestedActivity) {}
 
   /** Return the same classification until native ownership or assistant content changes. */
   entries(pane?: Pane): ContentEntry[] {
@@ -121,7 +123,7 @@ export class NativeContentIndex {
   private refresh(): void {
     const history = this.source.children[2] as Container;
     if (!Array.isArray(history?.children)) throw new Error("Pi's history document is not supported");
-    const signature: unknown[] = [...this.source.children, ...history.children];
+    const signature: unknown[] = [this.nested?.revision, ...this.source.children, ...history.children];
     for (const component of history.children) {
       const metadata = component as NativeContent;
       signature.push(metadata.toolCallId, metadata.entry?.data?.parentToolCallId, metadata.message?.details?.parentToolCallId);
@@ -153,6 +155,14 @@ export class NativeContentIndex {
         const parentId = native.entry?.data?.parentToolCallId ?? native.message?.details?.parentToolCallId;
         const owner = kind === "system" && typeof parentId === "string" ? owners.get(parentId) : undefined;
         entries.push(this.entry(component, kind, spacing, true, owner));
+        if (kind === "tool" && typeof native.toolCallId === "string") {
+          for (const child of this.nested?.entries(native.toolCallId) ?? []) {
+            const entry = this.entry(child, "system", [], true, native);
+            entry.nested = true;
+            if (this.nested?.summary(child)) entry.tool = () => this.nested!.summary(child)!;
+            entries.push(entry);
+          }
+        }
       }
       spacing = [];
     }

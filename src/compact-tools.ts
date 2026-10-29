@@ -39,7 +39,7 @@ export class CompactTool implements Component {
     width = Math.max(0, width - (this.options.gutter?.() ?? 0));
     const { name, args, status } = this.summary();
     const theme = this.theme();
-    const dot = theme.fg(status === "running" ? "warning" : status, "●");
+    const dot = theme.fg(status === "running" ? "warning" : status === "unknown" ? "dim" : status, "●");
     const count = this.options.count?.();
     const description = count ? "" : toolDescription(args);
     const control = this.options.toggle ? theme.fg("muted", this.options.expanded?.() ? "▾" : "▸") + " " : "";

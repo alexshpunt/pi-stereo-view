@@ -6,6 +6,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
 import { NativeContentIndex } from "./content.js";
+import type { NestedActivity } from "./nested-activity.js";
 import type { Preferences } from "./preferences.js";
 import type { TranscriptTimestamps } from "./timestamps.js";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.js";
@@ -136,6 +137,7 @@ export class TranscriptLayout {
     private readonly openSettings: () => void,
     private readonly copy?: (text: string | undefined) => void,
     private readonly getTools: () => readonly ToolInfo[] = () => [],
+    private readonly nested?: NestedActivity,
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
@@ -202,7 +204,7 @@ export class TranscriptLayout {
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
     const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
-    const index = new NativeContentIndex(document);
+    const index = new NativeContentIndex(document, this.nested);
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("activity"), false, index, this.copy, showCopyButtons, () => this.preferences.compactTools, this.getTools,
       () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); });
