@@ -1,6 +1,7 @@
 import { Container, Spacer, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { NativeContentIndex } from "../src/content.js";
+import { NestedActivity } from "../src/nested-activity.js";
 
 class ToolExecutionComponent extends Text {
   toolName = "write";
@@ -165,6 +166,27 @@ test("late output stays directly after its owner without changing native history
   expect(index.contains(firstOutput, "chat")).toBe(true);
 });
 
+test("uses the saved IDE native panel for its matching nested call", () => {
+  const parent = new ToolExecutionComponent("PARENT", 0, 0);
+  const nested = new NestedActivity();
+  nested.absorb({ role: "toolResult", toolCallId: parent.toolCallId, nestedCalls: { complete: true, calls: [
+    { id: parent.toolCallId + "/1", name: "write", status: "ok", arguments: { path: "file" } },
+  ] } });
+  const native = new ToolExecutionComponent("NATIVE-SAVED-FIXTURE", 0, 0);
+  native.toolCallId = parent.toolCallId + "/1";
+  const panel = new Container(); panel.addChild(native);
+  class SavedPanel extends Container {
+    entry = { customType: "ide-nested-results", data: { parentToolCallId: parent.toolCallId, calls: [{ id: native.toolCallId }] } };
+    customComponent = panel;
+    setExpanded(): void {}
+  }
+  const saved = new SavedPanel();
+  const source = new Container(); const history = new Container();
+  source.children = [new Container(), new Container(), history]; history.children = [parent, saved];
+  const index = new NativeContentIndex(source, nested);
+  const child = index.entries("activity").find(entry => entry.source === nested.entries(parent.toolCallId)[0])!;
+  expect(visible(child.component as Container)).toContain("NATIVE-SAVED-FIXTURE");
+});
 class CustomMessageComponent extends Text {
   constructor(text: string, readonly message: { details: { parentToolCallId: string } }) { super(text, 0, 0); }
 }
