@@ -1,10 +1,11 @@
-import { Text, stripTerminalSequences } from "@earendil-works/pi-tui";
+import { ToolExecutionComponent, type ToolRenderers } from "@earendil-works/pi-coding-agent";
+import { Text, stripTerminalSequences, type Component, type TUI } from "@earendil-works/pi-tui";
 
 type Start = { parentToolCallId: string; toolCallId: string; toolName: string; args: unknown };
-type End = { parentToolCallId: string; toolCallId: string; toolName: string; result: { content?: unknown }; isError: boolean };
+type End = { parentToolCallId: string; toolCallId: string; toolName: string; result: { content?: unknown }; isError: boolean; durationMs?: number };
 type RecordCall = { id: string; name: string; status: "ok" | "error" | "unfinished"; arguments?: unknown; argumentsBytes?: number; error?: string };
 type SavedMessage = { role: string; toolCallId?: string; nestedCalls?: { complete: boolean; calls: RecordCall[] } };
-type Call = { root: string; id: string; name: string; args: unknown; status: string; result?: string; saved?: boolean; bytes?: number; parallel?: boolean; view: Text };
+type Call = { root: string; id: string; name: string; args: unknown; status: string; result?: string; saved?: boolean; bytes?: number; parallel?: boolean; view: Component };
 
 const clean = (value: string): string => stripTerminalSequences(value).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "");
 const resultText = (content: unknown): string => Array.isArray(content) ? content.map(block =>
@@ -13,16 +14,25 @@ const resultText = (content: unknown): string => Array.isArray(content) ? conten
 /** Display-only nested call state. Saved records never imply that a result was saved. */
 export class NestedActivity {
   private calls = new Map<string, Call>();
-  private roots = new Map<string, Text[]>();
-  private byView = new WeakMap<Text, Call>();
+  private roots = new Map<string, Component[]>();
+  private byView = new WeakMap<Component, Call>();
   private notices = new Map<string, Text>();
   revision = 0;
 
-  entries(parent: string): readonly Text[] { return this.roots.get(parent) ?? []; }
+  constructor(private readonly tui?: TUI, private readonly cwd = "", private readonly renderer?: (name: string) => ToolRenderers | undefined) {}
 
-  summary(view: Text): { name: string; args: unknown; status: "running" | "success" | "error" | "unknown" } | undefined {
+  entries(parent: string): readonly Component[] { return this.roots.get(parent) ?? []; }
+
+  summary(view: Component): { name: string; args: unknown; status: "running" | "success" | "error" | "unknown" } | undefined {
     const call = this.byView.get(view);
     return call ? { name: call.name, args: call.args, status: call.status === "error" ? "error" : call.status === "ok" ? "success" : call.status === "running" ? "running" : "unknown" } : undefined;
+  }
+
+  id(view: Component): string | undefined { return this.byView.get(view)?.id; }
+  isSaved(view: Component): boolean { return this.byView.get(view)?.saved === true; }
+  search(view: Component): string {
+    const call = this.byView.get(view);
+    return call ? [call.name, JSON.stringify(call.args, null, 2), call.result].filter(Boolean).join("\n") : "";
   }
 
   private paint(call: Call): void {
@@ -30,13 +40,18 @@ export class NestedActivity {
     const prefix = "  ".repeat(Math.min(depth, 8));
     const args = call.args === undefined ? (call.bytes === undefined ? "" : `Arguments omitted (${call.bytes} bytes)`) : JSON.stringify(call.args, null, 2);
     const details = [args, call.result, call.saved ? "Result not saved" : ""].filter(Boolean).join("\n");
+    if (!(call.view instanceof Text)) return;
     call.view.setText(`${prefix}↳ ${clean(call.name)} [${call.status}${call.parallel ? ", overlapping" : ""}]\n${details.split("\n").map(line => prefix + clean(line)).join("\n")}`);
   }
 
   start(event: Start): void {
     const root = this.calls.get(event.parentToolCallId)?.root ?? event.parentToolCallId;
     const running = [...this.calls.values()].filter(call => call.root === root && call.status === "running" && !event.parentToolCallId.startsWith(call.id + "/") && event.parentToolCallId !== call.id);
-    const call: Call = { root, id: event.toolCallId, name: event.toolName, args: event.args, status: "running", parallel: running.length > 0, view: new Text("", 0, 0) };
+    const native = this.tui ? new ToolExecutionComponent(event.toolName, event.toolCallId, event.args, { showImages: true }, this.renderer?.(event.toolName), this.tui, this.cwd) : undefined;
+    native?.markExecutionStarted();
+    native?.setArgsComplete();
+    native?.setExpanded(true);
+    const call: Call = { root, id: event.toolCallId, name: event.toolName, args: event.args, status: "running", parallel: running.length > 0, view: native ?? new Text("", 0, 0) };
     for (const other of running) { other.parallel = true; this.paint(other); }
     this.calls.set(call.id, call);
     this.byView.set(call.view, call);
@@ -51,6 +66,7 @@ export class NestedActivity {
     const call = this.calls.get(event.toolCallId);
     if (!call) return;
     call.result = resultText(event.partialResult.content);
+    if (call.view instanceof ToolExecutionComponent) call.view.updateResult({ ...event.partialResult, content: Array.isArray(event.partialResult.content) ? event.partialResult.content : [], isError: false }, true);
     this.paint(call);
   }
 
@@ -59,6 +75,7 @@ export class NestedActivity {
     if (!call) return;
     call.status = event.isError ? "error" : "ok";
     call.result = resultText(event.result.content);
+    if (call.view instanceof ToolExecutionComponent) call.view.updateResult({ ...event.result, content: Array.isArray(event.result.content) ? event.result.content : [], isError: event.isError, durationMs: event.durationMs });
     this.paint(call);
   }
 

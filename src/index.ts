@@ -5,7 +5,7 @@ import { TranscriptLayout } from "./layout.js";
 import { NestedActivity } from "./nested-activity.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
-import { beforeFirstFrame } from "./startup.js";
+import { beforeFirstFrame, captureToolRenderers } from "./startup.js";
 
 /** Split native fullscreen history without changing message content or the input dock. */
 export default async function transcript(pi: ExtensionAPI): Promise<void> {
@@ -13,6 +13,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   let host: TUI | undefined;
   let timestamps: TranscriptTimestamps | undefined;
   let nested: NestedActivity | undefined;
+  const renderers = captureToolRenderers();
+  renderers.install();
   let unsubscribeInput: (() => void) | undefined;
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
@@ -96,7 +98,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   const createLayout = (tui: TUI, ui: ExtensionContext["ui"], session: ExtensionContext["sessionManager"]): void => {
     host = tui;
     timestamps = new TranscriptTimestamps(session);
-    nested = new NestedActivity();
+    nested = new NestedActivity(tui, session.getCwd(), renderers.resolve);
     nested.restore(session.getBranch());
     layout = new TranscriptLayout(preferences, () => ui.theme,
       message => ui.notify(message, "warning"), () => persist(ui), timestamps,
@@ -130,6 +132,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   });
 
   pi.on("session_start", async (event, ctx) => {
+    renderers.install();
     releaseStartup();
     if (ctx.mode !== "tui") return;
     const early = event.reason === "startup" && earlySession === ctx.sessionManager.getSessionId() && layout !== undefined;
@@ -199,6 +202,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   pi.on("session_tree", (_event, ctx) => { closeSearch(); timestamps?.reset(); nested?.restore(ctx.sessionManager.getBranch()); host?.requestRender(); });
   pi.on("session_compact", (_event, ctx) => { closeSearch(); timestamps?.reset(); nested?.restore(ctx.sessionManager.getBranch()); host?.requestRender(); });
   pi.on("session_shutdown", async () => {
+    renderers.dispose();
     releaseStartup();
     closeSearch();
     unsubscribeInput?.();

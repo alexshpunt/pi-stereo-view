@@ -1,4 +1,4 @@
-import { Container, Markdown, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
+import { Container, Markdown, Text, stripTerminalSequences, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry } from "./search.js";
 import type { NestedActivity } from "./nested-activity.js";
 
@@ -12,7 +12,7 @@ const panes: Record<ContentKind, Pane> = {
 interface NativeContent extends Component {
   text?: string;
   message?: { content?: unknown; summary?: string; details?: { parentToolCallId?: unknown } };
-  entry?: { data?: { parentToolCallId?: unknown } };
+  entry?: { customType?: string; data?: { parentToolCallId?: unknown; calls?: { id?: unknown }[] } };
   toolCallId?: string;
   toolName?: string;
   args?: unknown;
@@ -89,11 +89,31 @@ const nativeKinds: Record<string, { kind: ContentKind; accepts(content: NativeCo
   },
 };
 
+/** Show the IDE-owned native child when its saved panel contains this call. */
+class SavedNativePanel implements Component {
+  constructor(private readonly fallback: Component, private readonly group: NativeContent, private readonly id: string) {}
+  private native(): Component | undefined {
+    this.group.setExpanded?.(true);
+    const find = (component: Component | undefined): Component | undefined => {
+      if (!component) return undefined;
+      const node = component as NativeContent & { children?: Component[] };
+      if (nameOf(component) === "ToolExecutionComponent" && node.toolCallId === this.id) return component;
+      for (const child of node.children ?? []) { const found = find(child); if (found) return found; }
+      return undefined;
+    };
+    return find(this.group.customComponent);
+  }
+  render(width: number): string[] { return (this.native() ?? this.fallback).render(width); }
+  invalidate(): void { this.fallback.invalidate(); this.group.invalidate(); }
+  handleMouse(event: TuiMouseEvent): ReturnType<NonNullable<Component["handleMouse"]>> { return (this.native() ?? this.fallback).handleMouse?.(event); }
+}
+
 /** Shared semantic index for painting and search, independent of wording, severity and lifecycle. */
 export class NativeContentIndex {
   private signature: unknown[] = [];
   private content: ContentEntry[] = [];
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
+  private readonly savedPanels = new WeakMap<Component, { group: NativeContent; panel: Component }>();
 
   constructor(private readonly source: Container, private readonly nested?: NestedActivity) {}
 
@@ -132,6 +152,12 @@ export class NativeContentIndex {
     }
     if (signature.length === this.signature.length && signature.every((value, index) => value === this.signature[index])) return;
     const owners = new Map<string, NativeContent>();
+    const panels = new Map<string, NativeContent>();
+    for (const component of history.children) {
+      const entry = (component as NativeContent).entry;
+      if (entry?.customType !== "ide-nested-results" || !Array.isArray(entry.data?.calls)) continue;
+      for (const call of entry.data.calls) if (typeof call.id === "string") panels.set(call.id, component as NativeContent);
+    }
     for (const component of history.children) {
       const adapter = nativeKinds[nameOf(component)];
       const native = component as NativeContent;
@@ -159,7 +185,20 @@ export class NativeContentIndex {
           for (const child of this.nested?.entries(native.toolCallId) ?? []) {
             const entry = this.entry(child, "system", [], true, native);
             entry.nested = true;
-            if (this.nested?.summary(child)) entry.tool = () => this.nested!.summary(child)!;
+            if (this.nested?.summary(child)) {
+              const id = this.nested.id(child);
+              const group = id && this.nested.isSaved(child) ? panels.get(id) : undefined;
+              if (group && id && group.entry?.data?.parentToolCallId === native.toolCallId) {
+                let cached = this.savedPanels.get(child);
+                if (!cached || cached.group !== group) {
+                  cached = { group, panel: new SavedNativePanel(child, group, id) };
+                  this.savedPanels.set(child, cached);
+                }
+                entry.component = cached.panel;
+              }
+              entry.tool = () => this.nested!.summary(child)!;
+              entry.search = () => ({ label: this.nested!.summary(child)!.name, text: this.nested!.search(child) });
+            }
             entries.push(entry);
           }
         }
