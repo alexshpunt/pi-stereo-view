@@ -36,6 +36,9 @@ test.each([[false, "parent"], [true, "parent"], [false, "codemode"], [true, "cod
       expect(result.exitCode).toBe(0);
       if (phase === "live") expect(getToolExecution(result, "parent-82").isError).toBe(false);
       const captures: Record<string, Capture> = JSON.parse(await readFile(captureFile, "utf8"));
+      if (phase === "live" && caller === "codemode") {
+        expect(plain(captures.settled.panes.activity)).toContain("NATIVE-RESULT-P82");
+      }
       if (phase === "live") {
         const search = captures.settled.search.activity.map(entry => entry.text).join("\n");
         expect(search).toContain("SUCCESS-RESULT-P82");
