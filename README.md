@@ -27,6 +27,8 @@ Unrecognized content stays in Conversation unless its metadata links it to a kno
 
 Late output linked to a tool call appears directly below that call in Activity, even if other work has happened since. Combined history keeps its original order.
 
+Calls made inside Codemode and other tools appear beneath their parent in Activity. While running, their arguments, status and available results are shown; compact mode gives each nested call its own expandable row. After reopening a session, Pi restores only the recorded call metadata and any saved error excerpt, not the full nested result. Activity marks incomplete records and omitted arguments. Older sessions without nested records remain unchanged.
+
 Messages and tools keep their familiar appearance. The input stays full width below both panels.
 
 ## Features
