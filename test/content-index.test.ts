@@ -186,6 +186,7 @@ test("uses the saved IDE native panel for its matching nested call", () => {
   const index = new NativeContentIndex(source, nested);
   const child = index.entries("activity").find(entry => entry.source === nested.entries(parent.toolCallId)[0])!;
   expect(visible(child.component as Container)).toContain("NATIVE-SAVED-FIXTURE");
+  expect(index.entries("activity").some(entry => entry.source === saved)).toBe(false);
 });
 class CustomMessageComponent extends Text {
   constructor(text: string, readonly message: { details: { parentToolCallId: string } }) { super(text, 0, 0); }
