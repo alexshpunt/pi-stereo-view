@@ -19,6 +19,19 @@ test("tracks concurrent nested calls individually through their outcomes", () =>
   expect(activity.entries("outer").map(view => activity.summary(view)?.status)).toEqual(["running", "error"]);
 });
 
+test("final editor batches update only their owning changed call and preserve errors", () => {
+  const activity = new NestedActivity();
+  activity.start({ parentToolCallId: "outer", toolCallId: "outer/1", toolName: "replace", args: {} });
+  activity.start({ parentToolCallId: "outer", toolCallId: "outer/2", toolName: "copy", args: {} });
+  activity.finishEditorBatch({ parentToolCallId: "other", calls: ["outer/1"], result: { content: [{ type: "text", text: "wrong-owner" }] } });
+  expect(texts(activity, "outer").join("\n")).not.toContain("wrong-owner");
+  activity.finishEditorBatch({ parentToolCallId: "outer", calls: ["outer/1", "outer/2"], unchangedCopyCalls: ["outer/2"],
+    result: { content: [{ type: "text", text: "fixture failure" }], isError: true } });
+  const views = activity.entries("outer");
+  expect(activity.summary(views[0])?.status).toBe("error");
+  expect(activity.summary(views[1])?.status).toBe("running");
+  expect(activity.search(views[0])).toContain("fixture failure");
+});
 test("hides a leading IDE reference from nested results without removing result content", () => {
   const activity = new NestedActivity();
   activity.start({ parentToolCallId: "outer", toolCallId: "outer/1", toolName: "read", args: {} });
