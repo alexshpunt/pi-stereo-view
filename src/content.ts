@@ -172,6 +172,15 @@ export class NativeContentIndex {
         spacing.push(component);
         continue;
       }
+      const savedGroup = (component as NativeContent).entry;
+      const root = savedGroup?.data?.parentToolCallId;
+      const calls = savedGroup?.data?.calls;
+      if (savedGroup?.customType === "ide-nested-results" && typeof root === "string" && owners.has(root) && Array.isArray(calls) && calls.length > 0) {
+        const nested = this.nested;
+        const children = nested?.entries(root) ?? [];
+        const represented = calls.every(call => typeof call.id === "string" && children.some(child => nested?.id(child) === call.id && (nested?.isSaved(child) || nested?.hasEditorBatch(child))));
+        if (represented) { spacing = []; continue; }
+      }
       const native = assistant(component);
       if (native) entries.push(...this.assistantEntries(native, spacing));
       else {

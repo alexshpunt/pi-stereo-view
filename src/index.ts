@@ -182,6 +182,11 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     timestamps?.observe(event.message, true);
     layout?.refreshSearch();
   });
+  pi.events.on("pi-agent-text-editor:native-batch-finished", value => {
+    nested?.finishEditorBatch(value);
+    layout?.refreshSearch();
+    host?.requestRender();
+  });
   pi.on("tool_execution_update", event => {
     if (event.parentToolCallId) { nested?.update(event); host?.requestRender(); }
     layout?.refreshSearch();
