@@ -5,7 +5,7 @@ type Start = { parentToolCallId: string; toolCallId: string; toolName: string; a
 type End = { parentToolCallId: string; toolCallId: string; toolName: string; result: { content?: unknown }; isError: boolean; durationMs?: number };
 type RecordCall = { id: string; name: string; status: "ok" | "error" | "unfinished"; arguments?: unknown; argumentsBytes?: number; error?: string };
 type SavedMessage = { role: string; toolCallId?: string; nestedCalls?: { complete: boolean; calls: RecordCall[] } };
-type Call = { root: string; id: string; name: string; args: unknown; status: string; result?: string; saved?: boolean; bytes?: number; parallel?: boolean; view: Component };
+type Call = { root: string; id: string; name: string; args: unknown; status: string; result?: string; saved?: boolean; editorBatch?: boolean; bytes?: number; parallel?: boolean; view: Component };
 
 const clean = (value: string): string => stripTerminalSequences(value).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "");
 const resultText = (content: unknown): string => Array.isArray(content) ? content.map(block =>
@@ -30,6 +30,7 @@ export class NestedActivity {
 
   id(view: Component): string | undefined { return this.byView.get(view)?.id; }
   isSaved(view: Component): boolean { return this.byView.get(view)?.saved === true; }
+  hasEditorBatch(view: Component): boolean { return this.byView.get(view)?.editorBatch === true; }
   search(view: Component): string {
     const call = this.byView.get(view);
     return call ? [call.name, JSON.stringify(call.args, null, 2), call.result].filter(Boolean).join("\n") : "";
@@ -79,6 +80,22 @@ export class NestedActivity {
     this.paint(call);
   }
 
+  /** Replace the provisional receipt on the final changed call with the committed batch. */
+  finishEditorBatch(value: unknown): void {
+    if (!value || typeof value !== "object") return;
+    const batch = value as { parentToolCallId?: unknown; calls?: unknown; unchangedCopyCalls?: unknown; result?: unknown };
+    if (typeof batch.parentToolCallId !== "string" || !Array.isArray(batch.calls) || !batch.result || typeof batch.result !== "object") return;
+    const result = batch.result as { content?: unknown; isError?: boolean; details?: { results?: { data?: { path?: unknown } }[] } };
+    if (!Array.isArray(result.content)) return;
+    const unchanged = Array.isArray(batch.unchangedCopyCalls) ? batch.unchangedCopyCalls : [];
+    const id = [...batch.calls].reverse().find((call: unknown) => typeof call === "string" && !unchanged.includes(call));
+    const call = typeof id === "string" ? this.calls.get(id) : undefined;
+    if (!call || call.root !== batch.parentToolCallId) return;
+    if (!call.editorBatch) { call.editorBatch = true; this.revision++; }
+    const results = result.details?.results;
+    if (call.view instanceof ToolExecutionComponent && Array.isArray(results) && new Set(results.map(item => item.data?.path).filter(path => typeof path === "string")).size > 1) call.view.updateArgs({});
+    this.end({ parentToolCallId: batch.parentToolCallId, toolCallId: call.id, toolName: call.name, result, isError: result.isError === true });
+  }
   absorb(message: SavedMessage): void {
     const root = message.toolCallId;
     const nested = message.nestedCalls;
