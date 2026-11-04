@@ -1,6 +1,6 @@
-import { Container, Markdown, Text, stripTerminalSequences, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Container, Markdown, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry } from "./search.js";
-import type { NestedActivity } from "./nested-activity.js";
+import { NestedCalls } from "./nested-calls.js";
 
 export type Pane = "activity" | "chat";
 export type ContentKind = "dialogue" | "system" | "thinking" | "tool" | "shell";
@@ -12,7 +12,7 @@ const panes: Record<ContentKind, Pane> = {
 interface NativeContent extends Component {
   text?: string;
   message?: { content?: unknown; summary?: string; details?: { parentToolCallId?: unknown } };
-  entry?: { customType?: string; data?: { parentToolCallId?: unknown; calls?: { id?: unknown }[] } };
+  entry?: { data?: { parentToolCallId?: unknown } };
   toolCallId?: string;
   toolName?: string;
   args?: unknown;
@@ -45,7 +45,6 @@ export interface ContentEntry {
   kind: ContentKind;
   spacing: Component[];
   compact: boolean;
-  nested?: boolean;
   search(width: number): Omit<SearchEntry, "source">;
   /** Live execution metadata exists only on calls, never on linked output. */
   tool?(): ToolSummary;
@@ -89,33 +88,49 @@ const nativeKinds: Record<string, { kind: ContentKind; accepts(content: NativeCo
   },
 };
 
-/** Show the IDE-owned native child when its saved panel contains this call. */
-class SavedNativePanel implements Component {
-  constructor(private readonly fallback: Component, private readonly group: NativeContent, private readonly id: string) {}
-  private native(): Component | undefined {
-    this.group.setExpanded?.(true);
-    const find = (component: Component | undefined): Component | undefined => {
-      if (!component) return undefined;
-      const node = component as NativeContent & { children?: Component[] };
-      if (nameOf(component) === "ToolExecutionComponent" && node.toolCallId === this.id) return component;
-      for (const child of node.children ?? []) { const found = find(child); if (found) return found; }
-      return undefined;
-    };
-    return find(this.group.customComponent);
-  }
-  render(width: number): string[] { return (this.native() ?? this.fallback).render(width); }
-  invalidate(): void { this.fallback.invalidate(); this.group.invalidate(); }
-  handleMouse(event: TuiMouseEvent): ReturnType<NonNullable<Component["handleMouse"]>> { return (this.native() ?? this.fallback).handleMouse?.(event); }
+/** Traverse the same component links as the native render cache, including wrappers. */
+export function componentTree(root: Component | undefined): NativeContent[] {
+  const seen = new Set<Component>();
+  const nodes: NativeContent[] = [];
+  const visit = (component: Component | undefined): void => {
+    if (!component || seen.has(component) || typeof component.render !== "function") return;
+    seen.add(component);
+    const node = component as NativeContent & { children?: Component[]; child?: Component; component?: Component };
+    nodes.push(node);
+    if (Array.isArray(node.children)) for (const child of node.children) visit(child);
+    visit(node.child); visit(node.component); visit(node.customComponent);
+  };
+  visit(root);
+  return nodes;
 }
 
+/** Preserve searchable tool-result text even when a custom renderer abbreviates it. */
+function nestedResultText(component: Component | undefined): string[] {
+  return componentTree(component).flatMap(node => nameOf(node) === "ToolExecutionComponent" ? [contentText(node.result?.content)] : []).filter(Boolean);
+}
+
+/** Unwrap layout-only containers while retaining each original renderer and shared note. */
+function nativePanelParts(source: NativeContent): Component[] | undefined {
+  if (!source.customComponent) return undefined;
+  const parts: Component[] = [];
+  const seen = new Set<Component>();
+  const visit = (component: Component): void => {
+    if (seen.has(component)) return;
+    seen.add(component);
+    if (component.constructor === Container) for (const child of (component as Container).children) visit(child);
+    else if (nameOf(component) !== "Spacer") parts.push(component);
+  };
+  visit(source.customComponent);
+  return parts.filter(part => nameOf(part) === "ToolExecutionComponent").length > 1 ? parts : undefined;
+}
 /** Shared semantic index for painting and search, independent of wording, severity and lifecycle. */
 export class NativeContentIndex {
   private signature: unknown[] = [];
   private content: ContentEntry[] = [];
+  private readonly expandedPanels = new WeakMap<Component, Component>();
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
-  private readonly savedPanels = new WeakMap<Component, { group: NativeContent; panel: Component }>();
 
-  constructor(private readonly source: Container, private readonly nested?: NestedActivity) {}
+  constructor(private readonly source: Container, readonly nested = new NestedCalls()) {}
 
   /** Return the same classification until native ownership or assistant content changes. */
   entries(pane?: Pane): ContentEntry[] {
@@ -143,21 +158,21 @@ export class NativeContentIndex {
   private refresh(): void {
     const history = this.source.children[2] as Container;
     if (!Array.isArray(history?.children)) throw new Error("Pi's history document is not supported");
-    const signature: unknown[] = [this.nested?.revision, ...this.source.children, ...history.children];
-    for (const component of history.children) {
-      const metadata = component as NativeContent;
-      signature.push(metadata.toolCallId, metadata.entry?.data?.parentToolCallId, metadata.message?.details?.parentToolCallId);
-      const native = assistant(component);
-      if (native) signature.push(native.lastMessage, ...native.contentContainer.children);
-    }
+    const makeSignature = (): unknown[] => {
+      const values: unknown[] = [this.nested.revision, ...this.source.children, ...history.children];
+      for (const component of history.children) {
+        const metadata = component as NativeContent;
+        values.push(metadata.toolCallId, metadata.entry?.data?.parentToolCallId, metadata.message?.details?.parentToolCallId, metadata.customComponent);
+        if (metadata.entry?.data?.parentToolCallId || metadata.message?.details?.parentToolCallId)
+          values.push(...(nativePanelParts(metadata) ?? []));
+        const native = assistant(component);
+        if (native) values.push(native.lastMessage, ...native.contentContainer.children);
+      }
+      return values;
+    };
+    const signature = makeSignature();
     if (signature.length === this.signature.length && signature.every((value, index) => value === this.signature[index])) return;
     const owners = new Map<string, NativeContent>();
-    const panels = new Map<string, NativeContent>();
-    for (const component of history.children) {
-      const entry = (component as NativeContent).entry;
-      if (entry?.customType !== "ide-nested-results" || !Array.isArray(entry.data?.calls)) continue;
-      for (const call of entry.data.calls) if (typeof call.id === "string") panels.set(call.id, component as NativeContent);
-    }
     for (const component of history.children) {
       const adapter = nativeKinds[nameOf(component)];
       const native = component as NativeContent;
@@ -172,15 +187,6 @@ export class NativeContentIndex {
         spacing.push(component);
         continue;
       }
-      const savedGroup = (component as NativeContent).entry;
-      const root = savedGroup?.data?.parentToolCallId;
-      const calls = savedGroup?.data?.calls;
-      if (savedGroup?.customType === "ide-nested-results" && typeof root === "string" && owners.has(root) && Array.isArray(calls) && calls.length > 0) {
-        const nested = this.nested;
-        const children = nested?.entries(root) ?? [];
-        const represented = calls.every(call => typeof call.id === "string" && children.some(child => nested?.id(child) === call.id && (nested?.isSaved(child) || nested?.hasEditorBatch(child))));
-        if (represented) { spacing = []; continue; }
-      }
       const native = assistant(component);
       if (native) entries.push(...this.assistantEntries(native, spacing));
       else {
@@ -189,28 +195,16 @@ export class NativeContentIndex {
         const kind = adapter?.accepts(native) ? adapter.kind : "system";
         const parentId = native.entry?.data?.parentToolCallId ?? native.message?.details?.parentToolCallId;
         const owner = kind === "system" && typeof parentId === "string" ? owners.get(parentId) : undefined;
-        entries.push(this.entry(component, kind, spacing, true, owner));
-        if (kind === "tool" && typeof native.toolCallId === "string") {
-          for (const child of this.nested?.entries(native.toolCallId) ?? []) {
-            const entry = this.entry(child, "system", [], true, native);
-            entry.nested = true;
-            if (this.nested?.summary(child)) {
-              const id = this.nested.id(child);
-              const group = id && this.nested.isSaved(child) ? panels.get(id) : undefined;
-              if (group && id && group.entry?.data?.parentToolCallId === native.toolCallId) {
-                let cached = this.savedPanels.get(child);
-                if (!cached || cached.group !== group) {
-                  cached = { group, panel: new SavedNativePanel(child, group, id) };
-                  this.savedPanels.set(child, cached);
-                }
-                entry.component = cached.panel;
-              }
-              entry.tool = () => this.nested!.summary(child)!;
-              entry.search = () => ({ label: this.nested!.summary(child)!.name, text: this.nested!.search(child) });
-            }
-            entries.push(entry);
-          }
-        }
+        if (owner && this.expandedPanels.get(component) !== owner) {
+          native.setExpanded?.(true);
+          this.expandedPanels.set(component, owner);
+        } else if (!owner) this.expandedPanels.delete(component);
+        const parts = owner && this.nested.entries(owner.toolCallId!).length ? nativePanelParts(native) : undefined;
+        if (parts) for (const part of parts) {
+          const adapter = nativeKinds[nameOf(part)];
+          const partKind = adapter?.accepts(part as NativeContent) ? adapter.kind : "system";
+          entries.push(this.entry(part, partKind, [], true, owner));
+        } else entries.push(this.entry(component, kind, spacing, true, owner));
       }
       spacing = [];
     }
@@ -224,7 +218,7 @@ export class NativeContentIndex {
     }
     this.content = entries.flatMap(entry => entry.owner === entry.source
       ? [entry, ...(linked.get(entry.source) ?? [])] : []);
-    this.signature = signature;
+    this.signature = makeSignature();
   }
 
   private entry(source: Component, kind: ContentKind, spacing: Component[], compact: boolean, owner?: NativeContent): ContentEntry {
@@ -241,7 +235,7 @@ export class NativeContentIndex {
         if (typeof native.toolName !== "string") throw new Error("Pi's tool metadata is not supported");
         return {
           label: native.toolName,
-          text: [native.toolName, JSON.stringify(native.args, null, 2), contentText(native.result?.content)].filter(Boolean).join("\n"),
+          text: [native.toolName, JSON.stringify(native.args, null, 2), contentText(native.result?.content), this.nested.search(native.toolCallId ?? "")].filter(Boolean).join("\n"),
           reveal: () => {
             if (typeof native.setExpanded !== "function") throw new Error("Pi's tool reveal is not supported");
             native.setExpanded(true);
@@ -256,10 +250,15 @@ export class NativeContentIndex {
         if (typeof native.text !== "string") throw new Error("Pi's user text metadata is not supported");
         return { label: "User", text: native.text };
       }
+      const saved = contentText(native.message?.content) || native.message?.summary || "";
+      const rendered = componentText(native.customComponent ?? source) ||
+        searchText(source.render(width).join("\n")).split("\n").map(line => line.trimEnd()).join("\n").replace(/^\n+|\n+$/g, "");
+      const text = [saved || rendered];
+      if (native.customComponent && rendered && !text.some(part => part.includes(rendered))) text.push(rendered);
+      for (const result of nestedResultText(native.customComponent)) if (!text.some(part => part.includes(result))) text.push(result);
       return {
         label: owner?.toolName ?? (native.message?.summary !== undefined ? "Summary" : "System"),
-        text: contentText(native.message?.content) || native.message?.summary || componentText(native.customComponent ?? source) ||
-          searchText(source.render(width).join("\n")).split("\n").map(line => line.trimEnd()).join("\n").replace(/^\n+|\n+$/g, ""),
+        text: text.filter(Boolean).join("\n"),
         reveal: typeof native.setExpanded === "function" ? () => native.setExpanded!(true) : undefined,
       };
     } };
