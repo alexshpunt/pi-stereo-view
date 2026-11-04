@@ -1,7 +1,6 @@
 import { Container, Spacer, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { NativeContentIndex } from "../src/content.js";
-import { NestedActivity } from "../src/nested-activity.js";
 
 class ToolExecutionComponent extends Text {
   toolName = "write";
@@ -166,28 +165,71 @@ test("late output stays directly after its owner without changing native history
   expect(index.contains(firstOutput, "chat")).toBe(true);
 });
 
-test("uses the saved IDE native panel for its matching nested call", () => {
-  const parent = new ToolExecutionComponent("PARENT", 0, 0);
-  const nested = new NestedActivity();
-  nested.absorb({ role: "toolResult", toolCallId: parent.toolCallId, nestedCalls: { complete: true, calls: [
-    { id: parent.toolCallId + "/1", name: "write", status: "ok", arguments: { path: "file" } },
-  ] } });
-  const native = new ToolExecutionComponent("NATIVE-SAVED-FIXTURE", 0, 0);
+test("projects original parent and extension panels without creating nested cards", () => {
+  const parent = new ToolExecutionComponent("PARENT WITH NESTED CALLS", 0, 0);
+  const native = new ToolExecutionComponent("FINAL FIXTURE", 0, 0);
   native.toolCallId = parent.toolCallId + "/1";
-  const panel = new Container(); panel.addChild(native);
-  class SavedPanel extends Container {
-    entry = { customType: "ide-nested-results", data: { parentToolCallId: parent.toolCallId, calls: [{ id: native.toolCallId }] } };
-    customComponent = panel;
-    setExpanded(): void {}
+  class ForeignPanel extends Container {
+    entry = { customType: "foreign-extension", data: { parentToolCallId: parent.toolCallId } };
+    customComponent = new Container();
+    constructor() {
+      super(); this.customComponent.addChild(native);
+      this.customComponent.addChild(new Text("EXTRA FIXTURE", 0, 0)); this.addChild(this.customComponent);
+    }
   }
-  const saved = new SavedPanel();
-  const source = new Container(); const history = new Container();
-  source.children = [new Container(), new Container(), history]; history.children = [parent, saved];
-  const index = new NativeContentIndex(source, nested);
-  const child = index.entries("activity").find(entry => entry.source === nested.entries(parent.toolCallId)[0])!;
-  expect(visible(child.component as Container)).toContain("NATIVE-SAVED-FIXTURE");
-  expect(index.entries("activity").some(entry => entry.source === saved)).toBe(false);
+  const panel = new ForeignPanel();
+  const { index, history } = setup(parent, panel);
+  const entries = index.entries("activity");
+  expect(entries.map(entry => entry.source)).toEqual([parent, panel]);
+  expect(entries.map(entry => entry.component)).toEqual([parent, panel]);
+  expect(panel.customComponent.children[0]).toBe(native);
+  expect(history.children).toEqual([parent, panel]);
+  expect(index.copy(entries[1], 80)).toContain("FINAL FIXTURE");
+  expect(index.copy(entries[1], 80)).toContain("EXTRA FIXTURE");
 });
+
+test("linked panels use their original expansion API and keep the whole panel", () => {
+  const parent = new ToolExecutionComponent("PARENT", 0, 0);
+  class ForeignPanel extends Container {
+    entry = { customType: "foreign", data: { parentToolCallId: parent.toolCallId } };
+    _expanded = false;
+    customComponent: Component | undefined;
+    setExpanded(value: boolean): void {
+      if (this._expanded === value) return;
+      this._expanded = value;
+      this.customComponent = new Text("FINAL FIXTURE\nWARNING FIXTURE", 0, 0);
+      this.addChild(this.customComponent);
+    }
+  }
+  const panel = new ForeignPanel();
+  const { index, history } = setup(parent, panel);
+  const entry = index.entries("activity").find(item => item.source === panel)!;
+  expect(entry.component).toBe(panel);
+  expect(panel._expanded).toBe(true);
+  expect(entry.search(80).text).toContain("FINAL FIXTURE");
+  expect(entry.search(80).text).toContain("WARNING FIXTURE");
+  panel._expanded = false;
+  // A later history update must not undo the panel's native collapse action.
+  history.addChild(new Text("LATER FIXTURE", 0, 0));
+  index.entries("activity");
+  expect(panel._expanded).toBe(false);
+});
+
+test("search and copy retain visible custom message content as well as its message", () => {
+  const parent = new ToolExecutionComponent("PARENT", 0, 0);
+  class CustomMessageComponent extends Container {
+    message = { content: [{ type: "text", text: "MESSAGE FIXTURE" }], details: { parentToolCallId: parent.toolCallId } };
+    customComponent = new Container();
+    constructor() { super(); this.customComponent.addChild(new Text("VISIBLE WARNING", 0, 0)); this.addChild(this.customComponent); }
+  }
+  const panel = new CustomMessageComponent();
+  const { index } = setup(parent, panel);
+  const entry = index.entries("activity").find(item => item.source === panel)!;
+  expect(entry.search(80).text).toContain("MESSAGE FIXTURE");
+  expect(entry.search(80).text).toContain("VISIBLE WARNING");
+  expect(index.copy(entry, 80)).toContain("VISIBLE WARNING");
+});
+
 class CustomMessageComponent extends Text {
   constructor(text: string, readonly message: { details: { parentToolCallId: string } }) { super(text, 0, 0); }
 }
