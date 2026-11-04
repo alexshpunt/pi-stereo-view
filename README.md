@@ -29,7 +29,7 @@ Late output linked to a tool call appears directly below that call in Activity, 
 
 Calls made inside Codemode and other tools appear beneath their parent in Activity. While running, their arguments, status and available results are shown; compact mode gives each nested call its own expandable row. After reopening a session, Pi restores recorded call metadata and any saved error excerpt. Pi Agent IDE may also restore its saved native result panels; full results are not always available. Activity marks incomplete records and omitted arguments. Older sessions without nested records remain unchanged.
 
-Messages and tools keep their familiar appearance. The input stays full width below both panels.
+Messages and tools keep their familiar appearance. Extension widgets appear at the bottom of Activity when they fit, below its independently scrolling history, while the input stays full width below both panels. If the widgets cannot fit without being clipped, the view temporarily returns to combined history and Pi's normal widget placement. Combined history and zoomed Conversation also keep normal widget placement.
 
 ## Features
 
