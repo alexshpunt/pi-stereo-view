@@ -27,7 +27,7 @@ Unrecognized content stays in Conversation unless its metadata links it to a kno
 
 Late output linked to a tool call appears directly below that call in Activity, even if other work has happened since. Combined history keeps its original order.
 
-Calls made inside Codemode and other tools appear beneath their parent in Activity. While running, their arguments, status and available results are shown; compact mode gives each nested call its own expandable row. After reopening a session, Pi restores recorded call metadata and any saved error excerpt. Pi Agent IDE may also restore its saved native result panels; full results are not always available. Activity marks incomplete records and omitted arguments. Older sessions without nested records remain unchanged.
+Expand a parent tool such as Codemode to browse its nested call tree. Adjacent calls of the same tool form a group with individual call headers. Each independent native result opens under its call. A combined result covering several calls stays whole inside their group. Panels without child execution identities remain available inside the parent's output disclosure. Session restoration uses Pi's saved nested-call metadata and the original saved panels.
 
 Messages and tools keep their familiar appearance. The input stays full width below both panels.
 
