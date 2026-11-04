@@ -6,7 +6,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
 import { NativeContentIndex } from "./content.js";
-import type { NestedActivity } from "./nested-activity.js";
+import { NestedCalls } from "./nested-calls.js";
 import type { Preferences } from "./preferences.js";
 import type { TranscriptTimestamps } from "./timestamps.js";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.js";
@@ -137,7 +137,7 @@ export class TranscriptLayout {
     private readonly openSettings: () => void,
     private readonly copy?: (text: string | undefined) => void,
     private readonly getTools: () => readonly ToolInfo[] = () => [],
-    private readonly nested?: NestedActivity,
+    private readonly nested = new NestedCalls(),
   ) {}
 
   private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {

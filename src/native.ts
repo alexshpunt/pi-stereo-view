@@ -1,5 +1,5 @@
 import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, truncateToWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.js";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.js";
@@ -7,6 +7,8 @@ import { NativeContentIndex, type ContentEntry, type Pane } from "./content.js";
 import { CompactTool } from "./compact-tools.js";
 import { toolPresentations, type ToolPresentation } from "./tool-presentation.js";
 import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.js";
+import { ToolIndent } from "./tool-indent.js";
+import { NestedTree, type NativeTreeBody } from "./nested-tree.js";
 export type { Pane } from "./content.js";
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
@@ -41,28 +43,6 @@ class SearchHighlight implements Component {
   }
 }
 
-/** Keep hierarchy guides outside native rendering, search and pointer coordinates. */
-class ToolIndent extends Container {
-  private readonly prefix: string;
-
-  constructor(component: Component, depth: number, body: boolean, private readonly theme: () => Theme) {
-    super();
-    this.addChild(component);
-    this.prefix = " │".repeat(depth) + (body ? " " : "");
-  }
-
-  override render(width: number): string[] {
-    const inset = Math.min(width, this.prefix.length);
-    const prefix = this.theme().fg("dim", this.prefix.slice(0, inset));
-    return super.render(Math.max(0, width - inset)).map(line => truncateToWidth(prefix + line, width, ""));
-  }
-
-  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
-    const inset = Math.min(event.width, this.prefix.length);
-    if (event.x < inset) return undefined;
-    return super.handleMouse({ ...event, x: event.x - inset, width: Math.max(0, event.width - inset) });
-  }
-}
 /**
  * Project the live native component tree, not messages or renderer strings.
  * Assistant shells keep the native render method and original content components.
@@ -72,6 +52,7 @@ class ToolIndent extends Container {
 export class NativeDocument extends Container {
   private readonly stamped = new WeakMap<Component, CompactMessage>();
   private readonly toolRows = new WeakMap<Component, CompactTool>();
+  private readonly nestedTrees = new WeakMap<Component, NestedTree>();
   private readonly groupRows = new WeakMap<Component, CompactTool>();
   private readonly indented = new WeakMap<Component, ToolIndent[]>();
   private readonly openGroups = new WeakSet<Component>();
@@ -283,6 +264,29 @@ export class NativeDocument extends Container {
     }
     return row;
   }
+  private nativeBlock(entry: ContentEntry): CompactMessage {
+    const component = entry.source;
+    const routed = entry.component;
+    this.clockOwners.set(component, entry.owner);
+    let stamped = this.stamped.get(routed);
+    if (!stamped) {
+      stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
+        this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.compactTools() && entry.kind === "tool"),
+        this.copy ? () => this.copyBlock(component) : undefined, this.showCopy);
+      this.stamped.set(routed, stamped);
+    }
+    this.compactBlocks.set(component, stamped);
+    return stamped;
+  }
+  private searchExcerpt(): Component {
+    return this.highlighted(new Text(this.theme().fg("accent", "Search match: ") + searchText(this.excerpt!.text), 1, 0), true);
+  }
+  private treeBody(entry: ContentEntry): NativeTreeBody {
+    const block = this.nativeBlock(entry);
+    return { entry, component: this.searchAnchor?.entry.source === entry.source && !this.excerpt ? this.highlighted(block) : block,
+      clock: () => block.searchClock(),
+      excerpt: this.excerpt?.entry.source === entry.source && entry.owner !== entry.source ? this.searchExcerpt() : undefined };
+  }
   override render(width: number): string[] {
     if (this.frameActive && this.frameWidth === width && this.frameLines) return this.frameLines;
     const chat = this.source.children[2] as Container;
@@ -317,8 +321,27 @@ export class NativeDocument extends Container {
     for (const source of opening) this.openGroups.add(source);
     this.groups = groups;
     const searched = this.searchAnchor ? this.index.entries(this.pane).find(entry => entry.source === this.searchAnchor!.entry.source) : undefined;
-    this.searchTool = searched?.nested ? searched.source : searched?.owner;
-    for (const entry of this.index.entries(this.pane)) {
+    this.searchTool = searched?.owner;
+    const entries = this.index.entries(this.pane);
+    const trees = new Map<Component, NestedTree>();
+    if (this.pane === "activity") for (const entry of entries) {
+      if (!entry.tool) continue;
+      const id = Reflect.get(entry.source, "toolCallId") as string | undefined;
+      if (!id || (!this.index.nested.entries(id).length && !this.index.nested.isIncomplete(id))) continue;
+      let tree = this.nestedTrees.get(entry.source);
+      if (!tree) {
+        tree = new NestedTree(id, this.index.nested, this.theme, name => this.present(name), this.compactTools, () => {
+          this.beforeExpand(); if (this.searchAnchor) this.clearSearch(); this.frameWidth = undefined;
+        }, () => {
+          const clock = this.showTimestamps() && this.compactTools() ? this.timestamps.label(entry.source) : "";
+          return clock ? clock.length + 1 : 0;
+        });
+        this.nestedTrees.set(entry.source, tree);
+      }
+      trees.set(entry.source, tree);
+    }
+    for (const entry of entries) {
+      if (entry.owner !== entry.source && trees.has(entry.owner)) continue;
       const component = entry.source;
       const routed = entry.component;
       this.clockOwners.set(component, entry.owner);
@@ -329,39 +352,38 @@ export class NativeDocument extends Container {
       let bodyDepth = 0;
       const compactTool = compactTools && entry.kind === "tool";
       if (compactTool) {
-        const group = entry.nested ? undefined : this.groups.get(entry.owner);
+        const group = this.groups.get(entry.owner);
         const grouped = group !== undefined && group.calls.length > 1;
-        bodyDepth = entry.nested || grouped ? 2 : 1;
+        bodyDepth = grouped ? 2 : 1;
         const members = !grouped || this.groupOpen(group);
         if (entry.tool) {
           if (visibleBlock && !toolRun) result.push(new Spacer(1));
           if (grouped && group.calls[0].source === component) result.push(this.groupRow(group));
-          if (members) result.push(this.indent(this.compactRow(entry), entry.nested || grouped ? 1 : 0));
+          if (members) result.push(this.indent(this.compactRow(entry), grouped ? 1 : 0));
           toolRun = true;
           visibleBlock = true;
         }
-        nativeBody = entry.nested && !entry.tool ? true : members && this.toolOpen(entry.nested ? component : entry.owner);
+        nativeBody = members && this.toolOpen(entry.owner);
       }
+      const tree = trees.get(component);
       const contentStart = result.length;
       const bodyWidth = Math.max(0, width - (bodyDepth ? bodyDepth * 2 + 1 : 0));
-      if (nativeBody && !entry.compact) {
+      if (nativeBody && tree) {
+        const panels = entries.filter(panel => panel.owner === component && panel.source !== component);
+        tree.setBodies(this.treeBody(entry), panels.map(panel => this.treeBody(panel)), this.searchAnchor?.entry.source);
+        result.push(tree);
+        visibleBlock = true;
+      } else if (nativeBody && !entry.compact) {
         toolRun = false;
         result.push(...entry.spacing, routed);
       } else if (nativeBody) {
         if (!compactTool) toolRun = false;
-        let stamped = this.stamped.get(routed);
-        if (!stamped) {
-          stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
-            this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.compactTools() && entry.kind === "tool"),
-            this.copy ? () => this.copyBlock(component) : undefined, this.showCopy);
-          this.stamped.set(routed, stamped);
-        }
-        this.compactBlocks.set(component, stamped);
+        const stamped = this.nativeBlock(entry);
         visibleBlock = stamped.prepare(bodyWidth, compactTool ? false : visibleBlock) || visibleBlock;
         result.push(stamped);
         clock = stamped.searchClock();
       }
-      if (this.searchAnchor?.entry.source === component && !this.excerpt && result.length > start) {
+      if (!tree && this.searchAnchor?.entry.source === component && !this.excerpt && result.length > start) {
         const last = result.length - 1;
         result[last] = this.highlighted(result[last]);
       }
@@ -370,20 +392,25 @@ export class NativeDocument extends Container {
         const lines = [...prefix, ...result.slice(contentStart).flatMap(child => child.render(bodyWidth))];
         let excerptRow: number | undefined;
         if (this.excerpt?.entry.source === component) {
-          const fragment = new Text(this.theme().fg("accent", "Search match: ") + searchText(this.excerpt.text), 1, 0);
           if (!lines.length && wasVisible) {
             result.push(new Spacer(1));
             lines.push("");
           }
           excerptRow = row + lines.length;
-          const decorated = this.highlighted(fragment, true);
+          const decorated = this.searchExcerpt();
           result.push(decorated);
           lines.push(...decorated.render(bodyWidth));
           visibleBlock = true;
         }
         // Compact controls/clocks are not saved text. Search the original body only.
         const prefixRows = prefix.length;
-        this.positions.set(component, { row: row + prefixRows, lines: lines.slice(prefixRows), clock, excerptRow });
+        if (tree && nativeBody) {
+          for (const [source, position] of tree.positions) this.positions.set(source, {
+            ...position, row: row + prefixRows + position.row,
+            excerptRow: position.excerptRow === undefined ? undefined : row + prefixRows + position.excerptRow,
+          });
+          if (excerptRow !== undefined) this.positions.set(component, { row, lines: [], excerptRow });
+        } else this.positions.set(component, { row: row + prefixRows, lines: lines.slice(prefixRows), clock, excerptRow });
         row += lines.length;
       }
       for (let child = contentStart; child < result.length; child++) result[child] = this.indent(result[child], bodyDepth, true);
