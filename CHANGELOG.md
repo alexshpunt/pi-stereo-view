@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.12 - 2026-11-04
+
+### Changed
+
+- Keep extension widgets at the bottom of Activity while its history scrolls independently. Widgets return to Pi's normal placement when they cannot fit safely.
+- Restore the nested Codemode call tree with independent controls and original native result panels, including shared results and saved sessions.
+
+### Fixed
+
+- Keep committed editor batch results visible under their originating nested calls.
+
 ## 0.1.11 - 2026-10-29
 
 ### Added
