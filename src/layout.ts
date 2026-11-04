@@ -35,6 +35,15 @@ class PanelScrollView extends ScrollView {
     return undefined;
   }
 }
+class WidgetScrollView extends ScrollView {
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+    if (event.type !== "wheel" || !event.wheelDelta) return undefined;
+    this.scrollBy(event.wheelDelta);
+    return { handled: true, target: { component: this, originX: event.screenX - event.x,
+      originY: event.screenY - event.y, width: event.width, height: event.height } };
+  }
+}
+
 class TranscriptColumns extends HStack {
   /** Reserve a fixed width for Conversation, independent of its content. */
   sizeConversation(component: Component, width: number): void {
@@ -75,10 +84,13 @@ class TranscriptRoot extends VStack {
 }
 
 class TranscriptPane extends VStack {
-  constructor(private readonly header: Component, private readonly view: ScrollView, private readonly height: () => number) {
+  constructor(private readonly header: Component, private readonly view: ScrollView, private readonly height: () => number,
+    private readonly widgets?: ScrollView, private readonly widgetsVisible: () => boolean = () => false) {
     super([
       { component: header, basis: "auto", shrink: 0 },
       { component: view, basis: 0, grow: 1, minSize: 1 },
+      ...(widgets ? [{ component: widgets, basis: "auto" as const, minSize: 0,
+        visible: () => widgetsVisible() }] : []),
     ]);
   }
 
@@ -98,8 +110,9 @@ class TranscriptPane extends VStack {
     // Empty preview rows avoid composing colored history text in ancestor measurements.
     const headerRows = this.header.render(width).length;
     const contentRows = this.view.children[0].render(this.view.getContentWidth(width)).length;
+    const widgetRows = this.widgets && this.widgetsVisible() ? this.widgets.render(width).length : 0;
     const available = Math.max(1, this.height() - headerRows);
-    return Array<string>(headerRows + Math.min(contentRows, available)).fill("");
+    return Array<string>(headerRows + Math.min((widgetRows ? Math.max(1, contentRows) : contentRows) + widgetRows, available)).fill("");
   }
 }
 
@@ -197,6 +210,22 @@ export class TranscriptLayout {
       this.warn("pi-stereo-view split is unavailable: Pi's history document is not supported.");
       return;
     }
+    // Route only the known native dock shape. Keep the original untouched for fallback.
+    const nativeDock = dock as unknown as { entries: Array<Exclude<StackChild, Component>>; children: Component[] };
+    const entries = Array.isArray(nativeDock.entries) ? nativeDock.entries.map(entry => ({ ...entry })) : [];
+    const supportedWidgets = entries.length === 6 && entries.every((entry, i) => entry.component === nativeDock.children[i]) &&
+      [2, 4].every(i => entries[i].component.constructor.name === "Container") &&
+      entries[3].minSize === 3;
+    const above = supportedWidgets ? entries[2].component as Container : undefined;
+    const below = supportedWidgets ? entries[4].component as Container : undefined;
+    const projectedDock = supportedWidgets ? new VStack(entries.filter((_, i) => i !== 2 && i !== 4)) : undefined;
+    const widgetTree = above && below ? new VStack([above, below]) : undefined;
+    const widgetView = widgetTree ? new WidgetScrollView(widgetTree, { overscroll: "contain" }) : undefined;
+    const widgetsPresent = (): boolean => !!above && !!below && (above.children.length > 1 || below.children.length > 0);
+    const dockUnchanged = (): boolean => supportedWidgets && nativeDock.entries.length === 6 &&
+      nativeDock.entries.every((entry, i) => entry.component === nativeDock.children[i] &&
+        Object.keys({ ...entry, ...entries[i] }).every(key =>
+          entry[key as keyof typeof entry] === entries[i][key as keyof typeof entry]));
     this.host = host;
     this.original = root;
     this.failed = false;
@@ -227,9 +256,12 @@ export class TranscriptLayout {
       () => this.searchPane() === "activity");
     this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"), () => this.searchPane() === "chat");
     let historyHeight = 0;
+    let projectWidgets = false;
     const shown = ({ width, height }: { width: number; height: number }): boolean => {
       const previousHeight = historyHeight;
-      historyHeight = Math.max(0, height - dock.render(width).length - 1);
+      const candidate = !!projectedDock && widgetsPresent() && dockUnchanged() && !this.failed &&
+        this.preferences.mode === "split" && this.preferences.zoom !== "chat";
+      historyHeight = Math.max(0, height - (candidate ? projectedDock : dock).render(width).length - 1);
       const search = this.search;
       if (search && previousHeight !== historyHeight) queueMicrotask(() => {
         if (this.search === search) search.bar.reposition();
@@ -240,6 +272,7 @@ export class TranscriptLayout {
         this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= MIN_ROWS + searchRows :
           width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1 + searchRows;
       this.fallback = this.preferences.mode === "split" && !fits;
+      projectWidgets = candidate && fits;
       if (this.search && (this.fallback || this.failed || this.preferences.mode !== "split" ||
         (this.preferences.zoom && this.preferences.zoom !== this.search.pane))) this.closeSearch(false);
       this.searchShortcut.sync(!this.failed && this.preferences.mode === "split" && fits);
@@ -248,6 +281,28 @@ export class TranscriptLayout {
         if (this.preferences.mode !== "split" || !fits) return false;
         // Both panels project the same native history and supported content kinds.
         activityDocument.check();
+        if (projectWidgets && widgetTree && widgetsPresent()) {
+          const chatWidth = Math.min(width - MIN_ACTIVITY - 1,
+            Math.max(MIN_CHAT, this.preferences.chatWidth ?? this.defaultWidth(width)));
+          const widgetWidth = this.preferences.zoom === "activity" || this.preferences.layout === "rows"
+            ? width : width - chatWidth - 1;
+          const chatSearch = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
+          const activitySearch = this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0;
+          const chatMin = MIN_ROWS + chatSearch;
+          const activityMin = MIN_ROWS + activitySearch;
+          const chatLimit = Math.max(chatMin, Math.min((this.preferences.chatHeight ?? this.automaticHeight) + chatSearch,
+            historyHeight - activityMin - 1));
+          const activityHeight = this.preferences.zoom || this.preferences.layout === "columns" ? historyHeight :
+            historyHeight - 1 - Math.min(chatLimit, Math.max(chatMin, chatPane.render(width).length));
+          // Do not clip opaque interactive widgets: their own wheel handlers may consume scrolling.
+          // If the entire surface cannot fit, leave Pi's original dock available instead.
+          const budget = Math.max(0, activityHeight - 3 - activitySearch);
+          if (widgetTree.render(widgetWidth).length > budget) {
+            projectWidgets = false;
+            this.fallback = true;
+            return false;
+          }
+        }
         this.activity?.setScrollbar(scroll.scrollbar);
         this.chat?.setScrollbar(scroll.scrollbar);
         columns.sizeConversation(chatPane, this.preferences.chatWidth ?? this.defaultWidth(width));
@@ -260,6 +315,7 @@ export class TranscriptLayout {
             historyHeight - activityMinimum - 1)), chatMinimum, activityMinimum);
         return true;
       } catch (error) {
+        projectWidgets = false;
         this.failed = true;
         this.searchShortcut.dispose();
         this.disposeDocuments?.();
@@ -334,7 +390,8 @@ export class TranscriptLayout {
         { component: this.searchRows[target], basis: "auto", shrink: 0,
           visible: () => this.search?.pane === target },
       ]);
-      return new TranscriptPane(header, view, () => historyHeight);
+      return new TranscriptPane(header, view, () => historyHeight,
+        target === "activity" ? widgetView : undefined, () => projectWidgets && widgetsPresent());
     };
     const activityPane = pane("Activity", "activity", this.activity);
     const chatPane = pane("Conversation", "chat", this.chat);
@@ -410,7 +467,9 @@ export class TranscriptLayout {
       { component: chatPane, basis: "auto", minSize: MIN_ROWS,
         visible: viewport => shown(viewport) && this.preferences.zoom === "chat" },
       { component: transcript, basis: 0, grow: 1, minSize: 1, visible: viewport => !shown(viewport) },
-      { component: dock, basis: "auto", shrink: 0, minSize: 1 },
+      ...(projectedDock ? [{ component: projectedDock, basis: "auto" as const, shrink: 0, minSize: 1,
+        visible: () => projectWidgets }] : []),
+      { component: dock, basis: "auto", shrink: 0, minSize: 1, visible: () => !projectWidgets },
     ]);
     this.mounted = mounted;
     host.setLayoutRoot(mounted);
