@@ -29,7 +29,7 @@ Late output linked to a tool call appears directly below that call in Activity, 
 
 Expand a parent tool such as Codemode to browse its nested call tree. Adjacent calls of the same tool form a group with individual call headers. Each independent native result opens under its call. A combined result covering several calls stays whole inside their group. Panels without child execution identities remain available inside the parent's output disclosure. Session restoration uses Pi's saved nested-call metadata and the original saved panels.
 
-Messages and tools keep their familiar appearance. The input stays full width below both panels.
+Messages and tools keep their familiar appearance. Extension widgets appear at the bottom of Activity when they fit, below its independently scrolling history, while the input stays full width below both panels. If the widgets cannot fit without being clipped, the view temporarily returns to combined history and Pi's normal widget placement. Combined history and zoomed Conversation also keep normal widget placement.
 
 ## Features
 
