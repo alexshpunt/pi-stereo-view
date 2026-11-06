@@ -5,6 +5,7 @@ import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
 import { beforeFirstFrame } from "./startup.js";
+import { observeNativeEditor } from "./native-editor.js";
 import { NestedCalls } from "./nested-calls.js";
 
 /** Split native fullscreen history without changing message content or the input dock. */
@@ -13,6 +14,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   let host: TUI | undefined;
   let timestamps: TranscriptTimestamps | undefined;
   const nested = new NestedCalls();
+  const nativeEditor = observeNativeEditor();
   let unsubscribeInput: (() => void) | undefined;
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
@@ -110,7 +112,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         }
         void copyToClipboard(text).then(() => ui.notify("Block sent to clipboard.", "info"),
           error => ui.notify("Could not copy block: " + String(error), "error"));
-      }, () => pi.getAllTools(), nested);
+      }, () => pi.getAllTools(), nested, () => nativeEditor.get(tui));
     try { ensureLayout(); }
     catch (error) {
       layout.dispose();
@@ -201,6 +203,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   pi.on("session_compact", (_event, ctx) => { closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
   pi.on("session_shutdown", async () => {
     releaseStartup();
+    nativeEditor.dispose();
     closeSearch();
     unsubscribeInput?.();
     unsubscribeInput = undefined;
