@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Show native inline extension dialogs below Activity history alongside widgets. Keep message editors full width, explicit overlays unchanged and native placement available when the surface does not fit.
+- Preserve an inline dialog's keyboard focus when pressing the panel search shortcut.
+
 ## 0.1.12 - 2026-11-04
 
 ### Changed
