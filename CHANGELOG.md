@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.13 - 2026-11-06
+
 ### Changed
 
 - Show native inline extension dialogs below Activity history alongside widgets. Keep message editors full width, explicit overlays unchanged and native placement available when the surface does not fit.
