@@ -6,7 +6,7 @@ import { defaults, loadPreferences, savePreferences, type Preferences } from "..
 
 const arrangement = {
   side: "right", chatWidth: 73, layout: "rows", chatHeight: 17,
-  showTimestamps: false, showCopyButtons: false, compactTools: true,
+  showTimestamps: false, showCopyButtons: false, compactTools: true, buttonStyle: "icons",
 } as const;
 
 test.each(["chat", "activity", null] as const)("ignores legacy temporary state with %s zoom without losing the saved arrangement", async zoom => {
