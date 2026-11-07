@@ -74,17 +74,17 @@ pi --tui-mode fullscreen
 
 ## Use it
 
-Click the toolbar and the buttons in each panel's header. Buttons use icons by default. To use text instead, open **Stereo View settings** with `[≡]` or `/stereo-view settings`, then set **Button style** to `text`. The choice survives restart.
+Click the toolbar and the buttons in each panel's header. Buttons use icons by default. To use text instead, open **Stereo View settings** with `[ ≡ ]` or `/stereo-view settings`, then set **Button style** to `text`. The choice survives restart.
 
 | Icons | Text | Action |
 | --- | --- | --- |
-| `[▣]` / `[◫]` | `[Join]` / `[Open]` | Turn split history off / on. |
-| `[▤]` / `[▥]` | `[Rows]` / `[Cols]` | Switch between rows and columns. |
-| `[↕]` / `[↔]` | `[Swap]` | Swap the panels. |
-| `[↗]` / `[↙]` | `[Max]` / `[Out]` | Zoom a panel / restore the split. |
-| `[≡]` | `[Menu]` | Open display and Conversation height settings. |
-| `[⌕]` | `[Find]` | Search this panel. |
-| `[⊟]` / `[⊞]` | `[Few]` / `[All]` | Compact Activity tools / restore full tools. |
+| `[ ▣ ]` / `[ ◫ ]` | `[Join]` / `[Open]` | Turn split history off / on. |
+| `[ ▤ ]` / `[ ▥ ]` | `[Rows]` / `[Cols]` | Switch between rows and columns. |
+| `[ ↕ ]` / `[ ↔ ]` | `[Swap]` | Swap the panels. |
+| `[ ↗ ]` / `[ ↙ ]` | `[Max]` / `[Out]` | Zoom a panel / restore the split. |
+| `[ ≡ ]` | `[Menu]` | Open display and Conversation height settings. |
+| `[ ⌕ ]` | `[Find]` | Search this panel. |
+| `[ ⊟ ]` / `[ ⊞ ]` | `[Few]` / `[All]` | Compact Activity tools / restore full tools. |
 
 **Resize:** drag the double line between the panels — `═` in rows, `║` in columns.
 
@@ -98,17 +98,17 @@ Swap the panels whenever you want. Zoom a panel to give it the whole history are
 
 ## Compact Activity
 
-Click `[⊟]` or `[Few]` beside Search and Maximize in the Activity header to show compact tool calls. Adjacent calls to the same tool in the same state share a header with a count; every failed call stays separate, even beside another failure. Click that header to show the individual compact rows, then click a row to open its original full card and linked output. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls. Thinking, Conversation content and different tools end a group.
+Click `[ ⊟ ]` or `[Few]` beside Search and Maximize in the Activity header to show compact tool calls. Adjacent calls to the same tool in the same state share a header with a count; every failed call stays separate, even beside another failure. Click that header to show the individual compact rows, then click a row to open its original full card and linked output. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls. Thinking, Conversation content and different tools end a group.
 
 Group and call headers show `▸` when collapsed and `▾` when expanded. Each call row has a one-cell left gutter, a colored status dot, its tool name and a short argument description. A group shows its shared running or successful state. Failed calls expose their own status and argument preview without opening a group. Long descriptions are truncated, not the saved calls. Verified local MCP forwarding aliases use their native tool's name; foreign, ambiguous and unknown tools keep their original identity.
 
-Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. You can also click `[⊞]` or `[All]` in the Activity header to restore full tools. Conversation and combined history keep their normal display.
+Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. You can also click `[ ⊞ ]` or `[All]` in the Activity header to restore full tools. Conversation and combined history keep their normal display.
 
 Compact tools work in columns, rows and zoomed Activity. The choice survives restart and defaults to off. For keyboard access, run `/stereo-view settings` and change **Compact Activity tools**.
 
 ## Search history
 
-Press **Ctrl+F** to search the last clicked or scrolled panel. The active panel's header is highlighted and, when space permits, marked with a dot; Conversation is active initially. The `[⌕]` / `[Find]` button always searches its own panel.
+Press **Ctrl+F** to search the last clicked or scrolled panel. The active panel's header is highlighted and, when space permits, marked with a dot; Conversation is active initially. The `[ ⌕ ]` / `[Find]` button always searches its own panel.
 
 Type a word or phrase to find it without case sensitivity. Combine terms with `AND`, `OR`, `NOT` and parentheses. Put phrases in quotes to keep them together, or start with `regex:` for a regular expression.
 
@@ -119,7 +119,7 @@ Type a word or phrase to find it without case sensitivity. Combine terms with `A
 | `(worker OR server) AND "ready now"` | Lines containing either term and the phrase “ready now”. |
 | `regex:worker_[0-9]+` | Names such as `worker_12`. |
 
-Press **Enter** or `[↓]` for the next match, and **Shift+Enter** for the previous one. The counter shows your position and the total matches. Ctrl+F returns to the search field without clearing your query.
+Press **Enter**, `[ ↓ ]` or `[Go]` for the next match, and **Shift+Enter** for the previous one. The counter shows your position and the total matches when space permits. Ctrl+F returns to the search field without clearing your query.
 
 Search covers the whole current conversation branch, including off-screen messages, hidden thinking and collapsed tool output. It does not search other branches, sessions, attachments or files. Russian and English queries work.
 
@@ -127,11 +127,11 @@ A match is revealed in its own panel without moving the other one. If matching t
 
 **Regex search requires ripgrep (`rg`) to be installed.** Invalid queries and search errors appear in the search field instead of showing incomplete results.
 
-Press **Escape** or `[×]` to close search and restore your previous scroll position. Your message draft stays unchanged. Close other dialogs before searching. Search is available in split fullscreen history; combined history and regular mode keep Pi's usual keyboard behaviour.
+Press **Escape**, `[ × ]` or `[Exit]` to close search and restore your previous scroll position. Your message draft stays unchanged. Close other dialogs before searching. Search is available in split fullscreen history; combined history and regular mode keep Pi's usual keyboard behaviour.
 
 ## Copy a block
 
-Click `⧉` or `[Copy]` below the right corner of a message, thinking, tool or other history block to copy its text. Blocks without a known time have no copy button. Copy buttons work in split and zoomed panels, even with timestamps hidden.
+Click `[ ⧉ ]` or `[Copy]` below the right corner of a message, thinking, tool or other history block to copy its text. Blocks without a known time have no copy button. Copy buttons work in split and zoomed panels, even with timestamps hidden.
 
 Messages and thinking keep their original text/Markdown, without terminal colours, clocks or copy buttons. Copying a tool includes its name, arguments, saved result and linked late output. A late-output block also has its own button to copy just that block. Collapsed and off-screen text is included.
 
