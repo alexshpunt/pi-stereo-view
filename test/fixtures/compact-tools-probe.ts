@@ -90,7 +90,7 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
       executions.push(args.tag);
       if (args.tag === "A938") {
         await capture("normal");
-        await click("[ ⊟ ]", "Activity");
+        await click("[⊟]", "Activity");
         await capture("initialGroup");
         await click("compact_probe");
         await capture("started");
@@ -129,7 +129,7 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
       pi.appendEntry("compact-linked", { parentToolCallId: "compact-first", text: "LATE-RESULT-FIXTURE" });
       ctx.ui.setEditorText("UNSENT-FIXTURE");
       await capture("rows");
-      await click("[ ↗ ]", "Activity");
+      await click("[↗]", "Activity");
       await capture("zoom");
       await click("compact_probe");
       await capture("groupClosed");
@@ -139,9 +139,9 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
       await capture("memberOpen");
       await click("ACTION-A938");
       await capture("nativeAction");
-      await click("[ ↙ ]", "Activity");
+      await click("[↙]", "Activity");
       await capture("memberRows");
-      await click("[ ▥ ]");
+      await click("[▥]");
       await capture("memberColumns");
       const expandedSize = { columns: process.stdout.columns, rows: process.stdout.rows };
       try {
@@ -155,8 +155,8 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
         process.stdout.emit("resize");
       }
       await capture();
-      await click("[ ▤ ]");
-      await click("[ ↗ ]", "Activity");
+      await click("[▤]");
+      await click("[↗]", "Activity");
       await capture("memberZoom");
       await click("compact_probe");
       await capture("memberHidden");
@@ -168,15 +168,15 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
       await capture("failureOpen");
       await click("B938", "compact_probe");
       await capture("failureClosed");
-      await click("[ ≡ ]");
+      await click("[≡]");
       await input(" ");
       await input("\x1b");
       await capture("clocksOff");
-      await click("[ ≡ ]");
+      await click("[≡]");
       await input(" ");
       await input("\x1b");
       await capture("clocksOn");
-      await click("[ ⌕ ]", "Activity");
+      await click("[⌕]", "Activity");
       await input("LATE-RESULT-FIXTURE");
       await input("\r");
       await capture();
@@ -191,11 +191,11 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
       for (let index = 1; index < Number(choice); index++) await input("\x1b[B");
       await input("\r");
       for (let attempt = 0; attempt < 100 && !copied; attempt++) await setTimeout(10);
-      await click("[ ⊞ ]", "Activity");
+      await click("[⊞]", "Activity");
       await capture("restored");
-      await click("[ ⊟ ]", "Activity");
-      await click("[ ↙ ]", "Activity");
-      await click("[ ▥ ]");
+      await click("[⊟]", "Activity");
+      await click("[↙]", "Activity");
+      await click("[▥]");
       await capture("columns");
       const { columns, rows } = process.stdout;
       try {
@@ -213,9 +213,9 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
         process.stdout.emit("resize");
       }
       await capture();
-      await click("[ ▣ ]");
+      await click("[▣]");
       await capture("combined");
-      await click("[ ◫ ]");
+      await click("[◫]");
       await capture("again");
       const starts = ctx.sessionManager.getBranch().flatMap(entry => entry.type === "custom" && entry.customType === "pi-agent-transcript/tool-start"
         ? [entry.data] : []);

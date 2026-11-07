@@ -61,9 +61,9 @@ test("ships only public runtime files and loads the installed archive in real Pi
     expect(await readFile(path.join(workspace, "effect.txt"), "utf8")).toBe("PACKED TOOL EFFECT");
     const frame: string[] = JSON.parse(await readFile(path.join(workspace, "native-snapshot.json"), "utf8"));
     const lines = frame.map(stripTerminalSequences);
-    expect(lines.filter(line => line.includes("[ ≡ ]"))).toHaveLength(1);
-    expect(lines.filter(line => line.includes("Conversation") && line.includes("[ ↗ ]"))).toHaveLength(1);
-    expect(lines.filter(line => line.includes("Activity") && line.includes("[ ↗ ]"))).toHaveLength(1);
+    expect(lines.filter(line => line.includes("[≡]"))).toHaveLength(1);
+    expect(lines.filter(line => line.includes("Conversation") && line.includes("[↗]"))).toHaveLength(1);
+    expect(lines.filter(line => line.includes("Activity") && line.includes("[↗]"))).toHaveLength(1);
     for (const marker of ["PACKED USER", "PACKED ANSWER", "NATIVE CALL MARKER", "NATIVE RESULT MARKER", "THINKING MARKER"]) {
       expect(lines.join("\n")).toContain(marker);
     }

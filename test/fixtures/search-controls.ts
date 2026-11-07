@@ -128,7 +128,7 @@ export default function searchControls(pi: ExtensionAPI): void {
     frames.editor = await capture();
     const editedDraft = ctx.ui.getEditorText();
     ctx.ui.setEditorText("UNSENT SEARCH DRAFT");
-    await click("[ ⌕ ]", "Conversation");
+    await click("[⌕]", "Conversation");
     frames.header = await capture();
     await input("deployment runtime");
     frames.headerQuery = await capture();
@@ -143,7 +143,7 @@ export default function searchControls(pi: ExtensionAPI): void {
     }, { overlay: true, overlayOptions: { width: 30, maxHeight: 1 } });
     await capture();
     await input("\x06");
-    await click("[ ⌕ ]", "Conversation");
+    await click("[⌕]", "Conversation");
     const openedOverOverlay = (await capture()).some(line => stripTerminalSequences(line).includes("Search:"));
     dismissBlocked();
     await blockedOverlay;

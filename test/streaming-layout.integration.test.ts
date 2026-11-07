@@ -7,7 +7,7 @@ import type { StreamingFrame } from "./fixtures/streaming-layout-probe.js";
 const columns = 140;
 const chatWidth = 55;
 const headerRow = (lines: string[], pane: string): number => lines.findIndex(line =>
-  line.includes(pane) && line.includes("[ ↗ ]"));
+  line.includes(pane) && line.includes("[↗]"));
 const paneText = (lines: string[], layout: "columns" | "rows", pane: "Conversation" | "Activity"): string => {
   if (layout === "columns") {
     const divider = columns - chatWidth - 1;

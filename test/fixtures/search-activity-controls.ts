@@ -76,7 +76,7 @@ export default function searchActivityControls(pi: ExtensionAPI): void {
     await click("Activity", "Activity");
     frames.active = await capture();
     const search = async (name: string, query: string, header = false, choose = true): Promise<void> => {
-      if (header) await click("[ ⌕ ]", "Activity");
+      if (header) await click("[⌕]", "Activity");
       else await input("\x06");
       frames[name + "Picker"] = await capture();
       await input(query);
@@ -93,7 +93,7 @@ export default function searchActivityControls(pi: ExtensionAPI): void {
     await search("custom", "CUSTOM HIDDEN RESULT", true);
     await search("missing", "ABANDONED BRANCH UNIQUE", false, false);
     await search("scope", "deployment runtime ready", false, false);
-    await click("[ ⌕ ]", "Conversation");
+    await click("[⌕]", "Conversation");
     frames.ownHeader = await capture();
     await input("ЗАПУСК РАБОЧЕГО");
     frames.russianQuery = await capture();
@@ -107,16 +107,16 @@ export default function searchActivityControls(pi: ExtensionAPI): void {
     await input("\x06");
     frames.wheelPicker = await capture();
     await input("\x1b");
-    await click("[ ↗ ]", "Activity");
+    await click("[↗]", "Activity");
     await input("\x06");
     frames.expandedPicker = await capture();
     await input("\x1b");
-    await click("[ ↙ ]", "Activity");
-    await click("[ ▣ ]", "[ ▣ ]");
+    await click("[↙]", "Activity");
+    await click("[▣]", "[▣]");
     await input("\x06");
     frames.combinedPicker = await capture();
     await input("\x1b");
-    await click("[ ◫ ]", "[ ◫ ]");
+    await click("[◫]", "[◫]");
     const { columns, rows } = process.stdout;
     try {
       process.stdout.columns = 40;

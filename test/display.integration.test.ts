@@ -7,7 +7,7 @@ import { afterEach, beforeAll, expect, test } from "vitest";
 const directories: string[] = [];
 const clean = (frame: string[]): string[] => frame.map(stripTerminalSequences);
 const header = (frame: string[], title: string): number => clean(frame).findIndex(line =>
-  line.includes(title) && /\[ (↗|↙) \]/.test(line));
+  line.includes(title) && /\[(↗|↙)\]/.test(line));
 const headerBackground = (frame: string[], title: string, marker = title): { r: number; g: number; b: number } => {
   const line = frame[header(frame, title)];
   const prefix = line.slice(0, line.indexOf(marker, line.indexOf(title)));
@@ -84,7 +84,7 @@ test("toggles saved timestamps from mouse and command settings and adapts tinted
   for (const frame of [frames.initial, frames.columns, frames.swappedRows, frames.expanded, frames.light]) {
     for (const title of ["Conversation", "Activity"]) {
       if (header(frame, title) < 0) continue;
-      const icon = clean(frame)[header(frame, title)].includes("[ ↙ ]") ? "[ ↙ ]" : "[ ↗ ]";
+      const icon = clean(frame)[header(frame, title)].includes("[↙]") ? "[↙]" : "[↗]";
       expect(headerBackground(frame, title, icon)).toEqual(headerBackground(frame, title));
     }
   }
