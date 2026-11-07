@@ -112,7 +112,7 @@ test.each(["columns", "rows"] as const)("groups late output and its search under
   }
 }, 60_000);
 
-test("keeps late linked updates visible when their tool group is collapsed", async () => {
+test("hides linked updates when their tool group is collapsed", async () => {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/compact-linked-"));
   const agent = await mkdtemp(path.resolve("tmp/compact-linked-agent-"));
@@ -140,9 +140,10 @@ test("keeps late linked updates visible when their tool group is collapsed", asy
       const capture: Capture = JSON.parse(await readFile(captureFile, "utf8"));
       const activity = clean(capture.panes.activity);
       for (const marker of ["LATE FIRST OUTPUT", "LATER FIRST UPDATE", "LATE SECOND OUTPUT"]) {
-        expect(activity.split(marker)).toHaveLength(2);
+        expect(activity).not.toContain(marker);
         expect(clean(capture.panes.chat)).not.toContain(marker);
       }
+      expect(clean(capture.expanded)).toContain("LATE FIRST OUTPUT");
       expect(activity).not.toContain("EXPANDED WORKER DETAIL");
       expect(clean(capture.expanded)).toContain("EXPANDED WORKER DETAIL");
       expect(capture.sourceChildrenUnchanged).toBe(true);

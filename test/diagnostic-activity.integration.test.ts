@@ -7,7 +7,7 @@ import { expect, test } from "vitest";
 const ide = process.env.PI_STEREO_VIEW_IDE_PATH ?? "";
 const clean = (lines: string[]): string => lines.map(stripTerminalSequences).join("\n");
 
-test("keeps a nested caller's late update visible before and after opening the caller", async () => {
+test("shows a nested caller's late update only when its output is open", async () => {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/nested-report-"));
   const agent = await mkdtemp(path.resolve("tmp/nested-report-agent-"));
@@ -25,18 +25,16 @@ test("keeps a nested caller's late update visible before and after opening the c
     }).run("Write a file");
     expect(result.exitCode).toBe(0);
     expect(getToolExecution(result, "nested-edit").isError).toBe(false);
-    const snapshot = JSON.parse(await readFile(capture, "utf8")) as { panes: Record<string, string[]>; opened: string[] };
-    for (const lines of [snapshot.panes.activity, snapshot.opened]) {
-      expect(clean(lines).split("NESTED REPORT DATA")).toHaveLength(2);
-      expect(clean(lines)).not.toContain("NESTED DETAIL");
-    }
+    const snapshot = JSON.parse(await readFile(capture, "utf8")) as { panes: Record<string, string[]>; opened: string[]; outputOpened: string[] };
+    for (const lines of [snapshot.panes.activity, snapshot.opened]) expect(clean(lines)).not.toContain("NESTED REPORT DATA");
+    expect(clean(snapshot.outputOpened).split("NESTED REPORT DATA")).toHaveLength(2);
     expect(clean(snapshot.panes.chat)).not.toContain("NESTED REPORT DATA");
   } finally {
     await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
   }
 }, 60_000);
 
-test.skipIf(!ide)("shows delayed IDE diagnostics for direct and nested edits while tools are collapsed", async () => {
+test.skipIf(!ide)("hides delayed IDE diagnostics until their tools are opened", async () => {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/ide-diagnostic-"));
   const agent = await mkdtemp(path.resolve("tmp/ide-diagnostic-agent-"));
@@ -64,14 +62,15 @@ test.skipIf(!ide)("shows delayed IDE diagnostics for direct and nested edits whi
     }).run("Edit files and release reports");
     expect(result.exitCode).toBe(0);
     for (const id of ["first-edit", "nested-edit", "latest-edit", "release"]) expect(getToolExecution(result, id).isError).toBe(false);
-    const snapshot = JSON.parse(await readFile(capture, "utf8")) as { panes: Record<string, string[]>; opened: string[]; screen: string[] };
+    const snapshot = JSON.parse(await readFile(capture, "utf8")) as { panes: Record<string, string[]>; opened: string[]; outputOpened: string[] };
     const activity = clean(snapshot.panes.activity);
     for (const file of ["direct.note", "nested.note"]) {
       expect(activity).toContain(file);
       expect(clean(snapshot.panes.chat)).not.toContain(file);
     }
-    expect(activity.match(/owned-checker/g)).toHaveLength(2);
-    expect(clean(snapshot.opened).match(/owned-checker/g)).toHaveLength(2);
+    expect(activity).not.toContain("owned-checker");
+    expect(clean(snapshot.opened)).not.toContain("owned-checker");
+    expect(clean(snapshot.outputOpened)).toContain("owned-checker");
   } finally {
     await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
   }
