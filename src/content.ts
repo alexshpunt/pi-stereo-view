@@ -79,6 +79,20 @@ function assistant(component: Component): NativeAssistant | undefined {
   return native;
 }
 
+/** Native rendering creates one child per visible text block or consecutive thinking run. */
+function forEachRun(source: NativeAssistant, visit: (kind: ContentKind) => void): void {
+  let thinking = false;
+  for (const block of source.lastMessage?.content ?? []) {
+    if (block.type === "thinking") {
+      if (!thinking && block.thinking?.trim()) { visit("thinking"); thinking = true; }
+    } else {
+      thinking = false;
+      if (block.type === "text" && block.text?.trim()) visit("dialogue");
+    }
+  }
+}
+const runsEnd = Symbol("runs");
+
 /** Read supported native execution identities; unrecognized content is system information. */
 const nativeKinds: Record<string, { kind: ContentKind; accepts(content: NativeContent): boolean }> = {
   UserMessageComponent: { kind: "dialogue", accepts: content => typeof content.text === "string" },
@@ -127,15 +141,31 @@ function nativePanelParts(source: NativeContent): Component[] | undefined {
 export class NativeContentIndex {
   private signature: unknown[] = [];
   private content: ContentEntry[] = [];
+  private panes: Partial<Record<Pane, ContentEntry[]>> = {};
   private readonly expandedPanels = new WeakMap<Component, Component>();
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
 
+  private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number } };
+
   constructor(private readonly source: Container, readonly nested = new NestedCalls()) {}
+
+  /**
+   * Native history cannot change while Pi lays out one frame, so the panes of a pass
+   * share one verification. The pass ends in the next microtask; structural changes
+   * and nested-call updates inside it still verify again.
+   */
+  beginFrame(): void {
+    if (this.pass?.active) { this.pass.verified = undefined; return; }
+    const pass: NonNullable<typeof this.pass> = { active: true };
+    this.pass = pass;
+    queueMicrotask(() => { pass.active = false; if (this.pass === pass) this.pass = undefined; });
+  }
 
   /** Return the same classification until native ownership or assistant content changes. */
   entries(pane?: Pane): ContentEntry[] {
     this.refresh();
-    return pane === undefined ? this.content : this.content.filter(entry => panes[entry.kind] === pane);
+    if (pane === undefined) return this.content;
+    return this.panes[pane] ??= this.content.filter(entry => panes[entry.kind] === pane);
   }
 
   /** A rebuilt history cannot retain search hits belonging to removed native owners. */
@@ -155,23 +185,51 @@ export class NativeContentIndex {
     return group.map(candidate => stripTerminalSequences(candidate.search(width).text)).filter(Boolean).join("\n\n");
   }
 
+  /** Visit every native identity that classification depends on, in a fixed order. */
+  private visitSignature(history: Container, visit: (value: unknown) => boolean): boolean {
+    if (!visit(this.nested.revision)) return false;
+    for (const component of this.source.children) if (!visit(component)) return false;
+    for (const component of history.children) if (!visit(component)) return false;
+    for (const component of history.children) {
+      const metadata = component as NativeContent;
+      if (!visit(metadata.toolCallId) || !visit(metadata.entry?.data?.parentToolCallId) ||
+        !visit(metadata.message?.details?.parentToolCallId) || !visit(metadata.customComponent)) return false;
+      if (metadata.entry?.data?.parentToolCallId || metadata.message?.details?.parentToolCallId)
+        for (const part of nativePanelParts(metadata) ?? []) if (!visit(part)) return false;
+      const native = assistant(component);
+      if (native) {
+        // Streaming replaces the message on every delta; only its block layout affects routing.
+        let changed = false;
+        forEachRun(native, kind => { if (!changed && !visit(kind)) changed = true; });
+        if (changed || !visit(runsEnd)) return false;
+        for (const child of native.contentContainer.children) if (!visit(child)) return false;
+      }
+    }
+    return true;
+  }
+
   private refresh(): void {
     const history = this.source.children[2] as Container;
     if (!Array.isArray(history?.children)) throw new Error("Pi's history document is not supported");
+    const pass = this.pass?.active ? this.pass : undefined;
+    const children = history.children;
+    const verified = pass?.verified;
+    if (verified && verified.children === children && verified.length === children.length && verified.last === children.at(-1) &&
+      verified.parts === this.source.children.length && verified.revision === this.nested.revision) return;
+    this.verify(history);
+    if (pass) pass.verified = { children, length: children.length, last: children.at(-1), parts: this.source.children.length, revision: this.nested.revision };
+  }
+
+  private verify(history: Container): void {
     const makeSignature = (): unknown[] => {
-      const values: unknown[] = [this.nested.revision, ...this.source.children, ...history.children];
-      for (const component of history.children) {
-        const metadata = component as NativeContent;
-        values.push(metadata.toolCallId, metadata.entry?.data?.parentToolCallId, metadata.message?.details?.parentToolCallId, metadata.customComponent);
-        if (metadata.entry?.data?.parentToolCallId || metadata.message?.details?.parentToolCallId)
-          values.push(...(nativePanelParts(metadata) ?? []));
-        const native = assistant(component);
-        if (native) values.push(native.lastMessage, ...native.contentContainer.children);
-      }
+      const values: unknown[] = [];
+      this.visitSignature(history, value => { values.push(value); return true; });
       return values;
     };
-    const signature = makeSignature();
-    if (signature.length === this.signature.length && signature.every((value, index) => value === this.signature[index])) return;
+    // Compare in place: this runs several times per frame over the whole history.
+    let position = 0;
+    const previous = this.signature;
+    if (this.visitSignature(history, value => value === previous[position++]) && position === previous.length) return;
     const owners = new Map<string, NativeContent>();
     for (const component of history.children) {
       const adapter = nativeKinds[nameOf(component)];
@@ -219,6 +277,7 @@ export class NativeContentIndex {
     this.content = entries.flatMap(entry => entry.owner === entry.source
       ? [entry, ...(linked.get(entry.source) ?? [])] : []);
     this.signature = makeSignature();
+    this.panes = {};
   }
 
   private entry(source: Component, kind: ContentKind, spacing: Component[], compact: boolean, owner?: NativeContent): ContentEntry {
@@ -268,15 +327,7 @@ export class NativeContentIndex {
     // Native rendering creates one child per visible text block or consecutive thinking run.
     // Match those children to semantic content before projecting; a Text diagnostic is not thinking.
     const runs: ContentKind[] = [];
-    let thinking = false;
-    for (const block of source.lastMessage?.content ?? []) {
-      if (block.type === "thinking") {
-        if (block.thinking?.trim() && !thinking) { runs.push("thinking"); thinking = true; }
-      } else {
-        thinking = false;
-        if (block.type === "text" && block.text?.trim()) runs.push("dialogue");
-      }
-    }
+    forEachRun(source, kind => runs.push(kind));
     const groups: Record<Pane, Component[]> = { chat: [], activity: [] };
     const diagnostics: Component[] = [];
     let slot = 0;
@@ -310,7 +361,8 @@ export class NativeContentIndex {
         views[pane] = view;
       }
       const content = view.children[0] as Container;
-      content.children = parts;
+      // Keep the array of unchanged views: their native render caches compare child identity.
+      if (content.children.length !== parts.length || content.children.some((child, index) => child !== parts[index])) content.children = parts;
       result.push({
         source, owner: source, component: view, kind: pane === "activity" ? "thinking" : runs.includes("dialogue") ? "dialogue" : "system", spacing, compact: true,
         search: width => {
