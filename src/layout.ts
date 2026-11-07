@@ -44,6 +44,22 @@ class NativeSurfaceScrollView extends ScrollView {
   }
 }
 
+class ButtonStack extends HStack {
+  constructor(children: StackChild[], private readonly controls: { index: number; icon: number; text: number; min: number }[],
+    private readonly titleLength?: number) {
+    super(children);
+  }
+
+  setStyle(style: "icons" | "text"): void {
+    if (this.titleLength !== undefined) this.entries[0].minSize = style === "icons" ? 1 : this.titleLength;
+    for (const { index, icon, text, min } of this.controls) {
+      const entry = this.entries[index];
+      entry.basis = style === "icons" ? icon : text;
+      entry.minSize = style === "icons" ? icon : min;
+      entry.shrink = style === "icons" ? 0 : 1;
+    }
+  }
+}
 class TranscriptColumns extends HStack {
   /** Reserve a fixed width for Conversation, independent of its content. */
   sizeConversation(component: Component, width: number): void {
@@ -344,7 +360,8 @@ export class TranscriptLayout {
         return false;
       }
     };
-    const toolbar = new HStack([
+    const headers: ButtonStack[] = [];
+    const toolbar = new ButtonStack([
       { component: this.button(
         () => this.preferences.mode === "combined" || this.fallback || this.failed ? (this.preferences.buttonStyle === "icons" ? "◫" : "Open") : (this.preferences.buttonStyle === "icons" ? "▣" : "Join"),
         () => this.toggle(), () => !this.fallback && !this.failed,
@@ -358,7 +375,7 @@ export class TranscriptLayout {
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Menu", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
-    ]);
+    ], [0, 1, 2, 3].map(index => ({ index, icon: index === 3 ? 5 : 6, text: index === 3 ? 6 : 7, min: 6 })));
     const pane = (title: string, target: Pane, view: ScrollView): Component => {
       const hue = target === "chat" ? rgbColor(104, 158, 115) : rgbColor(107, 152, 190);
       const palette = () => {
@@ -373,7 +390,7 @@ export class TranscriptLayout {
         render: width => [this.theme().style("─".repeat(width), { fg: palette().border })],
         invalidate() {},
       };
-      const label = new HStack([
+      const label = new ButtonStack([
         { component: new MouseRegion({
           render: width => new Text(this.theme().style(truncateToWidth(width < title.length + 3 ? title : " " + (this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
             fg: this.searchPane() === target ? "accent" : palette().text, bg: palette().fill,
@@ -401,7 +418,15 @@ export class TranscriptLayout {
           () => this.preferences.zoom === target ? (this.preferences.buttonStyle === "icons" ? "↙" : "Out") : (this.preferences.buttonStyle === "icons" ? "↗" : "Max"),
           () => this.maximize(target), () => true, () => palette().fill,
         ), basis: 5, shrink: 0 },
-      ]);
+      ], target === "activity" ? [
+        { index: 1, icon: 5, text: 6, min: 5 },
+        { index: 2, icon: 5, text: 7, min: 6 },
+        { index: 3, icon: 5, text: 5, min: 5 },
+      ] : [
+        { index: 1, icon: 5, text: 7, min: 6 },
+        { index: 2, icon: 5, text: 5, min: 5 },
+      ], title.length);
+      headers.push(label);
       const header = new VStack([
         { component: line, basis: 1, shrink: 0, visible: () =>
           this.preferences.zoom !== null || this.preferences.layout === "columns" ||
@@ -451,6 +476,8 @@ export class TranscriptLayout {
     const columns = new TranscriptColumns();
     const rows = new TranscriptRows();
     this.rebuild = (): void => {
+      toolbar.setStyle(this.preferences.buttonStyle);
+      for (const header of headers) header.setStyle(this.preferences.buttonStyle);
       for (const [stack, axis] of [[columns, "columns"], [rows, "rows"]] as const) {
         stack.clear();
         const minimum = axis === "columns" ? MIN_CHAT : MIN_ROWS;
