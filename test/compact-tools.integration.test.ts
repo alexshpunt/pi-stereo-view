@@ -84,7 +84,8 @@ test("compacts live tools without losing calls, full search, copy or normal hist
         expect(call(name, "B938")).toContain(start("compact-second"));
         expect(call(name, "E938")).toContain(start("compact-failure"));
       }
-      expect(body(name)).not.toContain("LATE-RESULT-FIXTURE");
+      if (name === "initialGroup") expect(body(name)).not.toContain("LATE-RESULT-FIXTURE");
+      else expect(body(name)).toContain("LATE-RESULT-FIXTURE");
     }
     for (const name of ["started", "partial", "pendingLater", "firstFinished", "groupOpen", "clocksOn"]) {
       expect(call(name, "A938"), name + "\n" + body(name)).toContain(start("compact-first"));
@@ -113,7 +114,7 @@ test("compacts live tools without losing calls, full search, copy or normal hist
       expect(body(name)).toContain("E938");
       expect(body(name)).not.toContain("NATIVE-HEADER-A938");
       expect(body(name)).not.toContain("RESULT-A938");
-      expect(body(name)).not.toContain("LATE-RESULT-FIXTURE");
+      expect(body(name)).toContain("LATE-RESULT-FIXTURE");
     }
     for (const name of ["memberOpen", "nativeAction", "memberRows", "memberColumns", "memberNarrow", "memberZoom", "memberReopened"]) {
       expect(body(name)).toContain("NATIVE-HEADER-A938");
@@ -154,19 +155,20 @@ test("compacts live tools without losing calls, full search, copy or normal hist
       const rows = frame(name);
       const indices = ["A938", "D938", "B938", "E938", "C938"].map(tag => rows.findIndex(line => line.includes("compact_probe") && line.includes(tag)));
       expect(indices.every(index => index >= 0), name + "\n" + rows.join("\n")).toBe(true);
-      expect(indices[1], name).toBe(indices[0] + 1);
+      expect(indices[1], name).toBe(indices[0] + 2);
+      expect(rows[indices[0] + 1], name).toContain("LATE-RESULT-FIXTURE");
       expect(indices[2], name).toBe(indices[1] + 1);
       expect(indices[3], name).toBe(indices[2] + 1);
       expect(indices[4], name).toBeGreaterThan(indices[3] + 1);
       expect(body(name)).not.toContain("RESULT-A938");
-      expect(body(name)).not.toContain("LATE-RESULT-FIXTURE");
+      expect(body(name)).toContain("LATE-RESULT-FIXTURE");
       for (const line of observation.frames[name]) expect(visibleWidth(line), name).toBeLessThanOrEqual(name === "narrow" ? 65 : 120);
     }
     expect(body("rows")).toContain("USER-FIXTURE");
     expect(body("rows")).toContain("ANSWER-FIXTURE");
     expect(body("zoom")).not.toContain("USER-FIXTURE");
     expect(body("search")).toContain("LATE-RESULT-FIXTURE");
-    expect(body("searchClosed")).not.toContain("LATE-RESULT-FIXTURE");
+    expect(body("searchClosed")).toContain("LATE-RESULT-FIXTURE");
     expect(observation.copied).toContain(JSON.stringify({ tag: "A938" }, null, 2));
     expect(observation.copied).toContain(getToolResultText(result, "compact-first"));
     expect(observation.copied).toContain("LATE-RESULT-FIXTURE");

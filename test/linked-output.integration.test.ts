@@ -112,6 +112,46 @@ test.each(["columns", "rows"] as const)("groups late output and its search under
   }
 }, 60_000);
 
+test("keeps late linked updates visible when their tool group is collapsed", async () => {
+  await mkdir(path.resolve("tmp"), { recursive: true });
+  const cwd = await mkdtemp(path.resolve("tmp/compact-linked-"));
+  const agent = await mkdtemp(path.resolve("tmp/compact-linked-agent-"));
+  try {
+    await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
+    await writeFile(path.join(agent, "transcript.json"), JSON.stringify({ mode: "split", side: "left", chatWidth: 60, layout: "columns", chatHeight: 20, zoom: null, showTimestamps: false, compactTools: true }));
+    const session = SessionManager.create(cwd, cwd);
+    session.appendMessage({ role: "user", content: "Saved conversation", timestamp: Date.now() });
+    for (const phase of ["live", "resume"] as const) {
+      const name = `compact-linked-${phase}`;
+      const captureFile = path.join(artifactsDir, name, "linked-output.json");
+      const result = await new PiIntegrationTest({
+        testName: name, artifactsDir, cwd,
+        piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
+        environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_TEST_SESSION: session.getSessionFile()!, LINKED_OUTPUT_APPEND: phase === "live" ? "1" : "0", LINKED_OUTPUT_FILE: captureFile },
+        rawMode: false, tuiSize: { cols: 160, rows: 60 },
+        extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/linked-output-probe.ts")], tools: ["write"],
+        conversation: phase === "live" ? [
+          assistantMessage([toolCall({ id: "first-write", name: "write", arguments: { path: "one.txt", content: "one" } })], { stopReason: "toolUse" }),
+          assistantMessage([toolCall({ id: "second-write", name: "write", arguments: { path: "two.txt", content: "two" } })], { stopReason: "toolUse" }),
+          assistantMessage([text("Done")]),
+        ] : [assistantMessage([text("Resumed")])],
+      }).run(phase === "live" ? "Write files" : "Resume");
+      expect(result.exitCode).toBe(0);
+      const capture: Capture = JSON.parse(await readFile(captureFile, "utf8"));
+      const activity = clean(capture.panes.activity);
+      for (const marker of ["LATE FIRST OUTPUT", "LATER FIRST UPDATE", "LATE SECOND OUTPUT"]) {
+        expect(activity.split(marker)).toHaveLength(2);
+        expect(clean(capture.panes.chat)).not.toContain(marker);
+      }
+      expect(activity).not.toContain("EXPANDED WORKER DETAIL");
+      expect(clean(capture.expanded)).toContain("EXPANDED WORKER DETAIL");
+      expect(capture.sourceChildrenUnchanged).toBe(true);
+    }
+  } finally {
+    await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
+  }
+}, 60_000);
+
 test("rebuilds linked ownership and discards old search on reload and branch navigation", async () => {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/linked-output-lifecycle-"));
