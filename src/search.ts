@@ -95,11 +95,11 @@ class SearchInput extends Input {
 }
 
 class SearchControls extends HStack {
-  constructor(private readonly count: () => string) { super([], { gap: 1 }); }
+  constructor(private readonly count: () => string) { super([]); }
   override render(width: number): string[] {
-    // Keep query space usable even in the smallest panel.
-    this.entries[1].basis = Math.min(this.count().length,
-      Math.max(3, width - 19));
+    // Keep room for at least one query character and the cursor.
+    this.entries[1].basis = Math.min(this.count().length + 2, Math.max(2, width - 22));
+    this.entries[1].visible = () => width >= 25;
     return super.render(width);
   }
 }
@@ -131,6 +131,7 @@ export class PanelSearch extends VStack {
     private readonly theme: () => Theme,
     private readonly match: (hit: SearchHit | undefined, query: string) => void,
     private readonly close: () => void,
+    buttonStyle: "icons" | "text" = "icons",
   ) {
     super();
     this.input = new SearchInput(() => this.refresh(true), () => this.step(-1));
@@ -148,14 +149,16 @@ export class PanelSearch extends VStack {
       }
       return { handled: true };
     });
-    this.controls.addChild(this.input, { basis: 0, grow: 1, minSize: 10 });
+    this.controls.addChild(this.input, { basis: 0, grow: 1, minSize: 11 });
     this.controls.addChild({
       render: width => new Text(this.theme().fg(this.hits.length ? "accent" : "dim",
-        truncateToWidth(this.count(), width, "…")), 0, 0).render(width),
+        truncateToWidth(" " + this.count() + " ", width, "…")), 0, 0).render(width),
       invalidate() {},
     }, { basis: 7, shrink: 0 });
-    this.controls.addChild(button("[↓]", () => { this.step(1); this.focus(); }), { basis: 3, shrink: 0 });
-    this.controls.addChild(button("[×]", close), { basis: 3, shrink: 0 });
+    this.controls.addChild(button(buttonStyle === "icons" ? "[ ↓ ]" : "[Go]", () => { this.step(1); this.focus(); }),
+      { basis: buttonStyle === "icons" ? 6 : 5, shrink: 0 });
+    this.controls.addChild(button(buttonStyle === "icons" ? "[ × ]" : "[Exit]", close),
+      { basis: buttonStyle === "icons" ? 5 : 6, shrink: 0 });
     const border = (render: (width: number) => string): Component => ({
       render: width => [this.theme().fg("border", render(width))], invalidate() {},
     });
