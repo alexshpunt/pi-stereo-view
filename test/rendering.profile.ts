@@ -16,6 +16,22 @@ if (!["always", "auto", "hidden"].includes(scrollbar)) throw new Error("Unknown 
 const output = path.resolve(process.env.PROFILE_OUTPUT ?? "tmp/profiling/baseline");
 const transcript = path.resolve(process.env.PROFILE_TRANSCRIPT_PATH ?? ".");
 const profileSearch = process.env.PROFILE_SEARCH === "1";
+// Long real sessions: several calls per turn, Codemode-sized arguments and compact Activity.
+const callsPerTurn = Number(process.env.PROFILE_CALLS ?? 1);
+const argChars = Number(process.env.PROFILE_ARG_CHARS ?? 0);
+const compact = process.env.PROFILE_COMPACT === "1";
+const argText = (index: number, call: number, length: number): string => {
+  let text = "";
+  for (let row = 0; text.length < length; row++) text += "const value" + row + " = await tools.read({ path: \"synthetic/" + index + "/" + call + "/" + row + ".ts\" });\n";
+  return text.slice(0, length);
+};
+const syntheticCall = (index: number, call: number): { id: string; name: string; arguments: Record<string, string> } => {
+  if (callsPerTurn === 1 && !argChars) return { id: "synthetic-read-" + index, name: "read", arguments: { path: "synthetic-data.txt" } };
+  const id = "synthetic-call-" + index + "-" + call;
+  const name = ["bash", "bash", "read", "codemode"][call % 4];
+  return { id, name, arguments: name === "codemode" ? { code: argText(index, call, argChars) } :
+    name === "bash" ? { command: argText(index, call, Math.min(argChars, 240)) } : { path: "synthetic/" + index + "/" + call + ".txt" } };
+};
 const searchPane = process.env.PROFILE_SEARCH_PANE ?? "chat";
 if (!["chat", "activity"].includes(searchPane)) throw new Error("Unknown search pane: " + searchPane);
 
@@ -42,7 +58,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true, hideThinkingBlock: false, fullscreenScrollbar: scrollbar, compaction: { enabled: false } }));
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
       mode: "split", side: "left", chatWidth: Math.floor((width - 1) * 0.35),
-      layout: mode === "rows" ? "rows" : "columns", chatHeight: null, zoom: null, showTimestamps: true,
+      layout: mode === "rows" ? "rows" : "columns", chatHeight: null, zoom: null, showTimestamps: true, compactTools: compact,
     }));
     const manager = SessionManager.create(cwd, cwd);
     const at = Date.parse("2026-01-01T10:00:00Z");
@@ -51,15 +67,18 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       manager.appendMessage(savedAssistant([
         { type: "thinking", thinking: "SYNTHETIC THINKING " + index + "\nCheck the output before answering." },
         { type: "text", text: "SYNTHETIC ASSISTANT " + index + "\n\nA paragraph with `inline code`, **bold text** and a [local label](https://example.invalid/).\n\n- First item\n- Second item" },
-        { type: "toolCall", id: "synthetic-read-" + index, name: "read", arguments: { path: "synthetic-data.txt" } },
+        ...Array.from({ length: callsPerTurn }, (_, call) => ({ type: "toolCall" as const, ...syntheticCall(index, call) })),
       ]));
-      manager.appendMessage({ role: "toolResult", toolName: "read", toolCallId: "synthetic-read-" + index, isError: false,
-        content: [{ type: "text", text: Array.from({ length: toolLines }, (_, row) => "SYNTHETIC TOOL " + index + " line " + row + " predictable result data").join("\n") }], timestamp: at + index });
+      for (let call = 0; call < callsPerTurn; call++) {
+        const { id, name } = syntheticCall(index, call);
+        manager.appendMessage({ role: "toolResult", toolName: name, toolCallId: id, isError: false,
+          content: [{ type: "text", text: Array.from({ length: toolLines }, (_, row) => "SYNTHETIC TOOL " + index + " line " + row + " predictable result data").join("\n") }], timestamp: at + index });
+      }
     }
     const runtime = { extensions, transcriptCommit, pi: execFileSync(process.env.PI_COMMAND ?? "pi", ["--version"], { encoding: "utf8" }).trim(),
       transcript: { path: transcript, sourceCommit: transcriptCommit, workingTree: transcriptGit("status", "--porcelain") },
       profileStartup: process.env.PROFILE_STARTUP === "1", profileSearch, searchPane,
-      workload: { exchanges: size, toolLines, width, height, scrollbar, syntheticOnly: true },
+      workload: { exchanges: size, callsPerTurn, argChars, compact, toolLines, width, height, scrollbar, syntheticOnly: true },
       provider: "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.", mode };
     await mkdir(artifact, { recursive: true });
     await writeFile(path.join(output, "runtime-" + mode + ".json"), JSON.stringify(runtime, null, 2));
@@ -68,7 +87,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: "", PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines),
-        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane },
+        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_COMPACT: compact ? "1" : "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane, PROFILE_FOCUS: process.env.PROFILE_FOCUS ?? "" },
       rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
       extensions,
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],
@@ -107,14 +126,16 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     }
     expect(measurements.initialDisplay.emittedFrameMs).toBeGreaterThan(0);
     expect(measurements.initialDisplay.cpuMs).toBeGreaterThan(0);
-    expect(measurements.runtime.savedToolBlocks, "The synthetic history must not be compacted before measurement").toBe(size);
+    expect(measurements.runtime.savedToolBlocks, "The synthetic history must not be compacted before measurement").toBe(size * callsPerTurn);
     expect(measurements.samples).not.toHaveLength(0);
     expect(measurements.samples.find((sample: { action: string }) => sample.action === "cold").sourceInvalidations,
       "A root invalidation must refresh the shared native history exactly once").toBe(1);
     expect(measurements.frames.streamed.some((line: string) => line.includes("SYNTHETIC STREAM UPDATE")),
       "The streamed native assistant must be visible before restoring its content").toBe(true);
-    expect(measurements.markers.some((line: string) => line.includes("SYNTHETIC TOOL UPDATE")),
+    // Compact Activity keeps the updated call collapsed behind its header.
+    if (!compact || mode === "stock" || mode === "combined") expect(measurements.markers.some((line: string) => line.includes("SYNTHETIC TOOL UPDATE")),
       "The updated native tool must be visible in the emitted final frame").toBe(true);
+    if (argChars) expect(measurements.summary.args?.count, "Argument streaming must be measured").toBeGreaterThan(0);
     expect(measurements.samples.every((sample: { paneRows: number }) => sample.paneRows <= height),
       "Pane height measurement must not assemble more than a window of history rows").toBe(true);
     expect(measurements.samples.every((sample: { previewScrollRows: number }) => sample.previewScrollRows <= height),
