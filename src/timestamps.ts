@@ -243,10 +243,9 @@ export class TranscriptTimestamps {
   }
 }
 
-// CGJ avoids xterm's single-codepoint rescaling without changing the visible glyph.
-// The trailing blank reserves its overhang and keeps the control two cells wide.
-const COPY_CONTROL = "⧉\u034f ";
-const COPY_CONTROL_WIDTH = visibleWidth(COPY_CONTROL);
+const TEXT_COPY_CONTROL = "[Copy]";
+// CGJ avoids xterm's single-codepoint rescaling; the trailing cell reserves overhang.
+const ICON_COPY_CONTROL = "⧉\u034f ";
 /** Keep message text full-width, with a clock above and copy action below. */
 export class CompactMessage extends Container {
   private top = 0;
@@ -257,6 +256,7 @@ export class CompactMessage extends Container {
   private bodyRows = 0;
   private copyRow?: number;
   private copyColumn?: number;
+  private copyWidth = 0;
   private copyPressed = false;
   private leadingRows = 0;
   private prepared?: { width: number; content: string[]; lines: string[] };
@@ -266,7 +266,8 @@ export class CompactMessage extends Container {
   constructor(private readonly component: Component, private readonly label: () => string,
     private readonly theme: () => Theme, private readonly gutter: () => number,
     private readonly show: () => boolean, private readonly copy?: () => void,
-    private readonly showCopy: () => boolean = () => true) {
+    private readonly showCopy: () => boolean = () => true,
+    private readonly buttonStyle: () => "icons" | "text" = () => "text") {
     super();
     this.addChild(component);
     this.nativeCache = new NativeRenderCache(component);
@@ -304,7 +305,9 @@ export class CompactMessage extends Container {
     // Only the scrollbar needs a side gutter; controls have their own rows.
     this.contentWidth = Math.max(1, width - gutter);
     const time = label && this.show() && visibleWidth(label) + 1 <= this.contentWidth ? " " + label : "";
-    const copy = label && this.copy && this.showCopy() && this.contentWidth >= COPY_CONTROL_WIDTH ? COPY_CONTROL : "";
+    const control = this.buttonStyle() === "icons" ? ICON_COPY_CONTROL : TEXT_COPY_CONTROL;
+    const controlWidth = visibleWidth(control);
+    const copy = label && this.copy && this.showCopy() && this.contentWidth >= controlWidth ? control : "";
     const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
     const cached = this.formatted;
@@ -340,8 +343,9 @@ export class CompactMessage extends Container {
     const lines = time ? [theme.fg("dim", time), ...body] : body;
     if (copy) {
       this.copyRow = lines.length;
-      this.copyColumn = this.contentWidth - COPY_CONTROL_WIDTH;
-      lines.push(" ".repeat(this.copyColumn) + theme.style(copy, { fg: "dim", dim: true }));
+      this.copyWidth = controlWidth;
+      this.copyColumn = this.contentWidth - controlWidth;
+      lines.push(" ".repeat(this.copyColumn) + theme.style(copy, { fg: "dim", dim: this.buttonStyle() === "icons" }));
     }
     this.formatted = { width, time, copy, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
     return lines;
@@ -352,7 +356,7 @@ export class CompactMessage extends Container {
       width: event.width, height: event.height };
     const onCopy = this.copyColumn !== undefined && this.copyRow !== undefined &&
       event.y === this.leadingRows + this.copyRow && event.x >= this.copyColumn &&
-      event.x < this.copyColumn + COPY_CONTROL_WIDTH && event.button === "left";
+      event.x < this.copyColumn + this.copyWidth && event.button === "left";
     if (onCopy && event.type === "press") {
       this.copyPressed = true;
       return { handled: true, capture: true, target };
