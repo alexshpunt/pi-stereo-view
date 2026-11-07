@@ -4,7 +4,7 @@ import { setImmediate, setTimeout } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { MouseRegion, ScrollView, Text, type TUI } from "@earendil-works/pi-tui";
 
-type Box = { rect: { x: number; y: number; width: number; height: number }; children: Box[]; scrollView?: ScrollView };
+type Box = { rect: { x: number; y: number; width: number; height: number }; children: Box[]; scrollView?: ScrollView; component?: unknown };
 type Host = TUI & {
   currentLayout?: { root: Box };
   getScreenLines(): string[];
@@ -39,7 +39,9 @@ export default function selectionScrollProbe(pi: ExtensionAPI): void {
     };
     const boxes = (): Box[] => {
       const found: Box[] = [];
-      const visit = (box: Box) => { if (box.scrollView) found.push(box); box.children.forEach(visit); };
+      // Only the two history panels: Activity widgets and dialogs can add their own scroll areas.
+      const panel = (box: Box) => Reflect.get((Reflect.get(box.component as object, "children") as unknown[] | undefined)?.[0] ?? {}, "pane") !== undefined;
+      const visit = (box: Box) => { if (box.scrollView && panel(box)) found.push(box); box.children.forEach(visit); };
       visit(tui.currentLayout!.root);
       return found;
     };
