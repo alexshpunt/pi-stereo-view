@@ -14,13 +14,13 @@ The integration tests run real Pi with scripted responses. The package check ins
 
 The test launcher disables automatic network activity with `PI_OFFLINE=1` so update and model-catalog notifications cannot change the expected terminal layout.
 
-The optional cross-extension selection test needs a Pi Agent IDE checkout:
+The optional nested IDE rendering test needs a Pi Agent IDE checkout:
 
 ```sh
-PI_STEREO_VIEW_IDE_PATH=/path/to/pi-agent-ide npm test -- test/selection-scroll.integration.test.ts
+PI_STEREO_VIEW_IDE_PATH=/path/to/pi-agent-ide npm test -- test/nested-ide-rendering.integration.test.ts
 ```
 
-Without that path, only those two cross-extension cases are skipped.
+Without that path, only that cross-extension case is skipped.
 
 CI runs the package suite on Node.js 22.19.0 and checks the archive contents. See [.github/workflows/ci.yml](.github/workflows/ci.yml) for its triggers and steps.
 
