@@ -8,6 +8,10 @@ import { NativeRenderCache } from "./render-cache.js";
 type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
 type UserSlot = { kind: string; text?: string; time: unknown };
+interface BranchTimes {
+  messageTimes: WeakMap<object, unknown>; users: TimedSource[]; slots: UserSlot[]; bash: TimedSource[];
+  starts: Map<string, number>; owners: Map<string, unknown>;
+}
 
 // Identical native padding is common across cold blocks. Keep only a few short blank rows.
 const blankRows = new Set<string>();
@@ -33,10 +37,17 @@ const validTime = (value: unknown): number | undefined => {
 export function timestampLabel(value: unknown): string {
   const time = validTime(value);
   if (time === undefined) return "";
+  // Every visible block asks for its clock on every frame.
+  let label = labels.get(time);
+  if (label !== undefined) return label;
   const date = new Date(time);
-  return [date.getHours(), date.getMinutes(), date.getSeconds()]
+  label = [date.getHours(), date.getMinutes(), date.getSeconds()]
     .map(part => String(part).padStart(2, "0")).join(":");
+  if (labels.size >= 8192) labels.clear();
+  labels.set(time, label);
+  return label;
 }
+const labels = new Map<number, string>();
 
 const userSlots = ({ message, time }: TimedSource): UserSlot[] => {
   if (message.role !== "user") return [];
@@ -64,11 +75,46 @@ export class TranscriptTimestamps {
 
   constructor(private readonly session: ExtensionContext["sessionManager"]) {}
 
+  private branch?: { leaf: object; sources: TimedSource[]; derived?: BranchTimes };
+
+  /** Session entries are append-only, so one leaf entry identifies the whole active branch. */
+  private leaf(): object | undefined {
+    const leaf = typeof this.session.getLeafEntry === "function" ? this.session.getLeafEntry() : undefined;
+    return leaf && typeof leaf === "object" ? leaf : undefined;
+  }
   private sources(): TimedSource[] {
-    return this.session.buildContextEntries().flatMap(entry =>
+    const leaf = this.leaf();
+    if (leaf && this.branch?.leaf === leaf) return this.branch.sources;
+    const sources = this.session.buildContextEntries().flatMap(entry =>
       sessionEntryToContextMessages(entry).map(message => ({
         message, time: validTime("timestamp" in message ? message.timestamp : undefined) ?? entry.timestamp,
       })));
+    this.branch = leaf ? { leaf, sources } : undefined;
+    return sources;
+  }
+  /** Branch-derived lookups are rebuilt only when the active branch changes. */
+  private times(): BranchTimes {
+    const sources = this.sources();
+    if (this.branch?.sources === sources && this.branch.derived) return this.branch.derived;
+    const users = sources.filter(source => source.message.role === "user");
+    const starts = new Map<string, number>();
+    for (const entry of this.session.getBranch()) {
+      if (entry.type !== "custom" || entry.customType !== TOOL_START_ENTRY || !entry.data || typeof entry.data !== "object") continue;
+      const data = entry.data as { toolCallId?: unknown; time?: unknown };
+      const time = validTime(data.time);
+      if (typeof data.toolCallId === "string" && time !== undefined) starts.set(data.toolCallId, time);
+    }
+    const owners = new Map<string, unknown>();
+    for (const { message, time } of sources) {
+      if (message.role !== "assistant") continue;
+      for (const block of message.content) if (block.type === "toolCall") owners.set(block.id, time);
+    }
+    const derived = {
+      messageTimes: new WeakMap(sources.map(source => [source.message, source.time])), users, slots: users.flatMap(userSlots),
+      bash: sources.filter(source => source.message.role === "bashExecution"), starts, owners,
+    };
+    if (this.branch?.sources === sources) this.branch.derived = derived;
+    return derived;
   }
 
   /** Include the current unpersisted user and streamed tool IDs before UI delivery. */
@@ -99,8 +145,9 @@ export class TranscriptTimestamps {
     this.liveCalls.clear();
     this.orderedLabels = new WeakMap();
     this.messageTimes = new WeakMap();
-    this.starts.clear();
-    this.owners.clear();
+    this.branch = undefined;
+    this.starts = new Map();
+    this.owners = new Map();
   }
 
   /** Share one history correlation across the panels measured in a native frame. */
@@ -112,11 +159,10 @@ export class TranscriptTimestamps {
   prepare(components: Component[]): void {
     if (this.frameActive && this.preparedComponents === components) return;
     this.preparedComponents = components;
-    const sources = this.sources();
-    this.messageTimes = new WeakMap(sources.map(source => [source.message, source.time]));
-    const users = sources.filter(source => source.message.role === "user");
+    const { messageTimes, users, slots: saved, bash, starts, owners } = this.times();
+    this.messageTimes = messageTimes;
     if (this.pendingUser?.ended && users.length > this.pendingUser.before) this.pendingUser = undefined;
-    const slots = users.flatMap(userSlots);
+    const slots = saved.slice();
     const nativeUsers = components.filter(component =>
       component.constructor.name === "UserMessageComponent" || component.constructor.name === "SkillInvocationMessageComponent");
     if (nativeUsers.length !== slots.length && this.pendingUser) slots.push(...userSlots(this.pendingUser.source));
@@ -130,24 +176,13 @@ export class TranscriptTimestamps {
       });
       if (matches) nativeUsers.forEach((component, index) => this.orderedLabels.set(component, timestampLabel(slots[index].time)));
     }
-    const bash = sources.filter(source => source.message.role === "bashExecution");
     const nativeBash = components.filter(component => component.constructor.name === "BashExecutionComponent");
     if (nativeBash.length === bash.length && nativeBash.every((component, index) =>
       (component as Component & { command?: unknown }).command === (bash[index].message as { command: string }).command)) {
       nativeBash.forEach((component, index) => this.orderedLabels.set(component, timestampLabel(bash[index].time)));
     }
-    this.starts.clear();
-    for (const entry of this.session.getBranch()) {
-      if (entry.type !== "custom" || entry.customType !== TOOL_START_ENTRY || !entry.data || typeof entry.data !== "object") continue;
-      const data = entry.data as { toolCallId?: unknown; time?: unknown };
-      const time = validTime(data.time);
-      if (typeof data.toolCallId === "string" && time !== undefined) this.starts.set(data.toolCallId, time);
-    }
-    this.owners.clear();
-    for (const { message, time } of sources) {
-      if (message.role !== "assistant") continue;
-      for (const block of message.content) if (block.type === "toolCall") this.owners.set(block.id, time);
-    }
+    this.starts = starts;
+    this.owners = owners;
   }
 
   /** Reject changed private metadata before relying on it for a label. */

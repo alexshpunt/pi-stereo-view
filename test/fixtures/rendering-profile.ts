@@ -50,6 +50,9 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     try { action(); }
     catch (error) { clearTimeout(timeout); frame = undefined; reject(error); }
   });
+  // Restored histories exceed the scripted model's context. Compaction would send the
+  // scripted answers to its summarizer and replace the history being measured.
+  pi.on("session_before_compact", () => ({ cancel: true }));
   pi.on("session_start", async (_event, ctx) => {
     let finish = (): void => {};
     await ctx.ui.custom<void>((host, _theme, _keys, done) => {
@@ -74,7 +77,11 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       write.call(tui.terminal, data);
       output += data;
       if (!data.includes("\x1b[?2026l")) return;
-      if (stripTerminalSequences(output).includes("SYNTHETIC TOOL " + (Number(process.env.PROFILE_HISTORY) - 1) + " line")) {
+      const last = Number(process.env.PROFILE_HISTORY) - 1;
+      const restored = stripTerminalSequences(output);
+      // Compact Activity hides tool output, so the restored final answer marks the split display.
+      if (restored.includes("SYNTHETIC TOOL " + last + " line") ||
+        (process.env.PROFILE_COMPACT === "1" && restored.includes("SYNTHETIC ASSISTANT " + last))) {
         const usage = process.cpuUsage(cpu);
         initialDisplay = { emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000 };
         if (startupInspector) {
@@ -103,7 +110,11 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     };
     const inspector = new Session();
     let profileViews: ScrollView[] = [];
+    // PROFILE_FOCUS limits the CPU profile to one measured action, for attributing its own cost.
+    const focus = process.env.PROFILE_FOCUS || undefined;
+    let focusSamples = 0;
     const measure = async (name: string, action: () => void): Promise<void> => {
+      if (name === focus && focusSamples++ === 0) await inspector.post("Profiler.start");
       paneRows = 0;
       panePreviewCharacters = 0;
       previewScrollRows = 0;
@@ -117,6 +128,10 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         sourceInvalidations: sourceInvalidations - before.sourceInvalidations, paneRows, panePreviewCharacters, previewScrollRows,
         visibleScrollbars: profileViews.filter(view => view.isScrollbarVisible).length, bytes: bytes - before.bytes,
         nativeMs: nativeMs - before.nativeMs, compactMs: compactMs - before.compactMs, documentMs: documentMs - before.documentMs });
+      if (name === focus && focusSamples === count) {
+        const { profile } = await inspector.post("Profiler.stop");
+        await writeFile(path.join(ctx.cwd, "rendering.cpuprofile"), JSON.stringify(profile));
+      }
     };
     // Extension loaders can hold distinct native module instances; use the public scroll API.
     const isScrollView = (component: Container): component is ScrollView =>
@@ -222,7 +237,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       phases.initial = await capture();
       for (let index = 0; index < 3; index++) await paint(() => tui.requestRender(true));
       await inspector.post("Profiler.enable");
-      await inspector.post("Profiler.start");
+      if (!focus) await inspector.post("Profiler.start");
       for (let index = 0; index < count; index++) await measure("frame", () => tui.requestRender(true));
       ctx.ui.setEditorText("SYNTHETIC PROFILE DRAFT ");
       await capture();
@@ -275,8 +290,23 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         tool.updateResult({ content: [{ type: "text", text: Array.from({ length: Number(process.env.PROFILE_TOOL_LINES ?? 80) }, (_, row) => "SYNTHETIC TOOL UPDATE " + index + " line " + row).join("\n") }], isError: false }, true);
         tui.requestRender();
       });
-      const { profile } = await inspector.post("Profiler.stop");
-      await writeFile(path.join(ctx.cwd, "rendering.cpuprofile"), JSON.stringify(profile));
+      // Streamed tool arguments change one call header per frame, as during Codemode argument streaming.
+      const streamed = tool as unknown as { args: unknown; updateArgs(args: unknown): void };
+      const savedArgs = streamed.args;
+      const [key, code] = savedArgs && typeof savedArgs === "object" ? Object.entries(savedArgs).find(([, value]) => typeof value === "string") ?? [] : [];
+      if (key && typeof code === "string" && code.length > 200) {
+        for (let index = 0; index < count; index++) await measure("args", () => {
+          streamed.updateArgs({ ...(savedArgs as object), [key]: code + "\n// SYNTHETIC ARGUMENT " + index });
+          tui.requestRender();
+        });
+        streamed.args = savedArgs;
+        tool.invalidate();
+        await capture();
+      }
+      if (!focus) {
+        const { profile } = await inspector.post("Profiler.stop");
+        await writeFile(path.join(ctx.cwd, "rendering.cpuprofile"), JSON.stringify(profile));
+      }
       phases.finished = await capture();
       if (split && process.env.PROFILE_SEARCH === "1") {
         if (process.env.PROFILE_SEARCH_PANE === "activity") {

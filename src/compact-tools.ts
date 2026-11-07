@@ -31,21 +31,38 @@ interface CompactToolOptions {
   toggle?(): void;
 }
 
+interface HeaderInputs {
+  width: number; name: string; args: unknown; status: ToolSummary["status"]; count?: number; expanded?: boolean;
+  label: string; theme: Theme;
+}
+const sameInputs = (a: HeaderInputs, b: HeaderInputs): boolean => a.width === b.width && a.name === b.name &&
+  a.args === b.args && a.status === b.status && a.count === b.count && a.expanded === b.expanded && a.label === b.label && a.theme === b.theme;
+
 /** A display-only call or group header; the original renderer owns the body. */
 export class CompactTool implements Component {
+  // Headers are rebuilt every frame for the whole history. Completed calls keep their
+  // argument object, so reuse the row until a displayed input changes.
+  private cached?: { inputs: HeaderInputs; lines: string[] };
+
   constructor(private readonly summary: () => ToolSummary, private readonly theme: () => Theme,
     private readonly options: CompactToolOptions = {}) {}
 
   render(width: number): string[] {
     width = Math.max(0, width - (this.options.gutter?.() ?? 0));
     const { name, args, status } = this.summary();
-    const theme = this.theme();
+    const inputs: HeaderInputs = { width, name, args, status, count: this.options.count?.(),
+      expanded: this.options.toggle ? this.options.expanded?.() : undefined, label: this.options.clock?.() ?? "", theme: this.theme() };
+    // Streamed arguments may be updated in place, so running calls always rebuild.
+    if (this.cached && status !== "running" && sameInputs(this.cached.inputs, inputs)) return this.cached.lines;
+    const lines = this.header(inputs);
+    this.cached = { inputs, lines };
+    return lines;
+  }
+  private header({ width, name, args, status, count, expanded, label, theme }: HeaderInputs): string[] {
     const dot = theme.fg(status === "running" ? "warning" : status === "unknown" ? "dim" : status, "●");
-    const count = this.options.count?.();
     const description = count ? "" : toolDescription(args);
-    const control = this.options.toggle ? theme.fg("muted", this.options.expanded?.() ? "▾" : "▸") + " " : this.options.alignControl ? "  " : "";
+    const control = this.options.toggle ? theme.fg("muted", expanded ? "▾" : "▸") + " " : this.options.alignControl ? "  " : "";
     const text = `${dot} ${control}${singleLine(name)}${count ? ` ×${count}` : ""}${description ? " " + theme.fg("muted", description) : ""}`;
-    const label = this.options.clock?.() ?? "";
     const clock = label && width >= visibleWidth(label) + 8 ? label : "";
     const available = Math.max(0, width - 1 - (clock ? visibleWidth(clock) + 1 : 0));
     const body = truncateToWidth(text, available, "…");
@@ -60,5 +77,5 @@ export class CompactTool implements Component {
     }
     return { handled: true };
   }
-  invalidate(): void {}
+  invalidate(): void { this.cached = undefined; }
 }

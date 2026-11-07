@@ -73,6 +73,7 @@ export class NativeDocument extends Container {
   private frameWidth?: number;
   private frameLines?: string[];
   private checked = false;
+  private releasedFor?: readonly ContentEntry[];
   private disposed = false;
 
   constructor(
@@ -98,8 +99,12 @@ export class NativeDocument extends Container {
   beginFrame(): void {
     this.frameActive = true;
     this.frameWidth = undefined;
-    if (this.compactBlocks.size) {
-      const present = new Set(this.index.entries(this.pane).map(entry => entry.source));
+    this.index.beginFrame();
+    // Blocks are only added from the current entries, so an unchanged index has nothing to release.
+    const entries = this.index.entries(this.pane);
+    if (this.compactBlocks.size && entries !== this.releasedFor) {
+      this.releasedFor = entries;
+      const present = new Set(entries.map(entry => entry.source));
       for (const [component, block] of this.compactBlocks) if (!present.has(component)) {
         block.dispose();
         this.compactBlocks.delete(component);

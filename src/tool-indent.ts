@@ -8,10 +8,22 @@ export class ToolIndent extends Container {
     super(); this.addChild(component);
     this.prefix = " ".repeat(gutter) + " │".repeat(depth) + (body ? " " : "");
   }
+  // Expanded runs are re-indented on every frame; reuse rows while the native rows are unchanged.
+  private cached?: { width: number; prefix: string; source: string[]; lines: string[] };
   override render(width: number): string[] {
     const inset = Math.min(width, this.prefix.length);
     const prefix = this.theme().fg("dim", this.prefix.slice(0, inset));
-    return super.render(Math.max(0, width - inset)).map(line => truncateToWidth(prefix + line, width, ""));
+    const source = super.render(Math.max(0, width - inset));
+    const cached = this.cached;
+    if (cached && cached.width === width && cached.prefix === prefix && cached.source.length === source.length &&
+      cached.source.every((line, index) => line === source[index])) return cached.lines;
+    const lines = source.map(line => truncateToWidth(prefix + line, width, ""));
+    this.cached = { width, prefix, source, lines };
+    return lines;
+  }
+  override invalidate(): void {
+    this.cached = undefined;
+    super.invalidate();
   }
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
     const inset = Math.min(event.width, this.prefix.length);
