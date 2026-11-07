@@ -14,20 +14,16 @@ const pointer = (x: number, y: number): TuiMouseEvent => ({
   width: 30, height: 10, shift: false, alt: false, ctrl: false,
 });
 
-test("keeps the copy control a composed grapheme inside its two-cell slot", () => {
+test("renders the copy control as readable single-cell text at the right edge", () => {
   const message = new CompactMessage({ render: () => ["body"], invalidate() {} },
     () => "12:34:56", () => theme, () => 0, () => true, () => {});
   try {
     message.prepare(30, true);
     const row = stripTerminalSequences(message.render(30).at(-1)!);
-    const graphemes = [...new Intl.Segmenter().segment(row.trimStart())].map(part => part.segment);
-    expect(graphemes).toHaveLength(2);
-    expect(graphemes[0].codePointAt(0)).toBe(0x29c9);
-    const markers = [...graphemes[0]].slice(1);
-    expect(markers.length).toBeGreaterThan(0);
-    expect(markers.every(marker => /\p{Default_Ignorable_Code_Point}/u.test(marker))).toBe(true);
-    expect(visibleWidth(graphemes[0])).toBe(1);
-    expect(graphemes[1]).toBe(" ");
+    const control = row.trimStart();
+    expect(control).toMatch(/^\[[A-Za-z]+\]$/);
+    expect(control.length).toBeGreaterThan(2);
+    expect(visibleWidth(control)).toBe(control.length);
     expect(visibleWidth(row)).toBe(30);
   } finally { message.dispose(); }
 });
@@ -47,20 +43,20 @@ test("hides the footer immediately without hiding time or disabling keyboard cop
   const document = new NativeDocument(root, "chat", timestamps, () => theme, () => 0, () => true,
     () => {}, true, undefined, text => copied.push(text), () => show);
   try {
-    expect(document.render(30).join("\n")).toContain("⧉");
+    expect(document.render(30).join("\n")).toContain("[Copy]");
     show = false;
     document.invalidate();
     const hidden = document.render(30).map(stripTerminalSequences);
     expect(hidden).toHaveLength(2);
     expect(hidden[0]).toMatch(/^ \d{2}:\d{2}:\d{2}$/);
-    expect(hidden.join("\n")).not.toContain("⧉");
+    expect(hidden.join("\n")).not.toContain("[Copy]");
     const choices = document.copyBlocks();
     expect(choices).toHaveLength(1);
     choices[0].copy();
     expect(copied).toEqual(["USER SOURCE"]);
     show = true;
     document.invalidate();
-    expect(document.render(30).at(-1)?.trim()).toBe("⧉\u034f");
+    expect(document.render(30).at(-1)?.trim()).toBe("[Copy]");
   } finally { document.dispose(); }
 });
 test.each([true, false])("leaves untimed blocks undecorated even when clocks are %s", show => {
@@ -82,7 +78,7 @@ test.each([true, false])("leaves untimed blocks undecorated even when clocks are
     expect(copies).toBe(0);
     label = "12:34:56";
     message.prepare(30, true);
-    expect(message.render(30).at(-1)?.trim()).toBe("⧉\u034f");
+    expect(message.render(30).at(-1)?.trim()).toBe("[Copy]");
     label = "";
     message.prepare(30, true);
     expect(message.render(30)).toEqual(["", "Package updates are available."]);
@@ -105,16 +101,16 @@ test.each([true, false])("places time above and the copy icon below without a si
     const rows = message.render(30).map(stripTerminalSequences);
     const header = show ? [" 12:34:56"] : [];
     expect(nativeWidth).toBe(29);
-    expect(rows).toEqual(["", ...header, "a".repeat(29), "body", " ".repeat(27) + "⧉\u034f "]);
+    expect(rows).toEqual(["", ...header, "a".repeat(29), "body", " ".repeat(23) + "[Copy]"]);
     const contentRow = 1 + header.length;
     message.handleMouse(pointer(28, contentRow));
     expect(events.at(-1)).toMatchObject({ x: 28, y: 1, width: 29, height: 4 });
     const count = events.length;
     if (show) message.handleMouse(pointer(0, 1));
-    for (let x = 27; x < 29; x++) message.handleMouse(pointer(x, rows.length - 1));
-    message.handleMouse(pointer(26, rows.length - 1));
+    for (let x = 23; x < 29; x++) message.handleMouse(pointer(x, rows.length - 1));
+    message.handleMouse(pointer(22, rows.length - 1));
     message.handleMouse(pointer(29, rows.length - 1));
-    expect(copies).toBe(2);
+    expect(copies).toBe(6);
     expect(events).toHaveLength(count);
   } finally { message.dispose(); }
 });
@@ -138,7 +134,7 @@ test("keeps image protocol rows intact between the header and footer", () => {
     const rows = message.render(30);
     expect(rows[0]).toBe(" 12:34:56");
     expect(rows.slice(1, -1)).toEqual(content);
-    expect(rows.at(-1)?.trim()).toBe("⧉\u034f");
+    expect(rows.at(-1)?.trim()).toBe("[Copy]");
   } finally { message.dispose(); }
 });
 
@@ -147,7 +143,7 @@ test.each([true, false])("search ignores the footer icon (clock %s)", show => {
   const message = new CompactMessage(native, () => "12:34:56", () => theme, () => 0, () => show, () => {});
   try {
     const rows = message.render(30);
-    const hit = { entry: { source: native, label: "User", text: "⧉" }, line: 0, text: "⧉" };
+    const hit = { entry: { source: native, label: "User", text: "[Copy]" }, line: 0, text: "[Copy]" };
     expect(searchHitRow(rows, hit, message.searchClock())).toBeUndefined();
     expect(searchHitRow(rows, { ...hit, text: "body", entry: { ...hit.entry, text: "body" } }, message.searchClock())).toBe(show ? 1 : 0);
   } finally { message.dispose(); }

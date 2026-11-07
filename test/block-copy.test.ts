@@ -75,24 +75,44 @@ test.each([true, false])("copy hit testing preserves native selection with times
   const rows = block.render(40).map(stripTerminalSequences);
   const bodyRow = show ? 2 : 1;
   const copyRow = bodyRow + 2;
-  const x = rows[copyRow].indexOf("⧉");
-  expect(x).toBe(37);
-  expect(rows[copyRow].slice(x)).toBe("⧉\u034f ");
+  const control = /\[[^\]]+\]/.exec(rows[copyRow]);
+  expect(control).not.toBeNull();
+  const x = control!.index;
+  const controlWidth = control![0].length;
+  expect(controlWidth).toBeGreaterThan(2);
+  expect(x + controlWidth).toBe(39);
   expect(rows[1]).toBe(show ? " 12:34:56" : "**source**");
   expect(rows[bodyRow]).toBe("**source**");
-  for (const column of [x, x + 1]) {
+  for (let column = x; column < x + controlWidth; column++) {
     expect(block.handleMouse(pointer("press", column, copyRow))).toMatchObject({ capture: true });
     block.handleMouse(pointer("click", column, copyRow));
   }
-  expect(copies).toBe(2);
+  expect(copies).toBe(controlWidth);
   block.handleMouse(pointer("click", x, copyRow + 1));
-  expect(copies).toBe(2);
+  expect(copies).toBe(controlWidth);
   block.handleMouse(pointer("press", 1, bodyRow));
   expect(events.at(-1)).toMatchObject({ x: 1, y: 1, width: 39, height: 4 });
   expect(events).toHaveLength(1);
   block.dispose();
 });
 
+test("changes copy presentation without changing the copied block or hit target", () => {
+  let style: "icons" | "text" = "icons";
+  let copies = 0;
+  const native: Component = { render: () => ["body"], invalidate() {} };
+  const block = new CompactMessage(native, () => "12:34:56", () => theme, () => 0, () => true,
+    () => { copies++; }, () => true, () => style);
+  const iconRow = block.render(40).map(stripTerminalSequences).at(-1)!;
+  expect(iconRow).toContain("⧉");
+  style = "text";
+  const textRow = block.render(40).map(stripTerminalSequences).at(-1)!;
+  const control = /\[[A-Za-z]+\]/.exec(textRow);
+  expect(control).not.toBeNull();
+  const y = block.render(40).length - 1;
+  block.handleMouse(pointer("click", control!.index + 1, y));
+  expect(copies).toBe(1);
+  block.dispose();
+});
 test("copies a native text renderer's source rather than its padding and wrapping", () => {
   class CustomEntryComponent extends Container {
     entry = { data: { parentToolCallId: "missing" } };
