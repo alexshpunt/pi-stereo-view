@@ -92,6 +92,32 @@ const panes = (lines: string[]): { chat: string[]; activity: string[] } => ({
   chat: lines.slice(2, -6).map(line => stripTerminalSequences(sliceByColumn(line, 80, 40))),
 });
 
+test("keeps user clocks when an extension replaces a message after Pi displays it", async () => {
+  const { cwd, agent } = await workspace();
+  const manager = SessionManager.create(cwd, cwd);
+  const savedTime = Date.parse("2001-10-09T10:02:03Z");
+  manager.appendMessage({ role: "user", content: "EARLIER USER", timestamp: savedTime });
+  await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
+    side: "right", chatWidth: 40, layout: "columns", chatHeight: 32, zoom: null, showTimestamps: true,
+  }));
+  const run = await new PiIntegrationTest({
+    testName: "replaced-user-timestamp", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+    piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
+    environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!, TZ: "UTC" },
+    rawMode: false, tuiSize: { cols: 120, rows: 45 },
+    extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/replace-user-message.ts"), path.resolve("test/fixtures/timestamp-probe.ts")],
+    tools: [], conversation: [assistantMessage([text("CURRENT ANSWER")])],
+  }).run("CURRENT USER");
+  const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "timestamp-frames.json"), "utf8"));
+  const chat = panes(frames.finished).chat;
+  expect(timeAbove(chat, "EARLIER USER")).toBe(utcTime(savedTime));
+  const user = run.messages.find((message): message is { role: string; timestamp: number; content: unknown } =>
+    typeof message === "object" && message !== null && "role" in message && message.role === "user" &&
+    "timestamp" in message && typeof message.timestamp === "number" && "content" in message &&
+    JSON.stringify(message.content).includes("CURRENT USER"));
+  expect(user).toBeDefined();
+  expect(timeAbove(chat, "CURRENT USER")).toBe(utcTime(user!.timestamp));
+});
 test("keeps native compaction in Conversation and classic Combined while retaining split clocks", async () => {
   const { cwd, agent } = await workspace();
   const manager = SessionManager.create(cwd, cwd);
