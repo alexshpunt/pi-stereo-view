@@ -190,9 +190,9 @@ export default function blockCopyProbe(pi: ExtensionAPI): void {
       await copy("firstTool", "activity", "TOOL COPY first");
       await copy("secondTool", "activity", "TOOL COPY second");
       await copy("linked", "activity", "LATE FIRST COPY");
-      await control("[↗]", "Conversation");
+      await control("[ ↗ ]", "Conversation");
       await copy("zoomed", "chat", "USER COPY");
-      await control("[↙]", "Conversation");
+      await control("[ ↙ ]", "Conversation");
       const { columns, rows } = process.stdout;
       try {
         process.stdout.columns = 110;
@@ -220,7 +220,7 @@ export default function blockCopyProbe(pi: ExtensionAPI): void {
       await input(`\x1b[<0;${x + 5};${y + 1}m`);
       observation.selection = tui.hasActiveSelection();
       tui.resetTextSelection();
-      await control("[≡]", "");
+      await control("[ ≡ ]", "");
       observation.frames.copySettings = await capture();
       await input("\x1b[B");
       await input(" ");
@@ -236,7 +236,7 @@ export default function blockCopyProbe(pi: ExtensionAPI): void {
       const before = clipboard.length;
       await input("\r");
       observation.copies.keyboard = await awaitCopy(before);
-      await control("[≡]", "");
+      await control("[ ≡ ]", "");
       await input("\x1b[B");
       await input(" ");
       await input("\x1b");

@@ -141,7 +141,7 @@ for (const layout of ["columns", "rows"] as const) for (const legacy of [
       }).run("LEGACY VIEW CHECK");
       const frame = firstFrame(result.terminalOutput);
       assertSplit(frame, layout);
-      expect(frame).not.toContain("[↙]");
+      expect(frame).not.toContain("[ ↙ ]");
       expect(result.terminalOutput).toContain("LEGACY VIEW RESET");
       expect(result.providerRequests).toHaveLength(1);
     } finally {

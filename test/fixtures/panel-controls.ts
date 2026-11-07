@@ -54,7 +54,7 @@ export default function panelControls(pi: ExtensionAPI): void {
     if (process.env.TRANSCRIPT_BUTTON_STREAM !== "1" ||
         event.assistantMessageEvent.type !== "text_delta" || step >= 5) return;
     const actions: [string, string?][] = [
-      ["[▤]"], ["[↗]", "Activity"], ["[↙]", "Activity"], ["[▣]"], ["[◫]"],
+      ["[ ▤ ]"], ["[ ↗ ]", "Activity"], ["[ ↙ ]", "Activity"], ["[ ▣ ]"], ["[ ◫ ]"],
     ];
     const [label, owner] = actions[step++];
     pending = pending.then(async () => {
@@ -70,7 +70,7 @@ export default function panelControls(pi: ExtensionAPI): void {
     }
     if (process.env.TRANSCRIPT_BUTTON_TOGGLE === "1") {
       const before = await capture();
-      await click(stripTerminalSequences(before[0]).includes("[▣]") ? "[▣]" : "[◫]");
+      await click(stripTerminalSequences(before[0]).includes("[ ▣ ]") ? "[ ▣ ]" : "[ ◫ ]");
       await writeFile(path.join(ctx.cwd, "button-toggle.json"), JSON.stringify({ before, after: await capture() }));
     }
     if (process.env.TRANSCRIPT_BUTTON_DEFAULTS === "1") {
@@ -78,9 +78,9 @@ export default function panelControls(pi: ExtensionAPI): void {
       Object.defineProperty(process.stdout, "columns", { configurable: true, value: 400 });
       process.stdout.emit("resize");
       const wider = await capture();
-      await click("[▤]");
+      await click("[ ▤ ]");
       const rows = await capture();
-      await click("[▥]");
+      await click("[ ▥ ]");
       const restoredColumns = await capture();
       const divider = stripTerminalSequences(restoredColumns[1]).indexOf("║");
       if (divider < 0) throw new Error("Missing current column divider after restoring columns");
@@ -94,12 +94,12 @@ export default function panelControls(pi: ExtensionAPI): void {
     }
     if (process.env.TRANSCRIPT_BUTTON_CONTROLS !== "1") return;
     const frames: Record<string, string[]> = { initial: await capture() };
-    const { x, y } = await target("[↗]", "Activity");
+    const { x, y } = await target("[ ↗ ]", "Activity");
     await mouse(0, x, y);
     await mouse(32, x, y + 2);
     await mouse(0, x, y + 2, "m");
     frames.canceledClick = await capture();
-    await click("[▤]");
+    await click("[ ▤ ]");
     frames.rows = await capture();
     const lines = frames.rows.map(stripTerminalSequences);
     const row = lines.findIndex((line, index) => index > 1 && line.startsWith("═".repeat(120)));
@@ -109,9 +109,9 @@ export default function panelControls(pi: ExtensionAPI): void {
     await mouse(32, 10, 2);
     await mouse(0, 10, 2, "m");
     frames.rowDrag = await capture();
-    await click("[↕]");
+    await click("[ ↕ ]");
     frames.rowSwap = await capture();
-    await click("[▥]");
+    await click("[ ▥ ]");
     frames.columns = await capture();
     const divider = stripTerminalSequences(frames.columns[1]).indexOf("║");
     if (divider < 0) throw new Error("Missing draggable vertical divider");
@@ -119,19 +119,19 @@ export default function panelControls(pi: ExtensionAPI): void {
     await mouse(32, divider - 8, 2);
     await mouse(0, divider - 8, 2, "m");
     frames.columnDrag = await capture();
-    await click("[↗]", "Activity");
+    await click("[ ↗ ]", "Activity");
     frames.activity = await capture();
-    await click("[↙]", "Activity");
+    await click("[ ↙ ]", "Activity");
     frames.activityRestored = await capture();
-    await click("[↗]", "Conversation");
+    await click("[ ↗ ]", "Conversation");
     frames.chat = await capture();
-    await click("[↙]", "Conversation");
+    await click("[ ↙ ]", "Conversation");
     frames.chatRestored = await capture();
-    await click("[▣]");
+    await click("[ ▣ ]");
     frames.combined = await capture();
-    await click("[◫]");
+    await click("[ ◫ ]");
     frames.splitRestored = await capture();
-    await click("[▤]");
+    await click("[ ▤ ]");
     frames.rowsRestored = await capture();
     const rows = process.stdout.rows;
     try {
@@ -143,7 +143,7 @@ export default function panelControls(pi: ExtensionAPI): void {
       process.stdout.emit("resize");
     }
     frames.tallRows = await capture();
-    await click("[↗]", process.env.TRANSCRIPT_BUTTON_FINAL_ZOOM === "activity" ? "Activity" : "Conversation");
+    await click("[ ↗ ]", process.env.TRANSCRIPT_BUTTON_FINAL_ZOOM === "activity" ? "Activity" : "Conversation");
     frames.savedZoom = await capture();
     await writeFile(path.join(ctx.cwd, "panel-controls.json"), JSON.stringify(frames));
   });

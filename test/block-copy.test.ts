@@ -103,14 +103,18 @@ test("changes copy presentation without changing the copied block or hit target"
   const block = new CompactMessage(native, () => "12:34:56", () => theme, () => 0, () => true,
     () => { copies++; }, () => true, () => style);
   const iconRow = block.render(40).map(stripTerminalSequences).at(-1)!;
-  expect(iconRow).toContain("⧉");
+  expect(iconRow).toContain("[ ⧉\u034f ]");
+  const iconStart = iconRow.indexOf("[ ⧉");
+  const iconY = block.render(40).length - 1;
+  for (let x = iconStart; x < iconStart + 5; x++) block.handleMouse(pointer("click", x, iconY));
+  expect(copies).toBe(5);
   style = "text";
   const textRow = block.render(40).map(stripTerminalSequences).at(-1)!;
   const control = /\[[A-Za-z]+\]/.exec(textRow);
   expect(control).not.toBeNull();
   const y = block.render(40).length - 1;
   block.handleMouse(pointer("click", control!.index + 1, y));
-  expect(copies).toBe(1);
+  expect(copies).toBe(6);
   block.dispose();
 });
 test("copies a native text renderer's source rather than its padding and wrapping", () => {

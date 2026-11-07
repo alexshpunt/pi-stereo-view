@@ -40,9 +40,9 @@ export default function searchResizeControls(pi: ExtensionAPI): void {
       frames.narrow = await capture();
       const screen = frames.narrow.map(stripTerminalSequences);
       // Conversation is the first pane; its title may be clipped at minimum width.
-      const row = screen.findIndex(line => line.includes("[↗]"));
+      const row = screen.findIndex(line => line.includes("[ ↗ ]"));
       if (row < 0) throw new Error("Pane zoom control is missing at minimum width");
-      const column = screen[row].indexOf("[↗]") + 2;
+      const column = screen[row].indexOf("[ ↗ ]") + 2;
       for (const suffix of ["M", "m"]) {
         tui.handleTerminalInput(`\x1b[<0;${column + 1};${row + 1}${suffix}`);
         await setImmediate();

@@ -44,11 +44,17 @@ export default function buttonStyleProbe(pi: ExtensionAPI): void {
     const frames: Record<string, string[]> = { initial: await capture() };
     try {
       if (process.env.STYLE_CONTROLS === "1") {
-        await click("[≡]");
+        await click("[ ≡ ]");
         frames.menu = await capture();
         await click("Button style");
         await input("\x1b");
         frames.text = await capture();
+        await click("[Find]", "Conversation");
+        frames.textSearch = await capture();
+        for (const character of "STYLE") await input(character);
+        await click("[Go]", "Search:");
+        frames.textSearchNext = await capture();
+        await click("[Exit]", "Search:");
         await click("[Copy]", "[Copy]");
         for (let n = 0; n < 100 && copies.length === 0; n++) await setTimeout(10);
         await click("[Rows]");
