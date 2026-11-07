@@ -9,7 +9,7 @@ type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
 type UserSlot = { kind: string; text?: string; time: unknown };
 interface BranchTimes {
-  messageTimes: WeakMap<object, unknown>; users: TimedSource[]; slots: UserSlot[]; bash: TimedSource[];
+  messageTimes: WeakMap<object, unknown>; users: TimedSource[]; bash: TimedSource[];
   starts: Map<string, number>; owners: Map<string, unknown>;
 }
 
@@ -70,6 +70,7 @@ export class TranscriptTimestamps {
   private owners = new Map<string, unknown>();
   private readonly liveCalls = new Set<string>();
   private pendingUser?: { source: TimedSource; before: number; ended: boolean };
+  private readonly liveUsers = new Map<number, TimedSource>();
   private frameActive = false;
   private preparedComponents?: Component[];
 
@@ -110,7 +111,7 @@ export class TranscriptTimestamps {
       for (const block of message.content) if (block.type === "toolCall") owners.set(block.id, time);
     }
     const derived = {
-      messageTimes: new WeakMap(sources.map(source => [source.message, source.time])), users, slots: users.flatMap(userSlots),
+      messageTimes: new WeakMap(sources.map(source => [source.message, source.time])), users,
       bash: sources.filter(source => source.message.role === "bashExecution"), starts, owners,
     };
     if (this.branch?.sources === sources) this.branch.derived = derived;
@@ -123,10 +124,11 @@ export class TranscriptTimestamps {
     if (message.role === "user") {
       if (!ended) {
         this.pendingUser = {
-          source: { message, time: message.timestamp },
+          source: { message: { ...message, content: typeof message.content === "string" ? message.content : message.content.map(block => ({ ...block })) }, time: message.timestamp },
           before: this.sources().filter(source => source.message.role === "user").length,
           ended: false,
         };
+        this.liveUsers.set(this.pendingUser.before, this.pendingUser.source);
       } else if (this.pendingUser) {
         this.pendingUser.ended = true;
       }
@@ -143,6 +145,7 @@ export class TranscriptTimestamps {
     this.preparedComponents = undefined;
     this.pendingUser = undefined;
     this.liveCalls.clear();
+    this.liveUsers.clear();
     this.orderedLabels = new WeakMap();
     this.messageTimes = new WeakMap();
     this.branch = undefined;
@@ -159,22 +162,36 @@ export class TranscriptTimestamps {
   prepare(components: Component[]): void {
     if (this.frameActive && this.preparedComponents === components) return;
     this.preparedComponents = components;
-    const { messageTimes, users, slots: saved, bash, starts, owners } = this.times();
+    const { messageTimes, users, bash, starts, owners } = this.times();
     this.messageTimes = messageTimes;
     if (this.pendingUser?.ended && users.length > this.pendingUser.before) this.pendingUser = undefined;
-    const slots = saved.slice();
     const nativeUsers = components.filter(component =>
       component.constructor.name === "UserMessageComponent" || component.constructor.name === "SkillInvocationMessageComponent");
-    if (nativeUsers.length !== slots.length && this.pendingUser) slots.push(...userSlots(this.pendingUser.source));
-    this.orderedLabels = new WeakMap();
-    if (nativeUsers.length === slots.length) {
-      // Text is a compatibility check after ordinal association, never an identity key.
-      const matches = nativeUsers.every((component, index) => {
-        const slot = slots[index];
-        return component.constructor.name === slot.kind &&
+    const sources = users.slice();
+    if (this.pendingUser && users.length === this.pendingUser.before) sources.push(this.pendingUser.source);
+    const associations: Array<{ component: Component; time: unknown }> = [];
+    let position = 0;
+    let matched = true;
+    for (const [index, source] of sources.entries()) {
+      const live = this.liveUsers.get(index);
+      // An extension may replace a message after Pi rendered it. Use the observed
+      // version only for the same timestamp and only if it matches native text.
+      const candidates = [userSlots(source)];
+      if (live && validTime(live.time) !== undefined && validTime(live.time) === validTime(source.time)) {
+        candidates.push(userSlots(live));
+      }
+      const slots = candidates.find(candidate => candidate.every((slot, offset) => {
+        const component = nativeUsers[position + offset];
+        return component?.constructor.name === slot.kind &&
           (slot.text === undefined || (component as Component & { text?: unknown }).text === slot.text);
-      });
-      if (matches) nativeUsers.forEach((component, index) => this.orderedLabels.set(component, timestampLabel(slots[index].time)));
+      }));
+      if (!slots) { matched = false; break; }
+      slots.forEach((slot, offset) => associations.push({ component: nativeUsers[position + offset], time: slot.time }));
+      position += slots.length;
+    }
+    this.orderedLabels = new WeakMap();
+    if (matched && position === nativeUsers.length) {
+      for (const { component, time } of associations) this.orderedLabels.set(component, timestampLabel(time));
     }
     const nativeBash = components.filter(component => component.constructor.name === "BashExecutionComponent");
     if (nativeBash.length === bash.length && nativeBash.every((component, index) =>
