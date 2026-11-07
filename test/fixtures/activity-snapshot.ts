@@ -40,8 +40,28 @@ export default function activitySnapshot(pi: ExtensionAPI): void {
     const event = { type: "click" as const, button: "left" as const, x, y: row, screenX: x, screenY: row, width: 180, height: lines.length, shift: false, alt: false, ctrl: false };
     activity.handleMouse({ ...event, type: "press" });
     activity.handleMouse(event);
+    await emittedFrame(tui, () => tui.requestRender(true));
     activity.beginFrame();
     const opened = activity.render(180);
-    await writeFile(process.env.ACTIVITY_SNAPSHOT!, JSON.stringify({ panes, opened, screen: tui.getScreenLines() }));
+    const tree = (activity as Document & { children: Component[] }).children.flatMap(child => {
+      const queue = [child];
+      const found: Component[] = [];
+      for (const node of queue) {
+        if (node.constructor.name === "NestedTree") found.push(node);
+        else queue.push(...((node as Component & { children?: Component[] }).children ?? []));
+      }
+      return found;
+    })[0];
+    if (!tree?.handleMouse) throw new Error("Nested tree not found");
+    const treeLines = tree.render(178).map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
+    const outputRow = treeLines.findIndex(line => /▸\s+codemode output\b/u.test(line));
+    if (outputRow < 0) throw new Error("Nested output row not found");
+    const outputX = Math.max(8, treeLines[outputRow].indexOf("▸") + 1);
+    const outputEvent = { ...event, x: outputX, y: outputRow, screenX: outputX, screenY: outputRow, width: 178, height: treeLines.length };
+    tree.handleMouse({ ...outputEvent, type: "press" });
+    tree.handleMouse(outputEvent);
+    activity.beginFrame();
+    const outputOpened = activity.render(180);
+    await writeFile(process.env.ACTIVITY_SNAPSHOT!, JSON.stringify({ panes, opened, outputOpened, screen: tui.getScreenLines() }));
   });
 }
