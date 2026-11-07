@@ -1,21 +1,15 @@
-import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { assistantMessage, PiIntegrationTest, text, toolCall } from "pi-coding-agent-test";
 import { expect, test } from "vitest";
 
-// This cross-extension check is opt-in; the package suite needs only the published Pi host.
-const ide = process.env.PI_STEREO_VIEW_IDE_PATH ?? "";
-const git = (...args: string[]) => execFileSync("git", ["-C", ide, ...args], { encoding: "utf8" }).trim();
 type Observation = {
   direction: number; before: number; first: number; held: number; inside: number; insideHeld: number;
   released: number; afterRelease: number; otherBefore: number; otherAfter: number; copied: string; frame: string[];
   firstCopy: string; heldCopy: string;
 };
 
-test.skipIf(!ide).each(["columns", "rows"])("scrolls a held selection at both edges without dispatching to off-screen content in %s", async layout => {
-  const sourceCommit = git("rev-parse", "HEAD");
-  const version = JSON.parse(await readFile(path.join(ide, "package.json"), "utf8")).version;
+test.each(["columns", "rows"])("scrolls a held selection at both edges without dispatching to off-screen content in %s", async layout => {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/selection-scroll-"));
   const agent = await mkdtemp(path.resolve("tmp/selection-scroll-agent-"));
@@ -28,7 +22,7 @@ test.skipIf(!ide).each(["columns", "rows"])("scrolls a held selection at both ed
     const result = await new PiIntegrationTest({
       testName, artifactsDir: path.resolve("tmp/test-runs"), cwd,
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-      environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: ide },
+      environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: "" },
       rawMode: false, tuiSize: { cols: 120, rows: 35 }, timeoutMs: 120_000,
       extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/selection-scroll-probe.ts")],
       tools: ["write"], conversation: [
@@ -37,7 +31,6 @@ test.skipIf(!ide).each(["columns", "rows"])("scrolls a held selection at both ed
       ],
     }).run("Select history beyond the visible panel");
     expect(result.exitCode).toBe(0);
-    await writeFile(path.join(artifact, "runtime.json"), JSON.stringify({ ide: { path: ide, version, sourceCommit } }, null, 2));
     const observations: Observation[] = JSON.parse(await readFile(path.join(cwd, "selection-scroll.json"), "utf8"));
     await writeFile(path.join(artifact, "observations.json"), JSON.stringify(observations, null, 2));
     expect(observations).toHaveLength(4);
