@@ -91,6 +91,7 @@ export class NativeDocument extends Container {
     private readonly compactTools: () => boolean = () => false,
     private readonly getTools: () => readonly ToolInfo[] = () => [],
     private readonly beforeExpand: () => void = () => {},
+    private readonly buttonStyle: () => "icons" | "text" = () => "text",
   ) {
     super();
   }
@@ -277,7 +278,7 @@ export class NativeDocument extends Container {
     if (!stamped) {
       stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
         this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.compactTools() && entry.kind === "tool"),
-        this.copy ? () => this.copyBlock(component) : undefined, this.showCopy);
+        this.copy ? () => this.copyBlock(component) : undefined, this.showCopy, this.buttonStyle);
       this.stamped.set(routed, stamped);
     }
     this.compactBlocks.set(component, stamped);

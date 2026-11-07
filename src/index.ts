@@ -44,8 +44,12 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           currentValue: preferences.showTimestamps ? "on" : "off", values: ["on", "off"],
         }, {
           id: "copyButtons", label: "Show copy buttons",
-          description: "Hide copy icons and their rows; keyboard copying stays available.",
+          description: "Hide copy buttons and their rows; keyboard copying stays available.",
           currentValue: preferences.showCopyButtons ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "buttonStyle", label: "Button style",
+          description: "Choose icons or text for toolbar, panel and copy controls.",
+          currentValue: preferences.buttonStyle, values: ["icons", "text"],
         }, {
           id: "compactTools", label: "Compact Activity tools",
           description: "Group adjacent tools and expand individual calls inline. Full text stays searchable and copyable.",
@@ -54,9 +58,10 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "height", label: "Conversation height",
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
-        }], 4, getSettingsListTheme(), (id, value) => {
+        }], 5, getSettingsListTheme(), (id, value) => {
           if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
+          else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");
           else if (id === "compactTools") layout?.setCompactTools(value === "on");
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
           tui.requestRender();
@@ -238,7 +243,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const choice = await ctx.ui.select("Copy a block from the active panel", blocks.map(block => block.label));
         blocks.find(block => block.label === choice)?.copy();
       } else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view icons: ▣ combined, ◫ split, ▤ rows, ▥ columns, ↕/↔ swap, ↗ expand, ↙ restore, ⌕ search, ⊟ compact tools, ⊞ full tools, ≡ settings, ⧉ copy block. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Join combines history, ◫/Open splits it, ▤/Rows and ▥/Cols change layout, ↕/↔/Swap exchanges panels, ↗/Max and ↙/Out zoom and restore, ⌕/Find searches, ⊟/Few and ⊞/All toggle compact tools, ≡/Menu opens settings, ⧉/Copy copies a block. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);

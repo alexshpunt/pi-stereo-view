@@ -19,7 +19,7 @@ type NativeTui = TUI & {
 const MIN_CHAT = 24;
 const MIN_ACTIVITY = 40;
 const MIN_ROWS = 4;
-const BUTTON_WIDTH = 5;
+const TOOLBAR_BUTTON_WIDTH = 6;
 
 class PanelScrollView extends ScrollView {
   constructor(component: Component, options: ScrollViewOptions, private readonly interact: () => void, active: () => boolean) {
@@ -44,6 +44,22 @@ class NativeSurfaceScrollView extends ScrollView {
   }
 }
 
+class ButtonStack extends HStack {
+  constructor(children: StackChild[], private readonly controls: { index: number; icon: number; text: number; min: number }[],
+    private readonly titleLength?: number) {
+    super(children);
+  }
+
+  setStyle(style: "icons" | "text"): void {
+    if (this.titleLength !== undefined) this.entries[0].minSize = style === "icons" ? 1 : this.titleLength;
+    for (const { index, icon, text, min } of this.controls) {
+      const entry = this.entries[index];
+      entry.basis = style === "icons" ? icon : text;
+      entry.minSize = style === "icons" ? icon : min;
+      entry.shrink = style === "icons" ? 0 : 1;
+    }
+  }
+}
 class TranscriptColumns extends HStack {
   /** Reserve a fixed width for Conversation, independent of its content. */
   sizeConversation(component: Component, width: number): void {
@@ -154,9 +170,9 @@ export class TranscriptLayout {
     private readonly getEditor: () => Component | undefined = () => undefined,
   ) {}
 
-  private button(icon: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
+  private button(label: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
     return new MouseRegion({
-      render: width => new Text(this.theme().style("[ " + icon() + " ]", {
+      render: width => new Text(this.theme().style((this.preferences.buttonStyle === "icons" ? "[ " + label() + " ]" : "[" + label() + "]").padEnd(width), {
         fg: enabled() ? "accent" : "dim", bg: background?.(),
       }), 0, 0).render(width),
       invalidate() {},
@@ -249,9 +265,9 @@ export class TranscriptLayout {
     const index = new NativeContentIndex(document, this.nested);
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("activity"), false, index, this.copy, showCopyButtons, () => this.preferences.compactTools, this.getTools,
-      () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); });
+      () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); }, () => this.preferences.buttonStyle);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("chat"), false, index, this.copy, showCopyButtons);
+      () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
@@ -344,21 +360,22 @@ export class TranscriptLayout {
         return false;
       }
     };
-    const toolbar = new HStack([
+    const headers: ButtonStack[] = [];
+    const toolbar = new ButtonStack([
       { component: this.button(
-        () => this.preferences.mode === "combined" || this.fallback || this.failed ? "◫" : "▣",
+        () => this.preferences.mode === "combined" || this.fallback || this.failed ? (this.preferences.buttonStyle === "icons" ? "◫" : "Open") : (this.preferences.buttonStyle === "icons" ? "▣" : "Join"),
         () => this.toggle(), () => !this.fallback && !this.failed,
-      ), basis: BUTTON_WIDTH, shrink: 0 },
+      ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(
-        () => this.preferences.layout === "columns" ? "▤" : "▥",
+        () => this.preferences.layout === "columns" ? (this.preferences.buttonStyle === "icons" ? "▤" : "Rows") : (this.preferences.buttonStyle === "icons" ? "▥" : "Cols"),
         () => this.setLayout(this.preferences.layout === "columns" ? "rows" : "columns"), () => !this.failed,
-      ), basis: BUTTON_WIDTH, shrink: 0 },
+      ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(
-        () => this.preferences.layout === "columns" ? "↔" : "↕", () => this.swap(),
+        () => this.preferences.buttonStyle === "icons" ? (this.preferences.layout === "columns" ? "↔" : "↕") : "Swap", () => this.swap(),
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
-      ), basis: BUTTON_WIDTH, shrink: 0 },
-      { component: this.button(() => "≡", this.openSettings), basis: BUTTON_WIDTH, shrink: 0 },
-    ], { gap: 1 });
+      ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
+      { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Menu", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
+    ], [0, 1, 2, 3].map(index => ({ index, icon: index === 3 ? 5 : 6, text: index === 3 ? 6 : 7, min: 6 })));
     const pane = (title: string, target: Pane, view: ScrollView): Component => {
       const hue = target === "chat" ? rgbColor(104, 158, 115) : rgbColor(107, 152, 190);
       const palette = () => {
@@ -373,9 +390,9 @@ export class TranscriptLayout {
         render: width => [this.theme().style("─".repeat(width), { fg: palette().border })],
         invalidate() {},
       };
-      const label = new HStack([
+      const label = new ButtonStack([
         { component: new MouseRegion({
-          render: width => new Text(this.theme().style(truncateToWidth(" " + (this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
+          render: width => new Text(this.theme().style(truncateToWidth(width < title.length + 3 ? title : " " + (this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
             fg: this.searchPane() === target ? "accent" : palette().text, bg: palette().fill,
           }), 0, 0).render(width),
           invalidate() {},
@@ -385,23 +402,31 @@ export class TranscriptLayout {
             return { handled: true, render: true };
           }
           return undefined;
-        }), basis: 0, grow: 1, minSize: 1 },
+        }), basis: 0, grow: 1, minSize: title.length },
         ...(target === "activity" ? [{ component: this.button(
-          () => this.preferences.compactTools ? "⊞" : "⊟",
+          () => this.preferences.compactTools ? (this.preferences.buttonStyle === "icons" ? "⊞" : "All") : (this.preferences.buttonStyle === "icons" ? "⊟" : "Few"),
           () => {
             this.activate("activity");
             this.setCompactTools(!this.preferences.compactTools);
           }, () => true, () => palette().fill,
-        ), basis: BUTTON_WIDTH, shrink: 0 }] : []),
-        { component: this.button(() => "⌕", () => {
+        ), basis: 6, minSize: 5, shrink: 1 }] : []),
+        { component: this.button(() => this.preferences.buttonStyle === "icons" ? "⌕" : "Find", () => {
           this.activate(target);
           this.openSearch(target);
-        }, () => true, () => palette().fill), basis: BUTTON_WIDTH, shrink: 0 },
+        }, () => true, () => palette().fill), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
         { component: this.button(
-          () => this.preferences.zoom === target ? "↙" : "↗",
+          () => this.preferences.zoom === target ? (this.preferences.buttonStyle === "icons" ? "↙" : "Out") : (this.preferences.buttonStyle === "icons" ? "↗" : "Max"),
           () => this.maximize(target), () => true, () => palette().fill,
-        ), basis: BUTTON_WIDTH, shrink: 0 },
-      ]);
+        ), basis: 5, shrink: 0 },
+      ], target === "activity" ? [
+        { index: 1, icon: 5, text: 6, min: 5 },
+        { index: 2, icon: 5, text: 7, min: 6 },
+        { index: 3, icon: 5, text: 5, min: 5 },
+      ] : [
+        { index: 1, icon: 5, text: 7, min: 6 },
+        { index: 2, icon: 5, text: 5, min: 5 },
+      ], title.length);
+      headers.push(label);
       const header = new VStack([
         { component: line, basis: 1, shrink: 0, visible: () =>
           this.preferences.zoom !== null || this.preferences.layout === "columns" ||
@@ -451,6 +476,8 @@ export class TranscriptLayout {
     const columns = new TranscriptColumns();
     const rows = new TranscriptRows();
     this.rebuild = (): void => {
+      toolbar.setStyle(this.preferences.buttonStyle);
+      for (const header of headers) header.setStyle(this.preferences.buttonStyle);
       for (const [stack, axis] of [[columns, "columns"], [rows, "rows"]] as const) {
         stack.clear();
         const minimum = axis === "columns" ? MIN_CHAT : MIN_ROWS;
@@ -638,6 +665,12 @@ export class TranscriptLayout {
   /** Hide copy icons without disabling the keyboard copy picker. */
   setCopyButtons(show: boolean): void {
     this.preferences.showCopyButtons = show;
+    this.changed();
+  }
+
+  /** Change the presentation of toolbar, header and copy controls. */
+  setButtonStyle(style: "icons" | "text"): void {
+    this.preferences.buttonStyle = style;
     this.changed();
   }
 
