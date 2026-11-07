@@ -48,6 +48,8 @@ export interface ContentEntry {
   search(width: number): Omit<SearchEntry, "source">;
   /** Live execution metadata exists only on calls, never on linked output. */
   tool?(): ToolSummary;
+  /** The native renderer's collapsed view for linked custom output. */
+  preview?: Component;
 }
 
 const nameOf = (component: Component): string => component.constructor.name;
@@ -143,6 +145,23 @@ export class NativeContentIndex {
   private content: ContentEntry[] = [];
   private panes: Partial<Record<Pane, ContentEntry[]>> = {};
   private readonly expandedPanels = new WeakMap<Component, Component>();
+  private readonly previews = new WeakMap<Component, Component>();
+
+  private preview(source: Component): Component | undefined {
+    const native = source as NativeContent & { renderer?: unknown; customRenderer?: unknown; markdownTheme?: unknown; outputPad?: unknown };
+    const name = nameOf(source);
+    if (name !== "CustomEntryComponent" && name !== "CustomMessageComponent") return undefined;
+    let preview = this.previews.get(source);
+    if (!preview) {
+      const args = name === "CustomEntryComponent"
+        ? [native.entry, native.renderer, native.outputPad]
+        : [native.message, native.customRenderer, native.markdownTheme, native.outputPad];
+      const clone = Reflect.construct(source.constructor, args) as NativeContent;
+      preview = clone.customComponent ?? clone;
+      this.previews.set(source, preview);
+    }
+    return preview;
+  }
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
 
   private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number } };
@@ -288,7 +307,9 @@ export class NativeContentIndex {
         status: !native.result || native.isPartial !== false ? "running" : native.result.isError ? "error" : "success",
       };
     } : undefined;
-    return { source, owner: owner ?? source, component: source, kind: owner ? "tool" : kind, spacing, compact, tool, search: width => {
+    const preview = (): Component | undefined => owner ? this.preview(source) : undefined;
+    return { source, owner: owner ?? source, component: source, kind: owner ? "tool" : kind, spacing, compact, tool,
+      get preview() { return preview(); }, search: width => {
       const native = source as NativeContent;
       if (kind === "tool") {
         if (typeof native.toolName !== "string") throw new Error("Pi's tool metadata is not supported");
