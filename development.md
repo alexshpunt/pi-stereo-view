@@ -52,6 +52,23 @@ Stereo builds nested disclosure structure from `tool_execution_start`/`tool_exec
 
 Split history reuses unchanged native blocks between frames. Custom renderers must invalidate changed components before requesting a render, as required by Pi's component API. Native text setters, history rebuilds, streaming, tool updates, expansion, width and theme changes refresh the affected output. Image placement blocks are never retained in this cache. Detaching the layout removes its invalidation observers.
 
+Every streamed delta requests a frame, and each frame lays out the whole history, so per-frame work must not grow with history length. Compact call and group headers are reused until a displayed input changes: width, name, argument object, state, member count, expansion, clock or theme. Running calls rebuild their header on every frame because streamed arguments may change in place. Hierarchy guides are reused while the wrapped rows are unchanged. Timestamps reread the session only when its leaf entry changes. Content classification depends on each answer's block layout and child components, not on the message object that streaming replaces, and unchanged answers keep their child arrays so their native caches stay valid.
+
+## Rendering profiles
+
+The profiles run real Pi with scripted responses and write measurements under `tmp/profiling`. Compare a candidate with a baseline checkout through `PROFILE_TRANSCRIPT_PATH`, on an otherwise idle machine, with the Pi version users run (`PI_COMMAND`); `npm run` puts the development dependency's older `pi` first on `PATH`.
+
+```sh
+PI_COMMAND=$(command -v pi) PROFILE_MODES=stock,columns PROFILE_COMPACT=1 PROFILE_CALLS=10 PROFILE_ARG_CHARS=3000 \
+  PROFILE_HISTORY=100 PROFILE_WIDTH=200 PROFILE_HEIGHT=60 PROFILE_TOOL_LINES=40 npm run profile -- test/rendering.profile.ts
+```
+
+`test/rendering.profile.ts` builds a synthetic history of `PROFILE_HISTORY` turns with `PROFILE_CALLS` calls each and measures CPU per frame for repaint, typing, scrolling, resizing, streamed text, tool output and streamed arguments. `PROFILE_ARG_CHARS` gives calls Codemode-sized arguments and enables the streamed-argument action. `PROFILE_FOCUS=<action>` limits the CPU profile to one action. `scripts/summarize-render-profile.ts <artifact>` prints the hottest functions. Compare 10 and 100 turns to see how frame cost grows with history.
+
+`test/session.profile.ts` streams a scripted answer and command over a copy of a real saved session and reports process CPU and event-loop delay for the agent run. It is skipped unless `PROFILE_SESSION` names a session file; `PROFILE_MODE` is `split` or `stock`, and `PROFILE_CPU_DIR` writes a V8 profile of the Pi process. Keep personal sessions and their profiles out of Git.
+
+In split layouts Pi composites every visible row of both panels with `compositeTuiLine` and redraws two scrollbars, while stock fullscreen history uses Pi's full-width fast path. This cost depends on the screen size, not on history, and an extension cannot remove it without replacing native panel layout.
+
 Timestamp decoration puts a local clock on the first line of each text block, with a small right gutter. One blank row separates messages and tool calls without removing paragraph breaks or tool formatting. Tools whose custom call and result renderers use `renderShell: "self"` and show no content add no output, spacing or clock, even when their model-facing result contains images. Default and visibly rendered image blocks retain their native placement rows and use a separate clock row. Assistant text and thinking share their original message time. Combined history uses Pi's original renderer without these decorations.
 
 ## Search implementation
