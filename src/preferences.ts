@@ -16,10 +16,11 @@ export interface Preferences {
   showTimestamps: boolean;
   showCopyButtons: boolean;
   compactTools: boolean;
+  buttonStyle: "icons" | "text";
 }
 
 export const defaults: Preferences = {
-  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: false,
+  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: false, buttonStyle: "icons",
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -39,16 +40,18 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const showTimestamps = record.showTimestamps === undefined ? defaults.showTimestamps : record.showTimestamps;
   const showCopyButtons = record.showCopyButtons === undefined ? defaults.showCopyButtons : record.showCopyButtons;
   const compactTools = record.compactTools === undefined ? defaults.compactTools : record.compactTools;
+  const buttonStyle = record.buttonStyle === undefined ? defaults.buttonStyle : record.buttonStyle;
   if ((record.side !== "left" && record.side !== "right") ||
       (record.chatWidth !== null && (typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
         record.chatWidth < 24 || record.chatWidth > 240)) ||
       (layout !== "columns" && layout !== "rows") ||
       (chatHeight !== null && (typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240)) ||
-      typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean" || typeof compactTools !== "boolean") {
+      typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean" || typeof compactTools !== "boolean" ||
+      (buttonStyle !== "icons" && buttonStyle !== "text")) {
     throw new Error("Invalid pi-stereo-view preferences");
   }
   // Legacy files may contain mode/zoom. Every session starts with both panels visible.
-  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools };
+  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, buttonStyle };
 }
 
 /** Atomically save only the display settings, never session messages. */
@@ -56,8 +59,8 @@ export async function savePreferences(file: string, preferences: Preferences): P
   await mkdir(path.dirname(file), { recursive: true });
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
-    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools } = preferences;
-    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools };
+    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, buttonStyle } = preferences;
+    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, buttonStyle };
     await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
   } finally {
