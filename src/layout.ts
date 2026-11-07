@@ -270,7 +270,14 @@ export class TranscriptLayout {
     this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"), () => this.searchPane() === "chat");
     let historyHeight = 0;
     let projectSurface = false;
-    const shown = ({ width, height }: { width: number; height: number }): boolean => {
+    // Every root entry asks in turn during one visibility pass; evaluate the projection once.
+    let pass: { width: number; height: number; shown: boolean } | undefined;
+    const shown = (viewport: { width: number; height: number }): boolean => {
+      if (pass?.width === viewport.width && pass.height === viewport.height) return pass.shown;
+      pass = { ...viewport, shown: evaluate(viewport) };
+      return pass.shown;
+    };
+    const evaluate = ({ width, height }: { width: number; height: number }): boolean => {
       const previousHeight = historyHeight;
       const candidate = !!projectedDock && (widgetsPresent() || dialogPresent()) && dockUnchanged() && !this.failed &&
         this.preferences.mode === "split" && this.preferences.zoom !== "chat";
@@ -467,6 +474,7 @@ export class TranscriptLayout {
     const mounted = new TranscriptRoot([
       { component: toolbar, basis: 1, shrink: 0, visible: () => {
         // Root visibility is evaluated once at the start of each native layout pass.
+        pass = undefined;
         this.timestamps.beginFrame();
         activityDocument.beginFrame();
         chatDocument.beginFrame();
