@@ -346,9 +346,7 @@ export class NativeDocument extends Container {
       trees.set(entry.source, tree);
     }
     for (const entry of entries) {
-      const ownerGroup = this.groups.get(entry.owner);
-      const ownerVisible = (!ownerGroup || ownerGroup.calls.length < 2 || this.groupOpen(ownerGroup)) && this.toolOpen(entry.owner);
-      if (entry.owner !== entry.source && trees.has(entry.owner) && (!compactTools || ownerVisible)) continue;
+      if (entry.owner !== entry.source && trees.has(entry.owner)) continue;
       const component = entry.source;
       const routed = entry.component;
       this.clockOwners.set(component, entry.owner);
@@ -375,10 +373,7 @@ export class NativeDocument extends Container {
       const tree = trees.get(component);
       const contentStart = result.length;
       const bodyWidth = Math.max(0, width - (bodyDepth ? bodyDepth * 2 + 1 : 0));
-      if (!nativeBody && compactTool && entry.preview) {
-        result.push(entry.preview);
-        visibleBlock = true;
-      } else if (nativeBody && tree) {
+      if (nativeBody && tree) {
         const panels = entries.filter(panel => panel.owner === component && panel.source !== component);
         tree.setBodies(this.treeBody(entry), panels.map(panel => this.treeBody(panel)), this.searchAnchor?.entry.source);
         result.push(tree);

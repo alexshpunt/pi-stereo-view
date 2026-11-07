@@ -154,8 +154,6 @@ export class NestedTree extends Container {
     if (this.isOpen(output.key)) {
       for (const panel of attached.get("") ?? []) appendBody(panel, 1);
       appendBody(this.parent, 1);
-    } else if (this.compact()) {
-      for (const panel of attached.get("") ?? []) if (panel.entry.preview) append(panel.entry.preview, 1, true);
     }
     this.children = result;
     return super.render(width);
