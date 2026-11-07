@@ -44,7 +44,7 @@ test.each(["columns", "rows"] as const)("searches Conversation with keyboard and
   const observation: { frames: Record<string, string[]>; draft: string } = JSON.parse(await readFile(path.join(cwd, "search-frames.json"), "utf8"));
   const { frames } = observation;
   await writeFile(path.resolve("tmp/test-runs", "search-" + layout, "search-frames.json"), JSON.stringify(observation));
-  const header = clean(frames.keyboard).findIndex(line => line.includes("Conversation") && line.includes("[ ⌕ ]"));
+  const header = clean(frames.keyboard).findIndex(line => line.includes("Conversation") && line.includes("[⌕]"));
   const search = clean(frames.keyboard).findIndex(line => line.includes("Search:") && line.includes("[↓]"));
   expect(search, "Search must be under its own panel header, not a popup").toBe(header + 3);
   expect(clean(frames.keyboard)[search - 1]).toMatch(/┌─+┐/);
@@ -232,7 +232,7 @@ test("drops old search state on reload and branch changes, then keeps an older r
   }
   for (const name of ["reloaded", "branched"]) {
     expect(screen(name)).not.toContain("Search:");
-    expect((screen(name).match(/\[ ⌕ \]/g) ?? [])).toHaveLength(2);
+    expect((screen(name).match(/\[⌕\]/g) ?? [])).toHaveLength(2);
   }
   expect(screen("branched")).toContain("BRANCH NEW ANCHOR");
   expect(screen("branched")).not.toContain("OLD BRANCH ONLY");

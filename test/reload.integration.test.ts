@@ -34,9 +34,9 @@ test.each([true, false])("reloads twice with stable clocks, a full-width dock an
     expect(state.frames).toHaveLength(4);
     for (const frame of state.frames) {
       const lines = frame.map(stripTerminalSequences);
-      expect(lines.filter(line => line.includes("[ ≡ ]"))).toHaveLength(1);
-      expect(lines.filter(line => line.includes("Activity") && line.includes("[ ↗ ]"))).toHaveLength(1);
-      expect(lines.filter(line => line.includes("Conversation") && line.includes("[ ↗ ]"))).toHaveLength(1);
+      expect(lines.filter(line => line.includes("[≡]"))).toHaveLength(1);
+      expect(lines.filter(line => line.includes("Activity") && line.includes("[↗]"))).toHaveLength(1);
+      expect(lines.filter(line => line.includes("Conversation") && line.includes("[↗]"))).toHaveLength(1);
       const savedRow = lines.findIndex(line => line.includes("SAVED USER"));
       expect(savedRow, lines.join("\n")).toBeGreaterThan(0);
       expect(lines[savedRow]).not.toContain("⧉");

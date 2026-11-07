@@ -26,7 +26,7 @@ export default function compactProbe(pi: ExtensionAPI): void {
     const frames: Record<string, string[]> = { rows: await capture() };
     const lines = frames.rows.map(stripTerminalSequences);
     const row = lines.findIndex(line => line.includes("Conversation"));
-    const column = lines[row].indexOf("[ ↗ ]") + 2;
+    const column = lines[row].indexOf("[↗]") + 2;
     for (const suffix of ["M", "m"]) {
       tui.handleTerminalInput(`\x1b[<0;${column + 1};${row + 1}${suffix}`);
       await setImmediate();

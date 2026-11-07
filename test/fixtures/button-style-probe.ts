@@ -44,7 +44,7 @@ export default function buttonStyleProbe(pi: ExtensionAPI): void {
     const frames: Record<string, string[]> = { initial: await capture() };
     try {
       if (process.env.STYLE_CONTROLS === "1") {
-        await click("[ ≡ ]");
+        await click("[≡]");
         frames.menu = await capture();
         await click("Button style");
         await input("\x1b");

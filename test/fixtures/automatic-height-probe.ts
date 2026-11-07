@@ -85,7 +85,7 @@ export default function automaticHeightProbe(pi: ExtensionAPI): void {
       for (const character of "/stereo-view height auto") tui.handleTerminalInput(character);
       tui.handleTerminalInput("\r");
       await sample("autoCommand");
-      await click("[ ≡ ]");
+      await click("[≡]");
       await sample("settings");
       await click("Conversation height");
       await sample("manualSetting");

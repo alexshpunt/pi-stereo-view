@@ -106,7 +106,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     expect(measurements.runtime.autoExtensionsDisabled, "Personal and project extensions must not enter the comparison").toBe(true);
     const launchedExtensions: string[] = measurements.runtime.extensions;
     expect(launchedExtensions).toHaveLength(extensions.length + 1);
-    expect(measurements.frames.initial.join("\n").includes("[ ≡ ]"),
+    expect(measurements.frames.initial.join("\n").includes("[≡]"),
       "Only Transcript modes must paint the extension toolbar").toBe(mode !== "stock");
     expect(launchedExtensions.filter(extension => !extensions.includes(extension)),
       "Only the scripted test harness may accompany the requested profile extensions").toHaveLength(1);
