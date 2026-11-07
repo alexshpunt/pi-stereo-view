@@ -69,9 +69,9 @@ export default function linkedOutputProbe(pi: ExtensionAPI): void {
   const searchActivity = async (query: string): Promise<void> => {
     await emittedFrame(tui, () => tui.requestRender(true));
     const frame = tui.getScreenLines().map(stripTerminalSequences);
-    const row = frame.findIndex(line => line.includes("Activity") && line.includes("[⌕]"));
+    const row = frame.findIndex(line => line.includes("Activity") && line.includes("[ ⌕ ]"));
     if (row < 0) throw new Error("Activity search button is missing");
-    const column = frame[row].lastIndexOf("[⌕]") + 2;
+    const column = frame[row].lastIndexOf("[ ⌕ ]") + 2;
     await input(`\x1b[<0;${column + 1};${row + 1}M`);
     await input(`\x1b[<0;${column + 1};${row + 1}m`);
     await input(query);

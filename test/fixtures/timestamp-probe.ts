@@ -89,7 +89,7 @@ export default function timestampProbe(pi: ExtensionAPI): void {
     };
     if (process.env.TIMESTAMP_ENABLE_TIMES === "1") {
       frames.hidden = await capture();
-      await click("[≡]");
+      await click("[ ≡ ]");
       await click("Show timestamps");
       tui.handleTerminalInput("\x1b");
       frames.enabled = await capture();
@@ -106,9 +106,9 @@ export default function timestampProbe(pi: ExtensionAPI): void {
         Reflect.set(user, "text", original);
       }
     }
-    if (process.env.TIMESTAMP_ZOOM_ACTIVITY === "1") await click("[↗]", "Activity");
+    if (process.env.TIMESTAMP_ZOOM_ACTIVITY === "1") await click("[ ↗ ]", "Activity");
     if (process.env.TIMESTAMP_SCROLLBAR === "1") {
-      await click("[↗]", "Conversation");
+      await click("[ ↗ ]", "Conversation");
       for (const view of views()) {
         view.setScrollbar("auto");
         const lines = view.children[0].render(tui.terminal.columns).map(stripTerminalSequences);
@@ -123,16 +123,16 @@ export default function timestampProbe(pi: ExtensionAPI): void {
       frames.scrollbarVisible = views().map(view => String(view.isScrollbarVisible));
     }
     if (process.env.TIMESTAMP_LAYOUTS === "1") {
-      await click("[▣]");
+      await click("[ ▣ ]");
       await inspect("combined");
       for (const view of views()) view.scrollTo(100_000);
       frames.combinedEnd = await capture();
-      await click("[◫]");
+      await click("[ ◫ ]");
       await inspect("columns");
-      await click("[↗]", "Activity");
+      await click("[ ↗ ]", "Activity");
       await inspect("activity");
-      await click("[↙]", "Activity");
-      await click("[↗]", "Conversation");
+      await click("[ ↙ ]", "Activity");
+      await click("[ ↗ ]", "Conversation");
       await inspect("chat");
       if (process.env.TIMESTAMP_COMPACTION === "1") {
         const compact = containers().flatMap(container => container.children)
@@ -145,15 +145,15 @@ export default function timestampProbe(pi: ExtensionAPI): void {
         tui.handleTerminalInput("\x0f");
         await inspect("chatCollapsed");
       }
-      await click("[↙]", "Conversation");
-      await click("[▤]");
+      await click("[ ↙ ]", "Conversation");
+      await click("[ ▤ ]");
       await inspect("rows");
       for (const view of views()) view.scrollTo(100_000);
       frames.rowsEnd = await capture();
       if (process.env.TIMESTAMP_COMPACTION === "1") {
-        await click("[▣]");
+        await click("[ ▣ ]");
         await inspect("classicAgain");
-        await click("[◫]");
+        await click("[ ◫ ]");
         await inspect("rowsRestored");
       }
     } else frames.finished = await capture();

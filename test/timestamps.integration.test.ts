@@ -153,8 +153,8 @@ test("keeps native compaction in Conversation and classic Combined while retaini
   expect(clean(frames.chatCollapsed).join("\n")).toContain("[compaction]");
   expect(clean(frames.activity).join("\n")).not.toContain("[compaction]");
   const rows = clean(frames.rows);
-  const activityHeader = rows.findIndex(line => line.includes("Activity") && line.includes("[↗]"));
-  const chatHeader = rows.findIndex(line => line.includes("Conversation") && line.includes("[↗]"));
+  const activityHeader = rows.findIndex(line => line.includes("Activity") && line.includes("[ ↗ ]"));
+  const chatHeader = rows.findIndex(line => line.includes("Conversation") && line.includes("[ ↗ ]"));
   expect(rows.slice(activityHeader, chatHeader).join("\n")).not.toContain("[compaction]");
   expect(rows.slice(chatHeader).join("\n")).toContain("[compaction]");
   expect(timeAbove(chat, "CURRENT USER")).toMatch(/^\d{2}:\d{2}:\d{2}$/);

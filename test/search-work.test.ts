@@ -91,7 +91,7 @@ test("frames the live field and buttons without wrapping or losing usable input 
   const rows = bar.render(24);
   expect(rows).toHaveLength(3);
   expect(rows[0]).toBe("┌" + "─".repeat(22) + "┐");
-  expect(stripTerminalSequences(rows[1])).toMatch(/^│.*Search:.*\[↓\].*\[×\].*│$/);
+  expect(stripTerminalSequences(rows[1])).toMatch(/^│.*Search:.*\[ ↓ \].*\[ × \].*│$/);
   expect(rows[2]).toBe("└" + "─".repeat(22) + "┘");
 });
 
@@ -163,14 +163,17 @@ test("counts and visits every match beyond the old popup limit without wrapping 
   }));
   let selected: SearchHit | undefined;
   const bar = new PanelSearch(() => entries, tui, theme, hit => { selected = hit; }, () => {});
-  bar.input.handleInput("same");
+  for (const character of "same") bar.input.handleInput(character);
   expect(bar.render(45).join("\n")).toContain("1/250");
   for (let index = 0; index < 249; index++) bar.input.handleInput("\r");
   expect(selected?.entry.label).toBe("0");
   expect(bar.render(45).join("\n")).toContain("250/250");
   expect(bar.render(24)).toHaveLength(3);
-  expect(bar.render(24).join("\n")).toContain("[↓]");
-  expect(bar.render(24).join("\n")).toContain("[×]");
+  expect(bar.render(24).join("\n")).toContain("[ ↓ ]");
+  expect(bar.render(24).join("\n")).toContain("[ × ]");
+  expect(bar.input.getValue()).toBe("same");
+  expect(stripTerminalSequences(bar.input.render(11)[0])).toContain("Search: me");
+  expect(stripTerminalSequences(bar.render(24)[1])).toContain("Search: me");
   bar.input.handleInput("\r");
   expect(selected?.entry.label).toBe("249");
 });

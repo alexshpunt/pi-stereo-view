@@ -21,10 +21,12 @@ test("switches button presentation in settings, copies, fits narrow rows and sur
     }).run("STYLE USER");
     expect((await run("button-style", 1)).exitCode).toBe(0);
     const { frames, copies }: { frames: Record<string, string[]>; copies: string[] } = JSON.parse(await readFile(path.join(cwd, "style.json"), "utf8"));
-    expect(frames.initial[0]).toContain("[≡]");
+    expect(frames.initial[0]).toContain("[ ≡ ]");
     expect(frames.menu.join("\n")).toContain("Button style");
     expect(frames.text[0]).toMatch(/^\[[A-Za-z]+\] \[[A-Za-z]+\] \[[A-Za-z]+\] \[[A-Za-z]+\]/);
     expect(frames.text.join("\n")).toContain("[Copy]");
+    expect(frames.textSearch.join("\n")).toContain("[Go] [Exit]");
+    expect(frames.textSearchNext.join("\n")).toContain("STYLE");
     expect(frames.text.some(line => line.includes("Activity") && /\[[A-Za-z]+\] \[[A-Za-z]+\] \[[A-Za-z]+\]/.test(line))).toBe(true);
     expect(copies).toHaveLength(1);
     expect(["STYLE USER", "STYLE ANSWER"]).toContain(copies[0]);
@@ -37,7 +39,7 @@ test("switches button presentation in settings, copies, fits narrow rows and sur
     expect((await run("button-style-restart", 2)).exitCode).toBe(0);
     const restarted = JSON.parse(await readFile(path.join(cwd, "style-restart.json"), "utf8"));
     expect(restarted.frames.initial[0]).toMatch(/^\[[A-Za-z]+\] \[/);
-    expect(restarted.frames.iconsRestored[0]).toContain("[≡]");
+    expect(restarted.frames.iconsRestored[0]).toContain("[ ≡ ]");
     expect(restarted.frames.iconsRestored.join("\n")).toContain("⧉");
     expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8")).buttonStyle).toBe("icons");
   } finally { await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true }))); }

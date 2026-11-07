@@ -61,7 +61,7 @@ export default function searchControls(pi: ExtensionAPI): void {
     frames.keyboard = await capture();
     await writeFile(file, JSON.stringify({ frames, draft: ctx.ui.getEditorText() }));
     // Preserve the expected red observation if the old popup is still installed.
-    if (!frames.keyboard.some(line => stripTerminalSequences(line).includes("[↓]"))) {
+    if (!frames.keyboard.some(line => stripTerminalSequences(line).includes("[ ↓ ]"))) {
       await input("\x1b");
       return;
     }
@@ -107,7 +107,7 @@ export default function searchControls(pi: ExtensionAPI): void {
     frames.regex = await waitCount("1/2");
     await input("\x15");
     await input("regex:[");
-    frames.invalid = await waitCount("! [↓]");
+    frames.invalid = await waitCount("! [ ↓ ]");
     await input("\x15");
     await input("regex:.+");
     await input("\x15");
@@ -119,7 +119,7 @@ export default function searchControls(pi: ExtensionAPI): void {
     frames.refocused = await capture();
     await input("\r");
     frames.older = await capture();
-    await click("[↓]", "Search:");
+    await click("[ ↓ ]", "Search:");
     frames.next = await capture();
     await input("\x1b");
     frames.canceled = await capture();
@@ -128,11 +128,11 @@ export default function searchControls(pi: ExtensionAPI): void {
     frames.editor = await capture();
     const editedDraft = ctx.ui.getEditorText();
     ctx.ui.setEditorText("UNSENT SEARCH DRAFT");
-    await click("[⌕]", "Conversation");
+    await click("[ ⌕ ]", "Conversation");
     frames.header = await capture();
     await input("deployment runtime");
     frames.headerQuery = await capture();
-    await click("[×]", "Search:");
+    await click("[ × ]", "Search:");
     frames.closed = await capture();
     snapshot("closed");
     const blockedInput = new Input({ prompt: "OTHER FIRST: " });
@@ -143,7 +143,7 @@ export default function searchControls(pi: ExtensionAPI): void {
     }, { overlay: true, overlayOptions: { width: 30, maxHeight: 1 } });
     await capture();
     await input("\x06");
-    await click("[⌕]", "Conversation");
+    await click("[ ⌕ ]", "Conversation");
     const openedOverOverlay = (await capture()).some(line => stripTerminalSequences(line).includes("Search:"));
     dismissBlocked();
     await blockedOverlay;
@@ -161,7 +161,7 @@ export default function searchControls(pi: ExtensionAPI): void {
       return overlayInput;
     }, { overlay: true, overlayOptions: { width: 30, maxHeight: 1 } });
     await capture();
-    await click("[×]", "Search:");
+    await click("[ × ]", "Search:");
     await capture();
     const overlayKeptFocus = tui.getFocusedComponent() === overlayInput;
     await input("z");

@@ -7,7 +7,7 @@ import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 const directories: string[] = [];
 const clean = (lines: string[]): string => lines.map(stripTerminalSequences).join("\n");
 const headerRow = (lines: string[], title: string): number => lines.findIndex(line =>
-  stripTerminalSequences(line).includes(title) && /\[(↗|↙)\]/.test(stripTerminalSequences(line)));
+  stripTerminalSequences(line).includes(title) && /\[ (↗|↙) \]/.test(stripTerminalSequences(line)));
 
 beforeAll(async () => { await mkdir(path.resolve("tmp"), { recursive: true }); });
 afterEach(async () => {
@@ -77,9 +77,9 @@ test.each(["chat", "activity"])("uses mouse buttons and both dividers without re
   expect(await readFile(path.join(cwd, "effect.txt"), "utf8")).toBe("real effect");
   const frames: Record<string, string[]> = JSON.parse(await readFile(path.join(cwd, "panel-controls.json"), "utf8"));
   const first = stripTerminalSequences(frames.initial[headerRow(frames.initial, "Conversation")]);
-  expect(clean(frames.initial.slice(0, 2))).toContain("[↔]");
-  expect(first).toContain("[↗]");
-  expect(stripTerminalSequences(frames.rows[0])).toContain("[↕]");
+  expect(clean(frames.initial.slice(0, 2))).toContain("[ ↔ ]");
+  expect(first).toContain("[ ↗ ]");
+  expect(stripTerminalSequences(frames.rows[0])).toContain("[ ↕ ]");
   expect(first.indexOf("Conversation")).toBeLessThan(first.indexOf("Activity"));
   expect(first.indexOf("║")).toBe(36);
   expect(headerRow(frames.canceledClick, "Conversation")).toBe(2);
@@ -99,7 +99,7 @@ test.each(["chat", "activity"])("uses mouse buttons and both dividers without re
   expect(clean(frames.chat)).toContain("USER MARKER");
   expect(clean(frames.chat)).toContain("ANSWER MARKER");
   expect(clean(frames.chat)).not.toContain("NATIVE CALL MARKER");
-  expect(clean(frames.combined)).toContain("[◫]");
+  expect(clean(frames.combined)).toContain("[ ◫ ]");
   expect(headerRow(frames.combined, "Conversation")).toBe(-1);
   expect(clean(frames.combined)).toContain("NATIVE RESULT MARKER");
   expect(clean(frames.combined)).toContain("ANSWER MARKER");
@@ -107,7 +107,7 @@ test.each(["chat", "activity"])("uses mouse buttons and both dividers without re
     expect(stripTerminalSequences(frames[key][1]).indexOf("║")).toBe(75);
   }
   expect(headerRow(frames.shortRows, "Activity")).toBe(-1);
-  expect(clean(frames.shortRows)).toContain("[◫]");
+  expect(clean(frames.shortRows)).toContain("[ ◫ ]");
   expect(headerRow(frames.tallRows, "Activity")).toBe(2);
   expect(headerRow(frames.tallRows, "Conversation")).toBeGreaterThan(2);
   for (const frame of Object.values(frames)) {
@@ -116,8 +116,8 @@ test.each(["chat", "activity"])("uses mouse buttons and both dividers without re
       if (row < 0) continue;
       const buttons = stripTerminalSequences(frame[row]).match(/\[[^\]]*\]/gu) ?? [];
       for (const button of buttons) {
-        expect(button).toMatch(/^\[.\]$/u);
-        expect(visibleWidth(button)).toBe(3);
+        expect(button).toMatch(/^\[ . \]$/u);
+        expect(visibleWidth(button)).toBe(5);
       }
     }
     const lines = frame.map(stripTerminalSequences);
@@ -133,8 +133,8 @@ test.each(["chat", "activity"])("uses mouse buttons and both dividers without re
   const restored: string[] = JSON.parse(await readFile(path.join(cwd, "native-snapshot.json"), "utf8"));
   expect(headerRow(restored, "Activity")).toBe(2);
   expect(headerRow(restored, "Conversation")).toBeGreaterThan(2);
-  expect(clean(restored)).not.toContain("[↙]");
-  expect(clean(restored)).toContain("[▥]");
+  expect(clean(restored)).not.toContain("[ ↙ ]");
+  expect(clean(restored)).toContain("[ ▥ ]");
 });
 
 test("starts both panels in the saved arrangement after disabling split in another session", async () => {
@@ -158,14 +158,14 @@ test("starts both panels in the saved arrangement after disabling split in anoth
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, compactTools: false, buttonStyle: "icons" });
   await run("restore-combined-buttons");
   const frames: { before: string[]; after: string[] } = JSON.parse(await readFile(path.join(cwd, "button-toggle.json"), "utf8"));
-  expect(clean(frames.before)).toContain("[▣]");
+  expect(clean(frames.before)).toContain("[ ▣ ]");
   expect(headerRow(frames.before, "Conversation")).toBe(2);
   expect(headerRow(frames.before, "Activity")).toBe(saved.chatHeight + 2);
   expect(clean(frames.before)).toContain("USER MARKER");
   expect(clean(frames.before)).toContain("ANSWER MARKER");
   expect(headerRow(frames.after, "Conversation")).toBe(-1);
   expect(headerRow(frames.after, "Activity")).toBe(-1);
-  expect(clean(frames.after)).toContain("[◫]");
+  expect(clean(frames.after)).toContain("[ ◫ ]");
   expect(clean(frames.after)).toContain("USER MARKER");
   expect(clean(frames.after)).toContain("ANSWER MARKER");
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, compactTools: false, buttonStyle: "icons" });

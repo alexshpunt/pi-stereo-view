@@ -143,10 +143,10 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       if (process.env.PROFILE_MODE === "combined") {
         // Combined is a temporary view, so activate it before measuring that baseline.
         const toolbar = stripTerminalSequences(tui.getScreenLines()[0]);
-        const button = toolbar.indexOf("[▣]");
+        const button = toolbar.indexOf("[ ▣ ]");
         if (button < 0) throw new Error("Missing split toggle for combined profile");
         for (const suffix of ["M", "m"]) {
-          tui.handleTerminalInput(`\x1b[<0;${button + 2};1${suffix}`);
+          tui.handleTerminalInput(`\x1b[<0;${button + 3};1${suffix}`);
           await capture();
         }
       }
@@ -311,7 +311,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       if (split && process.env.PROFILE_SEARCH === "1") {
         if (process.env.PROFILE_SEARCH_PANE === "activity") {
           const lines = (await capture()).map(stripTerminalSequences);
-          const row = lines.findIndex(line => line.includes("Activity") && line.includes("[⌕]"));
+          const row = lines.findIndex(line => line.includes("Activity") && line.includes("[ ⌕ ]"));
           const column = lines[row].indexOf("Activity");
           for (const suffix of ["M", "m"]) {
             tui.handleTerminalInput(`\x1b[<0;${column + 1};${row + 1}${suffix}`);

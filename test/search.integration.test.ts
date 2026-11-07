@@ -44,11 +44,11 @@ test.each(["columns", "rows"] as const)("searches Conversation with keyboard and
   const observation: { frames: Record<string, string[]>; draft: string } = JSON.parse(await readFile(path.join(cwd, "search-frames.json"), "utf8"));
   const { frames } = observation;
   await writeFile(path.resolve("tmp/test-runs", "search-" + layout, "search-frames.json"), JSON.stringify(observation));
-  const header = clean(frames.keyboard).findIndex(line => line.includes("Conversation") && line.includes("[⌕]"));
-  const search = clean(frames.keyboard).findIndex(line => line.includes("Search:") && line.includes("[↓]"));
+  const header = clean(frames.keyboard).findIndex(line => line.includes("Conversation") && line.includes("[ ⌕ ]"));
+  const search = clean(frames.keyboard).findIndex(line => line.includes("Search:") && line.includes("[ ↓ ]"));
   expect(search, "Search must be under its own panel header, not a popup").toBe(header + 3);
   expect(clean(frames.keyboard)[search - 1]).toMatch(/┌─+┐/);
-  expect(clean(frames.keyboard)[search]).toMatch(/│.*Search:.*\[↓\].*\[×\].*│/);
+  expect(clean(frames.keyboard)[search]).toMatch(/│.*Search:.*\[ ↓ \].*\[ × \].*│/);
   expect(clean(frames.keyboard)[search + 1]).toMatch(/└─+┘/);
   expect(clean(frames.exact).join("\n")).toContain("1/2");
 
@@ -58,14 +58,14 @@ test.each(["columns", "rows"] as const)("searches Conversation with keyboard and
     expect(clean(frames[name]).join("\n")).toContain("deployment runtime ready");
   }
   expect(clean(frames.invalid).join("\n")).toContain("!");
-  expect(clean(frames.invalid).join("\n")).toContain("[×]");
+  expect(clean(frames.invalid).join("\n")).toContain("[ × ]");
   expect(clean(frames.keyboard).join("\n")).not.toContain("Search Conversation");
   expect(clean(frames.query).join("\n")).toContain("deployment runtime ready");
   expect(clean(frames.query).join("\n")).toContain("1/2");
   expect(clean(frames.older).join("\n")).toContain("OLDER OCCURRENCE CONTEXT");
   expect(clean(frames.older).join("\n")).toContain("2/2");
   expect(clean(frames.next).join("\n")).toContain("1/2");
-  expect(clean(frames.refocused).filter(line => line.includes("Search:") && line.includes("[↓]"))).toHaveLength(1);
+  expect(clean(frames.refocused).filter(line => line.includes("Search:") && line.includes("[ ↓ ]"))).toHaveLength(1);
   expect(clean(frames.header).join("\n")).toContain("Search:");
   expect(clean(frames.closed).join("\n")).not.toContain("Search:");
   expect(observation.draft).toBe("UNSENT SEARCH DRAFT");
@@ -185,8 +185,8 @@ test.each(["columns", "rows"] as const)("keeps an inline result visible at minim
   for (const name of ["opened", "narrow", "zoom", "shortZoom"]) {
     const screen = clean(observation.frames[name]).join("\n");
     expect(screen).toContain("Search:");
-    expect(screen).toContain("[↓]");
-    expect(screen).toContain("[×]");
+    expect(screen).toContain("[ ↓ ]");
+    expect(screen).toContain("[ × ]");
     expect(screen, "The search header must leave at least one native content row").toContain("RESIZE TARGET");
     expect(screen).toContain("RESIZE UNSENT DRAFT");
     if (name === "opened" || name === "narrow") expect(screen).toContain("Activity");
@@ -232,7 +232,7 @@ test("drops old search state on reload and branch changes, then keeps an older r
   }
   for (const name of ["reloaded", "branched"]) {
     expect(screen(name)).not.toContain("Search:");
-    expect((screen(name).match(/\[⌕\]/g) ?? [])).toHaveLength(2);
+    expect((screen(name).match(/\[ ⌕ \]/g) ?? [])).toHaveLength(2);
   }
   expect(screen("branched")).toContain("BRANCH NEW ANCHOR");
   expect(screen("branched")).not.toContain("OLD BRANCH ONLY");
