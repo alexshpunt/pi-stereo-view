@@ -244,8 +244,8 @@ export class TranscriptTimestamps {
 }
 
 const TEXT_COPY_CONTROL = "[Copy]";
-// CGJ avoids xterm's single-codepoint rescaling; the trailing cell reserves overhang.
-const ICON_COPY_CONTROL = "⧉\u034f ";
+// CGJ avoids xterm's single-codepoint rescaling; the space reserves glyph overhang.
+const ICON_COPY_CONTROL = "[ ⧉\u034f ]";
 /** Keep message text full-width, with a clock above and copy action below. */
 export class CompactMessage extends Container {
   private top = 0;

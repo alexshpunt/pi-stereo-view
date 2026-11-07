@@ -172,7 +172,7 @@ export class TranscriptLayout {
 
   private button(label: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
     return new MouseRegion({
-      render: width => new Text(this.theme().style(("[" + label() + "]").padEnd(width), {
+      render: width => new Text(this.theme().style((this.preferences.buttonStyle === "icons" ? "[ " + label() + " ]" : "[" + label() + "]").padEnd(width), {
         fg: enabled() ? "accent" : "dim", bg: background?.(),
       }), 0, 0).render(width),
       invalidate() {},
@@ -375,7 +375,7 @@ export class TranscriptLayout {
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Menu", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
-    ], [0, 1, 2, 3].map(index => ({ index, icon: 3, text: index === 3 ? 6 : 7, min: 6 })));
+    ], [0, 1, 2, 3].map(index => ({ index, icon: index === 3 ? 5 : 6, text: index === 3 ? 6 : 7, min: 6 })));
     const pane = (title: string, target: Pane, view: ScrollView): Component => {
       const hue = target === "chat" ? rgbColor(104, 158, 115) : rgbColor(107, 152, 190);
       const palette = () => {
@@ -419,12 +419,12 @@ export class TranscriptLayout {
           () => this.maximize(target), () => true, () => palette().fill,
         ), basis: 5, shrink: 0 },
       ], target === "activity" ? [
-        { index: 1, icon: 3, text: 6, min: 5 },
-        { index: 2, icon: 3, text: 7, min: 6 },
-        { index: 3, icon: 3, text: 5, min: 5 },
+        { index: 1, icon: 6, text: 6, min: 5 },
+        { index: 2, icon: 6, text: 7, min: 6 },
+        { index: 3, icon: 5, text: 5, min: 5 },
       ] : [
-        { index: 1, icon: 3, text: 7, min: 6 },
-        { index: 2, icon: 3, text: 5, min: 5 },
+        { index: 1, icon: 6, text: 7, min: 6 },
+        { index: 2, icon: 5, text: 5, min: 5 },
       ], title.length);
       headers.push(label);
       const header = new VStack([
@@ -583,7 +583,7 @@ export class TranscriptLayout {
       }
       void this.jumpToSearch(pane, hit, query, () => this.search?.bar === bar && this.searchVersion === version)
         .catch(error => this.warn("Could not navigate search: " + String(error)));
-    }, () => this.closeSearch());
+    }, () => this.closeSearch(), this.preferences.buttonStyle);
     this.search = { pane, bar, document, view, top: view.scrollTop, following: view.isFollowingEnd,
       focus: host.getFocusedComponent() };
     this.searchRows[pane].addChild(bar);
