@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.14 - 2026-11-07
+
 ### Fixed
 
 - Keep split view responsive while an agent streams in long sessions. Frames no longer rebuild call headers, timestamps and every earlier answer for the whole history.
