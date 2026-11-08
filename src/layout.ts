@@ -568,6 +568,10 @@ export class TranscriptLayout {
         chatDocument.beginFrame();
         return true;
       } },
+      { component: {
+        render: width => [this.theme().style("─".repeat(width), { fg: this.theme().colors.border })],
+        invalidate() {},
+      }, basis: 1, shrink: 0, visible: viewport => !shown(viewport) },
       { component: columns, basis: 0, grow: 1, minSize: 1,
         visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "columns" },
       { component: rows, basis: "auto", minSize: 1,
