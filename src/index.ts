@@ -1,6 +1,6 @@
 import path from "node:path";
 import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type TUI } from "@earendil-works/pi-tui";
+import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.js";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
 import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
@@ -37,7 +37,21 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     settingsOpen = true;
     closeSearch();
     try {
+      let overlay: OverlayHandle | undefined;
       await ui.custom<void>((tui, _theme, _keys, done) => {
+        // Pi dispatches outside clicks to the underlying layout, not the overlay.
+        const viewport = tui as unknown as { dispatchMouseToOverlay?: (event: TuiMouseEvent) => { hit: boolean } };
+        const dispatch = viewport.dispatchMouseToOverlay;
+        const ownDispatch = Object.hasOwn(viewport, "dispatchMouseToOverlay");
+        const dismissOutside = dispatch && function (event: TuiMouseEvent): { hit: boolean } {
+          const result = dispatch.call(viewport, event);
+          if (!result.hit && event.type === "press" && event.button === "left" && overlay?.isFocused()) {
+            done();
+            return { hit: true };
+          }
+          return result;
+        };
+        if (dismissOutside) viewport.dispatchMouseToOverlay = dismissOutside;
         const list = new SettingsList([{
           id: "timestamps", label: "Show timestamps",
           description: "Hide clock rows without changing messages or recorded tool starts.",
@@ -78,12 +92,18 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           render: (width: number) => box.render(width),
           invalidate: () => box.invalidate(),
           handleMouse: (event) => box.handleMouse(event),
+          dispose: () => {
+            if (viewport.dispatchMouseToOverlay === dismissOutside) {
+              if (ownDispatch) viewport.dispatchMouseToOverlay = dispatch;
+              else delete viewport.dispatchMouseToOverlay;
+            }
+          },
           handleInput: (data: string) => {
             list.handleInput(data);
             tui.requestRender();
           },
         };
-      }, { overlay: true, overlayOptions: { width: 60, margin: 1 } });
+      }, { overlay: true, overlayOptions: { width: 60, margin: 1 }, onHandle: handle => { overlay = handle; } });
     } finally {
       settingsOpen = false;
     }
