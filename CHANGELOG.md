@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.1.15 - 2026-11-08
+
+### Added
+
+- Choose icons or text for toolbar, panel, search and copy controls in Stereo View settings. The choice survives restart.
+
+### Changed
+
+- Use consistent spacing between adjacent buttons. In narrow search panels, hide the match counter when needed to keep the query editable.
+
+### Fixed
+
+- Keep timestamps and copy controls on user messages when an extension replaces a message after it is displayed.
+
 ## 0.1.14 - 2026-11-07
 
 ### Fixed
