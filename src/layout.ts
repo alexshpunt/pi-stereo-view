@@ -1,7 +1,7 @@
 import { setImmediate } from "node:timers/promises";
 import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
 import {
-  Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, VStack,
+  Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, visibleWidth, VStack,
   type Color, type Component, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type Pane } from "./native.js";
@@ -44,20 +44,72 @@ class NativeSurfaceScrollView extends ScrollView {
   }
 }
 
-class ButtonStack extends HStack {
-  constructor(children: StackChild[], private readonly controls: { index: number; icon: number; text: number; min: number }[],
-    private readonly titleLength?: number) {
-    super(children);
+class ButtonStack extends VStack {
+  private style: "icons" | "text" = "icons";
+  private lastLayout = "";
+
+  constructor(private readonly items: StackChild[], private readonly controls: { index: number; icon: number }[],
+    private readonly titleLength?: number, private readonly fill?: Component) {
+    super();
   }
 
   setStyle(style: "icons" | "text"): void {
-    if (this.titleLength !== undefined) this.entries[0].minSize = style === "icons" ? 1 : this.titleLength;
-    for (const { index, icon, text, min } of this.controls) {
-      const entry = this.entries[index];
-      entry.basis = style === "icons" ? icon : text;
-      entry.minSize = style === "icons" ? icon : min;
-      entry.shrink = style === "icons" ? 0 : 1;
+    if (this.style !== style) { this.style = style; this.lastLayout = ""; }
+  }
+
+  override render(width: number): string[] {
+    const textWidth = (index: number): number => {
+      const item = this.items[index];
+      const component = "component" in item ? item.component : item;
+      return (component as Component & { textWidth(): number }).textWidth();
+    };
+    const layout = `${this.style}:${width}:${this.style === "text" ? this.controls.map(control => textWidth(control.index)).join(",") : ""}`;
+    if (layout !== this.lastLayout) {
+      this.lastLayout = layout;
+      this.clear();
+      const entries = this.items.map((item, index) => {
+        const entry = "component" in item ? { ...item } : { component: item };
+        const control = this.controls.find(candidate => candidate.index === index);
+        if (control) {
+          entry.basis = this.style === "icons" ? control.icon : textWidth(index);
+          entry.minSize = entry.basis;
+          entry.shrink = 0;
+        } else if (this.titleLength !== undefined) {
+          entry.minSize = this.style === "icons" ? 1 : this.titleLength;
+        }
+        return entry;
+      });
+      if (this.style === "icons") {
+        this.addChild(new HStack(entries), { basis: 1, shrink: 0 });
+      } else {
+        let row: StackChild[] = [];
+        let occupied = 0;
+        const flush = (): void => {
+          if (row.length) {
+            const spaced = row.map((item, index) => {
+              const entry = "component" in item ? { ...item } : { component: item };
+              if (index < row.length - 1) {
+                if (typeof entry.basis === "number" && !entry.grow) entry.basis++;
+                entry.minSize = (entry.minSize ?? 0) + 1;
+              }
+              return entry;
+            });
+            if (this.fill && !row.includes(entries[0])) spaced.push({ component: this.fill, basis: 0, grow: 1 });
+            this.addChild(new HStack(spaced), { basis: 1, shrink: 0 });
+          }
+          row = []; occupied = 0;
+        };
+        for (const [index, entry] of entries.entries()) {
+          const control = this.controls.find(candidate => candidate.index === index);
+          const size = control ? textWidth(index) : this.titleLength ?? 0;
+          if (row.length && occupied + 1 + size > width) flush();
+          occupied += (row.length ? 1 : 0) + size;
+          row.push(entry);
+        }
+        flush();
+      }
     }
+    return super.render(width);
   }
 }
 class TranscriptColumns extends HStack {
@@ -171,7 +223,7 @@ export class TranscriptLayout {
   ) {}
 
   private button(label: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
-    return new MouseRegion({
+    const button = new MouseRegion({
       render: width => new Text(this.theme().style((this.preferences.buttonStyle === "icons" ? "[ " + label() + " ]" : "[" + label() + "]").padEnd(width), {
         fg: enabled() ? "accent" : "dim", bg: background?.(),
       }), 0, 0).render(width),
@@ -185,6 +237,7 @@ export class TranscriptLayout {
       }
       return { handled: true };
     });
+    return Object.assign(button, { textWidth: () => visibleWidth(label()) + 2 });
   }
 
   /** Mount controls only on a compatible native fullscreen history tree. */
@@ -285,6 +338,8 @@ export class TranscriptLayout {
       () => this.searchPane() === "activity");
     this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"), () => this.searchPane() === "chat");
     let historyHeight = 0;
+    let chatHeader: Component;
+    let activityHeader: Component;
     let projectSurface = false;
     // Every root entry asks in turn during one visibility pass; evaluate the projection once.
     let pass: { width: number; height: number; shown: boolean } | undefined;
@@ -298,16 +353,22 @@ export class TranscriptLayout {
       const candidate = !!projectedDock && (widgetsPresent() || dialogPresent()) && dockUnchanged() && !this.failed &&
         this.preferences.mode === "split" && this.preferences.zoom !== "chat";
       projectDialog = candidate && dialogPresent();
-      historyHeight = Math.max(0, height - (candidate ? projectedDock : dock).render(width).length - 1);
+      historyHeight = Math.max(0, height - (candidate ? projectedDock : dock).render(width).length - toolbar.render(width).length);
       const search = this.search;
       if (search && previousHeight !== historyHeight) queueMicrotask(() => {
         if (this.search === search) search.bar.reposition();
       });
       this.automaticHeight = Math.max(MIN_ROWS, Math.floor(historyHeight / 2));
-      const searchRows = this.search ? PANEL_SEARCH_ROWS : 0;
-      const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= MIN_ROWS + searchRows :
-        this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= MIN_ROWS + searchRows :
-          width >= MIN_CHAT && historyHeight >= MIN_ROWS * 2 + 1 + searchRows;
+      const chatWidth = this.preferences.zoom || this.preferences.layout === "rows" ? width : Math.min(width - MIN_ACTIVITY - 1,
+        Math.max(MIN_CHAT, this.preferences.chatWidth ?? this.defaultWidth(width)));
+      const activityWidth = this.preferences.zoom || this.preferences.layout === "rows" ? width : width - chatWidth - 1;
+      const chatSearch = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
+      const activitySearch = this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0;
+      const chatMin = Math.max(MIN_ROWS + chatSearch, chatHeader.render(Math.max(1, chatWidth)).length + 1);
+      const activityMin = Math.max(MIN_ROWS + activitySearch, activityHeader.render(Math.max(1, activityWidth)).length + 1);
+      const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= (this.preferences.zoom === "chat" ? chatMin : activityMin) :
+        this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= Math.max(chatMin, activityMin) :
+          width >= MIN_CHAT && historyHeight >= chatMin + activityMin + 1;
       this.fallback = this.preferences.mode === "split" && !fits;
       projectSurface = candidate && fits;
       if (this.search && (this.fallback || this.failed || this.preferences.mode !== "split" ||
@@ -319,21 +380,14 @@ export class TranscriptLayout {
         // Both panels project the same native history and supported content kinds.
         activityDocument.check();
         if (projectSurface && surfaceTree && surfacePresent()) {
-          const chatWidth = Math.min(width - MIN_ACTIVITY - 1,
-            Math.max(MIN_CHAT, this.preferences.chatWidth ?? this.defaultWidth(width)));
-          const widgetWidth = this.preferences.zoom === "activity" || this.preferences.layout === "rows"
-            ? width : width - chatWidth - 1;
-          const chatSearch = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
-          const activitySearch = this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0;
-          const chatMin = MIN_ROWS + chatSearch;
-          const activityMin = MIN_ROWS + activitySearch;
+          const widgetWidth = activityWidth;
           const chatLimit = Math.max(chatMin, Math.min((this.preferences.chatHeight ?? this.automaticHeight) + chatSearch,
             historyHeight - activityMin - 1));
           const activityHeight = this.preferences.zoom || this.preferences.layout === "columns" ? historyHeight :
             historyHeight - 1 - Math.min(chatLimit, Math.max(chatMin, chatPane.render(width).length));
           // Do not clip opaque interactive surfaces: their own wheel handlers may consume scrolling.
           // If the entire surface cannot fit, leave Pi's original dock available instead.
-          const budget = Math.max(0, activityHeight - 3 - activitySearch);
+          const budget = Math.max(0, activityHeight - activityHeader.render(widgetWidth).length);
           if (surfaceTree.render(widgetWidth).length > budget) {
             projectSurface = false;
             this.fallback = true;
@@ -344,12 +398,9 @@ export class TranscriptLayout {
         this.chat?.setScrollbar(scroll.scrollbar);
         columns.sizeConversation(chatPane, this.preferences.chatWidth ?? this.defaultWidth(width));
         // Keep short Conversation intact; shrink Activity first when history fills up.
-        const chatSearchRow = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
-        const chatMinimum = MIN_ROWS + chatSearchRow;
-        const activityMinimum = MIN_ROWS + (this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0);
-        rows.limitConversation(chatPane, Math.max(chatMinimum,
-          Math.min((this.preferences.chatHeight ?? this.automaticHeight) + chatSearchRow,
-            historyHeight - activityMinimum - 1)), chatMinimum, activityMinimum);
+        rows.limitConversation(chatPane, Math.max(chatMin,
+          Math.min((this.preferences.chatHeight ?? this.automaticHeight) + chatSearch,
+            historyHeight - activityMin - 1)), chatMin, activityMin);
         return true;
       } catch (error) {
         projectSurface = false;
@@ -363,11 +414,11 @@ export class TranscriptLayout {
     const headers: ButtonStack[] = [];
     const toolbar = new ButtonStack([
       { component: this.button(
-        () => this.preferences.mode === "combined" || this.fallback || this.failed ? (this.preferences.buttonStyle === "icons" ? "◫" : "Open") : (this.preferences.buttonStyle === "icons" ? "▣" : "Join"),
+        () => this.preferences.mode === "combined" || this.fallback || this.failed ? (this.preferences.buttonStyle === "icons" ? "◫" : "Split") : (this.preferences.buttonStyle === "icons" ? "▣" : "Combine"),
         () => this.toggle(), () => !this.fallback && !this.failed,
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(
-        () => this.preferences.layout === "columns" ? (this.preferences.buttonStyle === "icons" ? "▤" : "Rows") : (this.preferences.buttonStyle === "icons" ? "▥" : "Cols"),
+        () => this.preferences.layout === "columns" ? (this.preferences.buttonStyle === "icons" ? "▤" : "Rows") : (this.preferences.buttonStyle === "icons" ? "▥" : "Columns"),
         () => this.setLayout(this.preferences.layout === "columns" ? "rows" : "columns"), () => !this.failed,
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(
@@ -375,7 +426,12 @@ export class TranscriptLayout {
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Menu", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
-    ], [0, 1, 2, 3].map(index => ({ index, icon: index === 3 ? 5 : 6, text: index === 3 ? 6 : 7, min: 6 })));
+    ], [
+      { index: 0, icon: 6 },
+      { index: 1, icon: 6 },
+      { index: 2, icon: 6 },
+      { index: 3, icon: 5 },
+    ]);
     const pane = (title: string, target: Pane, view: ScrollView): Component => {
       const hue = target === "chat" ? rgbColor(104, 158, 115) : rgbColor(107, 152, 190);
       const palette = () => {
@@ -404,7 +460,7 @@ export class TranscriptLayout {
           return undefined;
         }), basis: 0, grow: 1, minSize: title.length },
         ...(target === "activity" ? [{ component: this.button(
-          () => this.preferences.compactTools ? (this.preferences.buttonStyle === "icons" ? "⊞" : "All") : (this.preferences.buttonStyle === "icons" ? "⊟" : "Few"),
+          () => this.preferences.compactTools ? (this.preferences.buttonStyle === "icons" ? "⊞" : "Full tools") : (this.preferences.buttonStyle === "icons" ? "⊟" : "Compact tools"),
           () => {
             this.activate("activity");
             this.setCompactTools(!this.preferences.compactTools);
@@ -415,27 +471,32 @@ export class TranscriptLayout {
           this.openSearch(target);
         }, () => true, () => palette().fill), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
         { component: this.button(
-          () => this.preferences.zoom === target ? (this.preferences.buttonStyle === "icons" ? "↙" : "Out") : (this.preferences.buttonStyle === "icons" ? "↗" : "Max"),
+          () => this.preferences.zoom === target ? (this.preferences.buttonStyle === "icons" ? "↙" : "Restore") : (this.preferences.buttonStyle === "icons" ? "↗" : "Maximize"),
           () => this.maximize(target), () => true, () => palette().fill,
         ), basis: 5, shrink: 0 },
       ], target === "activity" ? [
-        { index: 1, icon: 6, text: 6, min: 5 },
-        { index: 2, icon: 6, text: 7, min: 6 },
-        { index: 3, icon: 5, text: 5, min: 5 },
+        { index: 1, icon: 6 },
+        { index: 2, icon: 6 },
+        { index: 3, icon: 5 },
       ] : [
-        { index: 1, icon: 6, text: 7, min: 6 },
-        { index: 2, icon: 5, text: 5, min: 5 },
-      ], title.length);
+        { index: 1, icon: 6 },
+        { index: 2, icon: 5 },
+      ], title.length, {
+        render: width => [this.theme().style(" ".repeat(width), { bg: palette().fill })],
+        invalidate() {},
+      });
       headers.push(label);
       const header = new VStack([
         { component: line, basis: 1, shrink: 0, visible: () =>
           this.preferences.zoom !== null || this.preferences.layout === "columns" ||
           (this.preferences.side === "left" ? target === "chat" : target === "activity") },
-        { component: label, basis: 1, shrink: 0 },
+        { component: label, basis: "auto", shrink: 0 },
         { component: line, basis: 1, shrink: 0 },
         { component: this.searchRows[target], basis: "auto", shrink: 0,
           visible: () => this.search?.pane === target },
       ]);
+      if (target === "chat") chatHeader = header;
+      else activityHeader = header;
       return new TranscriptPane(header, view, () => historyHeight,
         target === "activity" ? surfaceView : undefined, () => projectSurface && surfacePresent());
     };
@@ -499,7 +560,7 @@ export class TranscriptLayout {
     };
     this.rebuild();
     const mounted = new TranscriptRoot([
-      { component: toolbar, basis: 1, shrink: 0, visible: () => {
+      { component: toolbar, basis: "auto", shrink: 0, visible: () => {
         // Root visibility is evaluated once at the start of each native layout pass.
         pass = undefined;
         this.timestamps.beginFrame();
