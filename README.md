@@ -78,13 +78,13 @@ Click the toolbar and the buttons in each panel's header. Buttons use icons by d
 
 | Icons | Text | Action |
 | --- | --- | --- |
-| `[ ▣ ]` / `[ ◫ ]` | `[Join]` / `[Open]` | Turn split history off / on. |
-| `[ ▤ ]` / `[ ▥ ]` | `[Rows]` / `[Cols]` | Switch between rows and columns. |
+| `[ ▣ ]` / `[ ◫ ]` | `[Combine]` / `[Split]` | Turn split history off / on. |
+| `[ ▤ ]` / `[ ▥ ]` | `[Rows]` / `[Columns]` | Switch between rows and columns. |
 | `[ ↕ ]` / `[ ↔ ]` | `[Swap]` | Swap the panels. |
-| `[ ↗ ]` / `[ ↙ ]` | `[Max]` / `[Out]` | Zoom a panel / restore the split. |
+| `[ ↗ ]` / `[ ↙ ]` | `[Maximize]` / `[Restore]` | Zoom a panel / restore the split. |
 | `[ ≡ ]` | `[Menu]` | Open display and Conversation height settings. |
 | `[ ⌕ ]` | `[Find]` | Search this panel. |
-| `[ ⊟ ]` / `[ ⊞ ]` | `[Few]` / `[All]` | Compact Activity tools / restore full tools. |
+| `[ ⊟ ]` / `[ ⊞ ]` | `[Compact tools]` / `[Full tools]` | Compact Activity tools / restore full tools. |
 
 **Resize:** drag the double line between the panels — `═` in rows, `║` in columns.
 
@@ -98,11 +98,11 @@ Swap the panels whenever you want. Zoom a panel to give it the whole history are
 
 ## Compact Activity
 
-Click `[ ⊟ ]` or `[Few]` beside Search and Maximize in the Activity header to show compact tool calls. Adjacent calls to the same tool in the same state share a header with a count; every failed call stays separate, even beside another failure. Click that header to show the individual compact rows, then click a row to open its original full card and linked output. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls. Thinking, Conversation content and different tools end a group.
+Click `[ ⊟ ]` or `[Compact tools]` beside Find and Maximize in the Activity header to show compact tool calls. Adjacent calls to the same tool in the same state share a header with a count; every failed call stays separate, even beside another failure. Click that header to show the individual compact rows, then click a row to open its original full card and linked output. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls. Thinking, Conversation content and different tools end a group.
 
 Group and call headers show `▸` when collapsed and `▾` when expanded. Each call row has a one-cell left gutter, a colored status dot, its tool name and a short argument description. A group shows its shared running or successful state. Failed calls expose their own status and argument preview without opening a group. Long descriptions are truncated, not the saved calls. Verified local MCP forwarding aliases use their native tool's name; foreign, ambiguous and unknown tools keep their original identity.
 
-Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. You can also click `[ ⊞ ]` or `[All]` in the Activity header to restore full tools. Conversation and combined history keep their normal display.
+Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. You can also click `[ ⊞ ]` or `[Full tools]` in the Activity header to restore full tools. Conversation and combined history keep their normal display.
 
 Compact tools work in columns, rows and zoomed Activity. The choice survives restart and defaults to off. For keyboard access, run `/stereo-view settings` and change **Compact Activity tools**.
 
