@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.1.16 - 2026-11-08
+
+### Changed
+
+- Use descriptive labels for text controls and wrap controls onto additional lines in narrow panels.
+- Separate the toolbar from history with a full-width line in combined view.
+
+### Fixed
+
+- Close Stereo View settings when clicking outside the menu.
+- Keep the panel header background continuous between controls and across wrapped rows.
+
 ## 0.1.15 - 2026-11-08
 
 ### Added
