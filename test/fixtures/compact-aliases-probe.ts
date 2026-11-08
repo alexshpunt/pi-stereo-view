@@ -4,7 +4,7 @@ import { setImmediate } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, Text, visibleWidth, type TUI } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { emittedFrame } from "./emitted-frame.js";
+import { emittedFrame } from "./emitted-frame.ts";
 
 export const aliasNames = {
   source: "alias_probe", local: "mcp__local__alias_probe",

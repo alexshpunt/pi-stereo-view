@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { matchSearchLines } from "../src/search-matcher.js";
+import { matchSearchLines } from "../src/search-matcher.ts";
 
 const ranges = (start: number, end: number) => [{ start, end }];
 

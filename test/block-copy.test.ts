@@ -1,9 +1,9 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Container, Text, stripTerminalSequences, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { NativeContentIndex } from "../src/content.js";
-import { NativeDocument } from "../src/native.js";
-import { CompactMessage, TranscriptTimestamps } from "../src/timestamps.js";
+import { NativeContentIndex } from "../src/content.ts";
+import { NativeDocument } from "../src/native.ts";
+import { CompactMessage, TranscriptTimestamps } from "../src/timestamps.ts";
 
 class UserMessageComponent extends Container {
   constructor(readonly text: string) { super(); this.addChild(new Text(text, 0, 0)); }

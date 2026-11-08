@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { defaults, loadPreferences, savePreferences } from "../src/preferences.js";
+import { defaults, loadPreferences, savePreferences } from "../src/preferences.ts";
 
 test("keeps icons for existing settings and persists the text style", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "button-style-"));

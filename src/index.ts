@@ -1,12 +1,12 @@
 import path from "node:path";
 import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
-import { TranscriptLayout } from "./layout.js";
-import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.js";
-import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.js";
-import { beforeFirstFrame } from "./startup.js";
-import { observeNativeEditor } from "./native-editor.js";
-import { NestedCalls } from "./nested-calls.js";
+import { TranscriptLayout } from "./layout.ts";
+import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
+import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.ts";
+import { beforeFirstFrame } from "./startup.ts";
+import { observeNativeEditor } from "./native-editor.ts";
+import { NestedCalls } from "./nested-calls.ts";
 
 /** Split native fullscreen history without changing message content or the input dock. */
 export default async function transcript(pi: ExtensionAPI): Promise<void> {

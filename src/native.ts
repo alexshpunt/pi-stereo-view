@@ -1,15 +1,15 @@
 import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
 import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
-import { searchText, type SearchEntry, type SearchHit } from "./search.js";
-import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.js";
-import { CompactMessage, type TranscriptTimestamps } from "./timestamps.js";
-import { NativeContentIndex, type ContentEntry, type Pane } from "./content.js";
-import { CompactTool } from "./compact-tools.js";
-import { toolPresentations, type ToolPresentation } from "./tool-presentation.js";
-import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.js";
-import { ToolIndent } from "./tool-indent.js";
-import { NestedTree, type NativeTreeBody } from "./nested-tree.js";
-export type { Pane } from "./content.js";
+import { searchText, type SearchEntry, type SearchHit } from "./search.ts";
+import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.ts";
+import { CompactMessage, type TranscriptTimestamps } from "./timestamps.ts";
+import { NativeContentIndex, type ContentEntry, type Pane } from "./content.ts";
+import { CompactTool } from "./compact-tools.ts";
+import { toolPresentations, type ToolPresentation } from "./tool-presentation.ts";
+import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.ts";
+import { ToolIndent } from "./tool-indent.ts";
+import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
+export type { Pane } from "./content.ts";
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
 class SearchHighlight implements Component {

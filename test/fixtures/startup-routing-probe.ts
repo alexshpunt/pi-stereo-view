@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text, type Component, type TUI } from "@earendil-works/pi-tui";
-import { emittedFrame } from "./emitted-frame.js";
+import { emittedFrame } from "./emitted-frame.ts";
 
 type Host = TUI & { layoutRoot: Component; getScreenLines(): string[] };
 

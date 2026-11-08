@@ -1,6 +1,6 @@
 import { Box, Container, Text, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { NativeRenderCache } from "../src/render-cache.js";
+import { NativeRenderCache } from "../src/render-cache.ts";
 
 test("reuses unchanged native output and honors direct component invalidation", () => {
   let text = "first";

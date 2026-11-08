@@ -1,5 +1,5 @@
 import type { Component } from "@earendil-works/pi-tui";
-import type { ContentEntry, ToolSummary } from "./content.js";
+import type { ContentEntry, ToolSummary } from "./content.ts";
 
 export interface ToolGroup { calls: ContentEntry[]; key: string; name: string; status: ToolSummary["status"] }
 

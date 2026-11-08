@@ -3,7 +3,7 @@ import path from "node:path";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { assistantMessage, getToolCallNames, getToolExecution, getToolResultText, PiIntegrationTest, text, toolCall } from "pi-coding-agent-test";
 import { expect, test } from "vitest";
-import { aliasNames } from "./fixtures/compact-aliases-probe.js";
+import { aliasNames } from "./fixtures/compact-aliases-probe.ts";
 
 test("groups a verified local forwarding alias with its source while foreign tools and original renderers remain distinct", async () => {
   await mkdir(path.resolve("tmp"), { recursive: true });

@@ -1,11 +1,11 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Container, Text, type Component } from "@earendil-works/pi-tui";
-import { componentTree, type ContentEntry, type ToolSummary } from "./content.js";
-import { CompactTool } from "./compact-tools.js";
-import type { SearchClock } from "./search-highlight.js";
-import type { NestedCall, NestedCalls } from "./nested-calls.js";
-import type { ToolPresentation } from "./tool-presentation.js";
-import { ToolIndent } from "./tool-indent.js";
+import { componentTree, type ContentEntry, type ToolSummary } from "./content.ts";
+import { CompactTool } from "./compact-tools.ts";
+import type { SearchClock } from "./search-highlight.ts";
+import type { NestedCall, NestedCalls } from "./nested-calls.ts";
+import type { ToolPresentation } from "./tool-presentation.ts";
+import { ToolIndent } from "./tool-indent.ts";
 
 export interface NativeTreeBody { entry: ContentEntry; component: Component; excerpt?: Component; clock?(): SearchClock | undefined }
 interface Node { key: string; summary: ToolSummary; children: Node[]; count?: number }

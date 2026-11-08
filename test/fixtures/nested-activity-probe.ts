@@ -3,7 +3,7 @@ import { setTimeout } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text, stripTerminalSequences, type Component, type TUI } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { emittedFrame } from "./emitted-frame.js";
+import { emittedFrame } from "./emitted-frame.ts";
 
 type Document = Component & { pane: string; source: { children: Component[] }; beginFrame(): void; searchEntries(): { text: string; label: string }[]; handleMouse(event: import("@earendil-works/pi-tui").TuiMouseEvent): unknown };
 type Host = TUI & { layoutRoot: Component; getScreenLines(): string[] };

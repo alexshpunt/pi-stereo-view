@@ -1,6 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
-import type { SearchHit } from "./search.js";
+import type { SearchHit } from "./search.ts";
 
 // Pi maps the public host package, not its private subpaths, in installed extensions.
 // Keep CSI styles and OSC/APC markers intact without importing a private utility.

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PiIntegrationTest } from "pi-coding-agent-test";
 import { expect, test } from "vitest";
-import type { StreamingFrame } from "./fixtures/streaming-layout-probe.js";
+import type { StreamingFrame } from "./fixtures/streaming-layout-probe.ts";
 
 const columns = 140;
 const chatWidth = 55;

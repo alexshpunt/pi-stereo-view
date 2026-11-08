@@ -1,4 +1,4 @@
-import type { ToolSummary } from "./content.js";
+import type { ToolSummary } from "./content.ts";
 
 type Start = { parentToolCallId?: string; toolCallId: string; toolName: string; args: unknown };
 type End = { toolCallId: string; isError: boolean };

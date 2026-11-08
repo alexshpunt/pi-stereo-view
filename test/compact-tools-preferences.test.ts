@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { defaults, loadPreferences, savePreferences } from "../src/preferences.js";
+import { defaults, loadPreferences, savePreferences } from "../src/preferences.ts";
 
 test("keeps tools in normal view for new and existing installations", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "compact-tools-preferences-"));

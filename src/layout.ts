@@ -4,12 +4,12 @@ import {
   Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, visibleWidth, VStack,
   type Color, type Component, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
-import { NativeDocument, type Pane } from "./native.js";
-import { NativeContentIndex } from "./content.js";
-import { NestedCalls } from "./nested-calls.js";
-import type { Preferences } from "./preferences.js";
-import type { TranscriptTimestamps } from "./timestamps.js";
-import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.js";
+import { NativeDocument, type Pane } from "./native.ts";
+import { NativeContentIndex } from "./content.ts";
+import { NestedCalls } from "./nested-calls.ts";
+import type { Preferences } from "./preferences.ts";
+import type { TranscriptTimestamps } from "./timestamps.ts";
+import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.ts";
 
 type NativeTui = TUI & {
   layoutRoot?: Container;

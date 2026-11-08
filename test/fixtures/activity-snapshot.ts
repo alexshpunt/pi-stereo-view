@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text, type Component, type TUI } from "@earendil-works/pi-tui";
-import { emittedFrame } from "./emitted-frame.js";
+import { emittedFrame } from "./emitted-frame.ts";
 
 type Document = Component & { pane: string; beginFrame(): void; handleMouse(event: import("@earendil-works/pi-tui").TuiMouseEvent): unknown };
 type Host = TUI & { layoutRoot: Component; getScreenLines(): string[] };

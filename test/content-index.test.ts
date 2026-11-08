@@ -1,6 +1,6 @@
 import { Container, Spacer, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { NativeContentIndex } from "../src/content.js";
+import { NativeContentIndex } from "../src/content.ts";
 
 class ToolExecutionComponent extends Text {
   toolName = "write";

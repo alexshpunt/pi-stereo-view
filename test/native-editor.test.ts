@@ -1,7 +1,7 @@
 import { InteractiveMode } from "@earendil-works/pi-coding-agent";
 import { Text, type TUI } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { observeNativeEditor } from "../src/native-editor.js";
+import { observeNativeEditor } from "../src/native-editor.ts";
 
 const prototype = InteractiveMode.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
 

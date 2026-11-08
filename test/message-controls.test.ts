@@ -1,12 +1,12 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, visibleWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { CompactMessage } from "../src/timestamps.js";
-import { searchHitRow } from "../src/search-highlight.js";
+import { CompactMessage } from "../src/timestamps.ts";
+import { searchHitRow } from "../src/search-highlight.ts";
 
 import { Container, Text } from "@earendil-works/pi-tui";
-import { NativeDocument } from "../src/native.js";
-import { TranscriptTimestamps } from "../src/timestamps.js";
+import { NativeDocument } from "../src/native.ts";
+import { TranscriptTimestamps } from "../src/timestamps.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 const theme = { fg: (_: string, text: string) => text, style: (text: string) => text } as unknown as Theme;
 const pointer = (x: number, y: number): TuiMouseEvent => ({

@@ -1,11 +1,11 @@
 import type { Theme, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Container, Text, stripTerminalSequences, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { NestedCalls } from "../src/nested-calls.js";
-import { NestedTree, type NativeTreeBody } from "../src/nested-tree.js";
-import { NativeContentIndex, type ContentEntry } from "../src/content.js";
-import { NativeDocument } from "../src/native.js";
-import { TranscriptTimestamps } from "../src/timestamps.js";
+import { NestedCalls } from "../src/nested-calls.ts";
+import { NestedTree, type NativeTreeBody } from "../src/nested-tree.ts";
+import { NativeContentIndex, type ContentEntry } from "../src/content.ts";
+import { NativeDocument } from "../src/native.ts";
+import { TranscriptTimestamps } from "../src/timestamps.ts";
 
 const theme = { fg: (_color: string, value: string) => value, style: (value: string) => value } as unknown as Theme;
 const present = (name: string) => ({ name, key: name });
