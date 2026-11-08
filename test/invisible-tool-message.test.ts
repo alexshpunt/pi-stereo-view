@@ -1,7 +1,7 @@
 import { initTheme, ToolExecutionComponent, type Theme } from "@earendil-works/pi-coding-agent";
 import { Container, getCapabilities, Image, setCapabilities, stripTerminalSequences, Text, type TUI } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { CompactMessage } from "../src/timestamps.js";
+import { CompactMessage } from "../src/timestamps.ts";
 
 const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=";
 const imageResult = () => ({ content: [

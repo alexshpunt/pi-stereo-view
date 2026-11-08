@@ -1,8 +1,8 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { NativeDocument } from "../src/native.js";
-import { TranscriptTimestamps } from "../src/timestamps.js";
+import { NativeDocument } from "../src/native.ts";
+import { TranscriptTimestamps } from "../src/timestamps.ts";
 
 class UserMessageComponent extends Text {
   renders = 0;

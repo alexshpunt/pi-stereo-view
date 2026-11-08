@@ -1,8 +1,8 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { highlightSearchRows } from "../src/search-highlight.js";
-import type { SearchHit } from "../src/search.js";
+import { highlightSearchRows } from "../src/search-highlight.ts";
+import type { SearchHit } from "../src/search.ts";
 
 const source: Component = { render: () => [], invalidate() {} };
 const hit = (text: string, ranges: { start: number; end: number }[], line = 0, saved = text): SearchHit =>

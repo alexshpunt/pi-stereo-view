@@ -1,7 +1,7 @@
 import type { ToolInfo } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { expect, test } from "vitest";
-import { toolPresentations } from "../src/tool-presentation.js";
+import { toolPresentations } from "../src/tool-presentation.ts";
 
 function fixture() {
   const source: ToolInfo = {

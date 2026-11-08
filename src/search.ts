@@ -4,7 +4,7 @@ import {
   type Component, type TUI,
 } from "@earendil-works/pi-tui";
 
-import { matchSearchLines, type LineMatch, type SearchRange } from "./search-matcher.js";
+import { matchSearchLines, type LineMatch, type SearchRange } from "./search-matcher.ts";
 const NATIVE_SEARCH = "tui.altScreen.search";
 
 /** Reserve Ctrl+F in split mode without changing any saved keyboard settings. */

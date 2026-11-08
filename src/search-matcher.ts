@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { compileSearchCondition, compileSearchQuery, satisfiesSearchCondition, type SearchCondition } from "./search-query.js";
+import { compileSearchCondition, compileSearchQuery, satisfiesSearchCondition, type SearchCondition } from "./search-query.ts";
 
 /** A matched UTF-16 span in the saved line, before native wrapping and decoration. */
 export interface SearchRange { start: number; end: number }

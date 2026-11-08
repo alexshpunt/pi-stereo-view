@@ -4,7 +4,7 @@ import { setImmediate, setTimeout } from "node:timers/promises";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ScrollView, sliceByColumn, stripTerminalSequences, Text, visibleWidth, type Component, type TUI } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { emittedFrame } from "./emitted-frame.js";
+import { emittedFrame } from "./emitted-frame.ts";
 
 type Host = TUI & {
   layoutRoot: Component;

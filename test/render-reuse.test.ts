@@ -2,11 +2,11 @@ import { SessionManager, type ExtensionContext, type Theme } from "@earendil-wor
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { Container, Markdown as NativeMarkdown, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { CompactTool } from "../src/compact-tools.js";
-import { timestampLabel, TOOL_START_ENTRY, TranscriptTimestamps } from "../src/timestamps.js";
-import { ToolIndent } from "../src/tool-indent.js";
-import { NativeDocument } from "../src/native.js";
-import type { ToolSummary } from "../src/content.js";
+import { CompactTool } from "../src/compact-tools.ts";
+import { timestampLabel, TOOL_START_ENTRY, TranscriptTimestamps } from "../src/timestamps.ts";
+import { ToolIndent } from "../src/tool-indent.ts";
+import { NativeDocument } from "../src/native.ts";
+import type { ToolSummary } from "../src/content.ts";
 
 const theme = { fg: (_color: string, text: string) => text, style: (text: string) => text } as unknown as Theme;
 class ToolExecutionComponent extends Text {

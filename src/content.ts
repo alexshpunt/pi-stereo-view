@@ -1,6 +1,6 @@
 import { Container, Markdown, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
-import { searchText, type SearchEntry } from "./search.js";
-import { NestedCalls } from "./nested-calls.js";
+import { searchText, type SearchEntry } from "./search.ts";
+import { NestedCalls } from "./nested-calls.ts";
 
 export type Pane = "activity" | "chat";
 export type ContentKind = "dialogue" | "system" | "thinking" | "tool" | "shell";

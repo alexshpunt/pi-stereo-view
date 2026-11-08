@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { defaults, loadPreferences, savePreferences, type Preferences } from "../src/preferences.js";
+import { defaults, loadPreferences, savePreferences, type Preferences } from "../src/preferences.ts";
 
 const arrangement = {
   side: "right", chatWidth: 73, layout: "rows", chatHeight: 17,

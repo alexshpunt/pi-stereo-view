@@ -4,7 +4,7 @@ import {
   type Component, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 
-import { NativeRenderCache } from "./render-cache.js";
+import { NativeRenderCache } from "./render-cache.ts";
 type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
 type UserSlot = { kind: string; text?: string; time: unknown };

@@ -4,7 +4,7 @@ import { setImmediate, setTimeout } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, ScrollView, stripTerminalSequences, Text, visibleWidth, type TUI } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { emittedFrame } from "./emitted-frame.js";
+import { emittedFrame } from "./emitted-frame.ts";
 
 type Host = TUI & { getScreenLines(): string[]; handleTerminalInput(data: string): void; layoutRoot?: Container };
 

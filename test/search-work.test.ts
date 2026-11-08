@@ -1,7 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, Text, type Component, type TUI } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { PanelSearch, type SearchHit } from "../src/search.js";
+import { PanelSearch, type SearchHit } from "../src/search.ts";
 
 const theme = () => ({ fg: (_color: string, value: string) => value }) as Theme;
 const tui = { requestRender() {}, setFocus() {} } as unknown as TUI;

@@ -2,8 +2,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { setImmediate } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, stripTerminalSequences, Text, type Component, type TUI } from "@earendil-works/pi-tui";
-import type { SearchEntry, SearchHit } from "../../src/search.js";
-import { emittedFrame } from "./emitted-frame.js";
+import type { SearchEntry, SearchHit } from "../../src/search.ts";
+import { emittedFrame } from "./emitted-frame.ts";
 
 type Document = Component & {
   pane: string;

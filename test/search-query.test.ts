@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { compileSearchQuery, compileSearchCondition, satisfiesSearchCondition } from "../src/search-query.js";
+import { compileSearchQuery, compileSearchCondition, satisfiesSearchCondition } from "../src/search-query.ts";
 
 test("ordinary phrases and punctuation stay literal unless regex is explicitly enabled", () => {
   expect(compileSearchQuery("ready now")).toBe("ready now");

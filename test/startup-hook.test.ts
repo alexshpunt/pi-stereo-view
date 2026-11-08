@@ -1,6 +1,6 @@
 import { InteractiveMode } from "@earendil-works/pi-coding-agent";
 import { expect, test } from "vitest";
-import { beforeFirstFrame } from "../src/startup.js";
+import { beforeFirstFrame } from "../src/startup.ts";
 
 test("cancels an unused startup hook without leaving a prototype replacement", () => {
   const original = InteractiveMode.prototype.init;

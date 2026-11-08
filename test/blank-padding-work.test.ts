@@ -1,7 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { expect, test, vi } from "vitest";
-import { CompactMessage } from "../src/timestamps.js";
+import { CompactMessage } from "../src/timestamps.ts";
 
 // Count the real classifier without replacing terminal parsing or native components.
 vi.mock(import("@earendil-works/pi-tui"), async importOriginal => {

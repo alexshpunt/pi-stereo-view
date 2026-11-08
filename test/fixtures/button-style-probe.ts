@@ -3,7 +3,7 @@ import path from "node:path";
 import { setImmediate, setTimeout } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { sliceByColumn, stripTerminalSequences, Text, visibleWidth, type TUI } from "@earendil-works/pi-tui";
-import { emittedFrame } from "./emitted-frame.js";
+import { emittedFrame } from "./emitted-frame.ts";
 
 type Host = TUI & { getScreenLines(): string[]; handleTerminalInput(data: string): void };
 

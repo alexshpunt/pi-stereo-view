@@ -1,9 +1,9 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Container, Text, stripTerminalSequences, visibleWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { NativeContentIndex } from "../src/content.js";
-import { NativeDocument } from "../src/native.js";
-import { timestampLabel, TOOL_START_ENTRY, TranscriptTimestamps } from "../src/timestamps.js";
+import { NativeContentIndex } from "../src/content.ts";
+import { NativeDocument } from "../src/native.ts";
+import { timestampLabel, TOOL_START_ENTRY, TranscriptTimestamps } from "../src/timestamps.ts";
 
 class ToolExecutionComponent extends Text {
   toolName = "fixture_tool";

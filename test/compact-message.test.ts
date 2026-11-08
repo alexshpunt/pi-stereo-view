@@ -1,7 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Text, stripTerminalSequences, visibleWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { CompactMessage } from "../src/timestamps.js";
+import { CompactMessage } from "../src/timestamps.ts";
 
 const theme = () => ({ fg: (_color: string, value: string) => value }) as Theme;
 

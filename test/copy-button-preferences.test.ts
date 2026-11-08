@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { defaults, loadPreferences, savePreferences } from "../src/preferences.js";
+import { defaults, loadPreferences, savePreferences } from "../src/preferences.ts";
 
 test("keeps copy icons on for old settings and persists the off choice", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "copy-preferences-"));
