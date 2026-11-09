@@ -4,13 +4,13 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { defaults, loadPreferences, savePreferences } from "../src/preferences.ts";
 
-test("keeps tools in normal view for new and existing installations", async () => {
+test("compacts tools by default for new installations and files without the setting", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "compact-tools-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
-    expect(await loadPreferences(file)).toMatchObject({ compactTools: false });
+    expect(await loadPreferences(file)).toMatchObject({ compactTools: true });
     await writeFile(file, JSON.stringify({ side: "right", chatWidth: 73, showTimestamps: false }));
-    expect(await loadPreferences(file)).toMatchObject({ compactTools: false, side: "right", chatWidth: 73, showTimestamps: false });
+    expect(await loadPreferences(file)).toMatchObject({ compactTools: true, side: "right", chatWidth: 73, showTimestamps: false });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -33,15 +33,15 @@ test.each(["on", null, 1])("rejects invalid compact tool preference %s", async c
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test("streams latest tools after five seconds only when chosen", async () => {
+test("streams latest tools after five seconds by default", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "compact-tools-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
-    expect(await loadPreferences(file)).toMatchObject({ streamTools: false, streamDelay: 5 });
+    expect(await loadPreferences(file)).toMatchObject({ streamTools: true, streamDelay: 5 });
     await writeFile(file, JSON.stringify({ side: "right", chatWidth: 73, compactTools: true }));
-    expect(await loadPreferences(file)).toMatchObject({ streamTools: false, streamDelay: 5 });
-    await savePreferences(file, { ...defaults, streamTools: true, streamDelay: 10 });
-    expect(await loadPreferences(file)).toEqual({ ...defaults, streamTools: true, streamDelay: 10 });
+    expect(await loadPreferences(file)).toMatchObject({ streamTools: true, streamDelay: 5 });
+    await savePreferences(file, { ...defaults, streamTools: false, streamDelay: 10 });
+    expect(await loadPreferences(file)).toEqual({ ...defaults, streamTools: false, streamDelay: 10 });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -54,3 +54,10 @@ test.each([["streamTools", "on"], ["streamTools", 1], ["streamDelay", 0], ["stre
       await expect(loadPreferences(file)).rejects.toThrow();
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
+
+test("ships the compact side-by-side defaults", () => {
+  expect(defaults).toMatchObject({
+    layout: "columns", side: "left", chatWidth: null, chatHeight: null, showTimestamps: true, showCopyButtons: true,
+    buttonStyle: "text", compactTools: true, streamTools: true, streamDelay: 5,
+  });
+});

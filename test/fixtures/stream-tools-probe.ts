@@ -38,11 +38,12 @@ export default function streamToolsProbe(pi: ExtensionAPI): void {
   });
   pi.on("agent_before_settle", async (_event, ctx) => {
     await capture("justFinished");
-    await setTimeout(1400);
+    await setTimeout(Number(process.env.STREAM_WAIT_MS ?? 1400));
     await capture("collapsed");
     const lines = tui.getScreenLines().map(stripTerminalSequences);
-    const y = lines.findIndex(line => line.includes("[ ≡ ]"));
-    const x = visibleWidth(lines[y].slice(0, lines[y].indexOf("[ ≡ ]"))) + 2;
+    const label = lines.some(line => line.includes("[Settings]")) ? "[Settings]" : "[ ≡ ]";
+    const y = lines.findIndex(line => line.includes(label));
+    const x = visibleWidth(lines[y].slice(0, lines[y].indexOf(label))) + 2;
     tui.handleTerminalInput(`\x1b[<0;${x + 1};${y + 1}M`);
     tui.handleTerminalInput(`\x1b[<0;${x + 1};${y + 1}m`);
     await setTimeout(50);
