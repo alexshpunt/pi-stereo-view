@@ -9,6 +9,8 @@
 ### Changed
 
 - The `[Menu]` button is now `[Settings]`.
+- New installs start side by side with Conversation on the left and Activity on the right, text buttons, Compact Activity tools and Stream latest tools on. Saved settings are kept.
+- Keep the last text button in a panel header one cell away from the right edge.
 
 ## 0.1.17 - 2026-11-09
 

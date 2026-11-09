@@ -74,7 +74,7 @@ pi --tui-mode fullscreen
 
 ## Use it
 
-Click the toolbar and the buttons in each panel's header. Buttons use icons by default. To use text instead, open **Stereo View settings** with `[ ≡ ]` or `/stereo-view settings`, then set **Button style** to `text`. The choice survives restart.
+Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button style** to `icons`. The choice survives restart.
 
 | Icons | Text | Action |
 | --- | --- | --- |
@@ -104,13 +104,13 @@ Group and call headers show `▸` when collapsed and `▾` when expanded. Each c
 
 Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. You can also click `[ ⊞ ]` or `[Full tools]` in the Activity header to restore full tools. Conversation and combined history keep their normal display.
 
-Compact tools work in columns, rows and zoomed Activity. The choice survives restart and defaults to off. For keyboard access, run `/stereo-view settings` and change **Compact Activity tools**.
+Compact tools work in columns, rows and zoomed Activity. The choice survives restart and defaults to on. For keyboard access, run `/stereo-view settings` and change **Compact Activity tools**.
 
 ### Stream latest tools
 
-Turn on **Stream latest tools** in Settings to watch the current work while keeping history short. With Compact Activity tools on, a new tool call appears as its full card and updates live. When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place into a compact row and joins the adjacent identical collapsed calls (`read ×3`).
+**Stream latest tools** (on by default, in Settings) lets you watch the current work while keeping history short. With Compact Activity tools on, a new tool call appears as its full card and updates live. When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place into a compact row and joins the adjacent identical collapsed calls (`read ×3`).
 
-Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both options survive restart; streaming defaults to off.
+Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both options survive restart; streaming defaults to on.
 
 ## Search history
 
