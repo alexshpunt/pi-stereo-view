@@ -95,6 +95,8 @@ class ButtonStack extends VStack {
               return entry;
             });
             if (this.fill && !row.includes(entries[0])) spaced.push({ component: this.fill, basis: 0, grow: 1 });
+            // Keep the last label off the panel's right edge, where the scrollbar sits.
+            if (this.fill) spaced.push({ component: this.fill, basis: 1, shrink: 0 });
             this.addChild(new HStack(spaced), { basis: 1, shrink: 0 });
           }
           row = []; occupied = 0;
@@ -102,7 +104,7 @@ class ButtonStack extends VStack {
         for (const [index, entry] of entries.entries()) {
           const control = this.controls.find(candidate => candidate.index === index);
           const size = control ? textWidth(index) : this.titleLength ?? 0;
-          if (row.length && occupied + 1 + size > width) flush();
+          if (row.length && occupied + 1 + size > width - (this.fill ? 1 : 0)) flush();
           occupied += (row.length ? 1 : 0) + size;
           row.push(entry);
         }
