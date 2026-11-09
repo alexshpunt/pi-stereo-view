@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.17 - 2026-11-09
+
+### Changed
+
+- Pi loads the extension faster.
+
 ## 0.1.16 - 2026-11-08
 
 ### Changed
