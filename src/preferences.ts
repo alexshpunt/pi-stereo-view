@@ -24,7 +24,7 @@ export interface Preferences {
 }
 
 export const defaults: Preferences = {
-  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: false, streamTools: false, streamDelay: 5, buttonStyle: "icons",
+  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
