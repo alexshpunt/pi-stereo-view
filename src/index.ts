@@ -8,6 +8,8 @@ import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
 
+const DELAYS = [1, 2, 3, 5, 10, 30];
+
 /** Split native fullscreen history without changing message content or the input dock. */
 export default async function transcript(pi: ExtensionAPI): Promise<void> {
   let layout: TranscriptLayout | undefined;
@@ -69,14 +71,24 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Group adjacent tools and expand individual calls inline. Full text stays searchable and copyable.",
           currentValue: preferences.compactTools ? "on" : "off", values: ["on", "off"],
         }, {
+          id: "streamTools", label: "Stream latest tools",
+          description: "In compact Activity, show new tool calls in full and collapse them after the delay.",
+          currentValue: preferences.streamTools ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "streamDelay", label: "Collapse delay",
+          description: "How long a finished streamed tool call stays fully visible before it collapses.",
+          currentValue: `${preferences.streamDelay}s`, values: [...new Set([...DELAYS, preferences.streamDelay])].sort((a, b) => a - b).map(seconds => `${seconds}s`),
+        }, {
           id: "height", label: "Conversation height",
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
-        }], 5, getSettingsListTheme(), (id, value) => {
+        }], 7, getSettingsListTheme(), (id, value) => {
           if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
           else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");
           else if (id === "compactTools") layout?.setCompactTools(value === "on");
+          else if (id === "streamTools") layout?.setStreamTools(value === "on");
+          else if (id === "streamDelay") layout?.setStreamDelay(Number.parseInt(value, 10));
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
           tui.requestRender();
         }, () => done());
@@ -263,7 +275,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const choice = await ctx.ui.select("Copy a block from the active panel", blocks.map(block => block.label));
         blocks.find(block => block.label === choice)?.copy();
       } else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Menu opens settings, ⧉/Copy copies a block. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⧉/Copy copies a block. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);

@@ -318,7 +318,10 @@ export class TranscriptLayout {
     const index = new NativeContentIndex(document, this.nested);
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("activity"), false, index, this.copy, showCopyButtons, () => this.preferences.compactTools, this.getTools,
-      () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); }, () => this.preferences.buttonStyle);
+      () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); }, () => this.preferences.buttonStyle, {
+        enabled: () => this.preferences.streamTools, delay: () => this.preferences.streamDelay * 1000,
+        changed: () => this.host?.requestRender(),
+      });
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle);
     this.documents = { activity: activityDocument, chat: chatDocument };
@@ -425,7 +428,7 @@ export class TranscriptLayout {
         () => this.preferences.buttonStyle === "icons" ? (this.preferences.layout === "columns" ? "↔" : "↕") : "Swap", () => this.swap(),
         () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
-      { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Menu", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
+      { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Settings", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
     ], [
       { index: 0, icon: 6 },
       { index: 1, icon: 6 },
@@ -742,6 +745,17 @@ export class TranscriptLayout {
   /** Project tool calls as dense rows while retaining their full search and copy text. */
   setCompactTools(compact: boolean): void {
     this.preferences.compactTools = compact;
+    this.changed();
+  }
+  /** Show the latest compact tool calls in full until they have been finished for the delay. */
+  setStreamTools(stream: boolean): void {
+    this.preferences.streamTools = stream;
+    this.changed();
+  }
+
+  /** Seconds a finished streamed call stays in full before collapsing. */
+  setStreamDelay(seconds: number): void {
+    this.preferences.streamDelay = Math.max(1, Math.min(300, Math.trunc(seconds)));
     this.changed();
   }
   private defaultWidth(width: number): number {

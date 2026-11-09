@@ -6,6 +6,7 @@ import { CompactMessage, type TranscriptTimestamps } from "./timestamps.ts";
 import { NativeContentIndex, type ContentEntry, type Pane } from "./content.ts";
 import { CompactTool } from "./compact-tools.ts";
 import { toolPresentations, type ToolPresentation } from "./tool-presentation.ts";
+import { ToolStreaming } from "./tool-streaming.ts";
 import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.ts";
 import { ToolIndent } from "./tool-indent.ts";
 import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
@@ -92,9 +93,15 @@ export class NativeDocument extends Container {
     private readonly getTools: () => readonly ToolInfo[] = () => [],
     private readonly beforeExpand: () => void = () => {},
     private readonly buttonStyle: () => "icons" | "text" = () => "text",
+    private readonly streaming?: { enabled(): boolean; delay(): number; changed(): void },
   ) {
     super();
+    if (streaming) this.streamer = new ToolStreaming(() => streaming.delay(), () => streaming.changed());
   }
+  private readonly streamer?: ToolStreaming;
+  /** Calls Compact Activity still shows as full native cards. */
+  private live(source: Component): boolean { return this.compactActive && this.streamer?.isLive(source) === true; }
+  private compactActive = false;
 
   /** Start a native frame; only repeated measurements within that frame may reuse routing. */
   beginFrame(): void {
@@ -204,6 +211,7 @@ export class NativeDocument extends Container {
   /** Stop native observers when the layout is detached or falls back. */
   dispose(): void {
     this.disposed = true;
+    this.streamer?.dispose();
     for (const block of this.compactBlocks.values()) block.dispose();
     this.compactBlocks.clear();
     this.frameWidth = undefined;
@@ -277,7 +285,7 @@ export class NativeDocument extends Container {
     let stamped = this.stamped.get(routed);
     if (!stamped) {
       stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
-        this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.compactTools() && entry.kind === "tool"),
+        this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.compactTools() && entry.kind === "tool" && !this.live(entry.owner)),
         this.copy ? () => this.copyBlock(component) : undefined, this.showCopy, this.buttonStyle);
       this.stamped.set(routed, stamped);
     }
@@ -308,7 +316,10 @@ export class NativeDocument extends Container {
     let toolRun = false;
     const compactTools = this.pane === "activity" && this.compactTools();
     this.present = toolPresentations(compactTools ? this.getTools() : []);
-    const groups = compactTools ? toolGroups(this.index.entries(), this.present) : new Map<Component, ToolGroup>();
+    this.compactActive = compactTools && this.streaming?.enabled() === true;
+    if (this.compactActive) this.streamer!.observe(this.index.entries());
+    else this.streamer?.clear();
+    const groups = compactTools ? toolGroups(this.index.entries(), this.present, source => this.live(source)) : new Map<Component, ToolGroup>();
     // Carry visible expansion through state-driven splits and merges, without
     // reopening explicitly collapsed runs. Read the old state before adding heads.
     const opening: Component[] = [];
@@ -336,7 +347,7 @@ export class NativeDocument extends Container {
       if (!id || (!this.index.nested.entries(id).length && !this.index.nested.isIncomplete(id))) continue;
       let tree = this.nestedTrees.get(entry.source);
       if (!tree) {
-        tree = new NestedTree(id, this.index.nested, this.theme, name => this.present(name), this.compactTools, () => {
+        tree = new NestedTree(id, this.index.nested, this.theme, name => this.present(name), () => this.compactTools() && !this.live(entry.source), () => {
           this.beforeExpand(); if (this.searchAnchor) this.clearSearch(); this.frameWidth = undefined;
         }, () => {
           const clock = this.showTimestamps() && this.compactTools() ? this.timestamps.label(entry.source) : "";
@@ -356,7 +367,7 @@ export class NativeDocument extends Container {
       let clock: SearchClock | undefined;
       let nativeBody = true;
       let bodyDepth = 0;
-      const compactTool = compactTools && entry.kind === "tool";
+      const compactTool = compactTools && entry.kind === "tool" && !this.live(entry.owner);
       if (compactTool) {
         const group = this.groups.get(entry.owner);
         const grouped = group !== undefined && group.calls.length > 1;
