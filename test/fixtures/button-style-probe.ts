@@ -133,7 +133,7 @@ export default function buttonStyleProbe(pi: ExtensionAPI): void {
           process.stdout.columns = width; process.stdout.emit("resize");
         }
       } else if (process.env.STYLE_CONTROLS === "2") {
-        await click("[Menu]");
+        await click("[Settings]");
         await click("Button style");
         await input("\x1b");
         frames.iconsRestored = await capture();
