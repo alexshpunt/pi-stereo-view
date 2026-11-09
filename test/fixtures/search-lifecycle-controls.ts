@@ -44,8 +44,6 @@ export default function searchLifecycleControls(pi: ExtensionAPI): void {
     }, { overlay: true, overlayOptions: { visible: () => false, nonCapturing: true }, onHandle: () => finish() });
     if (event.reason !== "reload") return;
     observation = JSON.parse(await readFile(file, "utf8"));
-    observation.frames.reloaded = await capture();
-    await save();
     void setImmediate().then(async () => {
       await input("/search-branch-check");
       await input("\r");
@@ -65,7 +63,8 @@ export default function searchLifecycleControls(pi: ExtensionAPI): void {
   pi.registerCommand("search-branch-check", {
     description: "Change branch with an open picker, then stream a response",
     handler: async (_args, ctx) => {
-      await capture();
+      // session_start runs while Pi's reload dialog still occupies the editor slot.
+      observation.frames.reloaded = await capture();
       await input("\x06");
       await input("OLD BRANCH ONLY");
       observation.frames.beforeBranch = await capture();
