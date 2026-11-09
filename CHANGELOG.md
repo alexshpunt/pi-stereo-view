@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.18 - 2026-11-09
+
 ### Added
 
 - Stream latest tools: with Compact Activity tools on, new tool calls show in full, then collapse into the compact history after a configurable delay.
