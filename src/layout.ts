@@ -207,6 +207,7 @@ export class TranscriptLayout {
   private drag?: { position: number; size: number };
   private failed = false;
   private fallback = false;
+  private dialogActive = false;
   private automaticHeight = MIN_ROWS;
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
@@ -223,6 +224,10 @@ export class TranscriptLayout {
     private readonly nested = new NestedCalls(),
     private readonly getEditor: () => Component | undefined = () => undefined,
   ) {}
+
+  private get effectiveZoom(): Preferences["zoom"] {
+    return this.dialogActive ? "activity" : this.preferences.zoom;
+  }
 
   private button(label: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
     const button = new MouseRegion({
@@ -292,20 +297,19 @@ export class TranscriptLayout {
     const below = supportedDock ? entries[4].component as Container : undefined;
     const editorSlot = supportedDock && entries[3].component.constructor.name === "Container"
       ? entries[3].component as Container : undefined;
-    let projectDialog = false;
     const dialogPresent = (): boolean => {
       const editor = this.getEditor();
       return !!editor && !!editorSlot && editorSlot.children.length === 1 && editorSlot.children[0] !== editor;
     };
     const projectedDock = supportedDock ? new VStack(entries.filter((_, i) => i !== 2 && i !== 4).map(entry =>
-      entry.component === editorSlot ? { ...entry, visible: () => !projectDialog } : entry)) : undefined;
+      entry.component === editorSlot ? { ...entry, visible: () => !this.dialogActive } : entry)) : undefined;
     // Preserve the original containers and Pi's above/editor/below order. Pi still owns their lifecycle.
     const surfaceTree = above && below ? new VStack([
-      above, ...(editorSlot ? [{ component: editorSlot, visible: () => projectDialog }] : []), below,
+      above, ...(editorSlot ? [{ component: editorSlot, visible: () => this.dialogActive }] : []), below,
     ]) : undefined;
     const surfaceView = surfaceTree ? new NativeSurfaceScrollView(surfaceTree, { overscroll: "contain" }) : undefined;
     const widgetsPresent = (): boolean => !!above && !!below && (above.children.length > 1 || below.children.length > 0);
-    const surfacePresent = (): boolean => widgetsPresent() || projectDialog;
+    const surfacePresent = (): boolean => widgetsPresent() || this.dialogActive;
     const dockUnchanged = (): boolean => supportedDock && nativeDock.entries.length === 6 &&
       nativeDock.entries.every((entry, i) => entry.component === nativeDock.children[i] &&
         Object.keys({ ...entry, ...entries[i] }).every(key =>
@@ -355,29 +359,30 @@ export class TranscriptLayout {
     };
     const evaluate = ({ width, height }: { width: number; height: number }): boolean => {
       const previousHeight = historyHeight;
-      const candidate = !!projectedDock && (widgetsPresent() || dialogPresent()) && dockUnchanged() && !this.failed &&
-        this.preferences.mode === "split" && this.preferences.zoom !== "chat";
-      projectDialog = candidate && dialogPresent();
+      const canProject = !!projectedDock && dockUnchanged() && !this.failed && this.preferences.mode === "split";
+      // Derive temporary zoom from Pi's live editor slot without changing the user's layout.
+      this.dialogActive = canProject && dialogPresent();
+      const candidate = canProject && (widgetsPresent() || this.dialogActive) && this.effectiveZoom !== "chat";
       historyHeight = Math.max(0, height - (candidate ? projectedDock : dock).render(width).length - toolbar.render(width).length);
       const search = this.search;
       if (search && previousHeight !== historyHeight) queueMicrotask(() => {
         if (this.search === search) search.bar.reposition();
       });
       this.automaticHeight = Math.max(MIN_ROWS, Math.floor(historyHeight / 2));
-      const chatWidth = this.preferences.zoom || this.preferences.layout === "rows" ? width : Math.min(width - MIN_ACTIVITY - 1,
+      const chatWidth = this.effectiveZoom || this.preferences.layout === "rows" ? width : Math.min(width - MIN_ACTIVITY - 1,
         Math.max(MIN_CHAT, this.preferences.chatWidth ?? this.defaultWidth(width)));
-      const activityWidth = this.preferences.zoom || this.preferences.layout === "rows" ? width : width - chatWidth - 1;
+      const activityWidth = this.effectiveZoom || this.preferences.layout === "rows" ? width : width - chatWidth - 1;
       const chatSearch = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
       const activitySearch = this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0;
       const chatMin = Math.max(MIN_ROWS + chatSearch, chatHeader.render(Math.max(1, chatWidth)).length + 1);
       const activityMin = Math.max(MIN_ROWS + activitySearch, activityHeader.render(Math.max(1, activityWidth)).length + 1);
-      const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= (this.preferences.zoom === "chat" ? chatMin : activityMin) :
+      const fits = this.effectiveZoom ? width >= MIN_CHAT && historyHeight >= (this.effectiveZoom === "chat" ? chatMin : activityMin) :
         this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= Math.max(chatMin, activityMin) :
           width >= MIN_CHAT && historyHeight >= chatMin + activityMin + 1;
       this.fallback = this.preferences.mode === "split" && !fits;
       projectSurface = candidate && fits;
       if (this.search && (this.fallback || this.failed || this.preferences.mode !== "split" ||
-        (this.preferences.zoom && this.preferences.zoom !== this.search.pane))) this.closeSearch(false);
+        (this.effectiveZoom && this.effectiveZoom !== this.search.pane))) this.closeSearch(false);
       this.searchShortcut.sync(!this.failed && this.preferences.mode === "split" && fits);
       if (this.failed) return false;
       try {
@@ -388,7 +393,7 @@ export class TranscriptLayout {
           const widgetWidth = activityWidth;
           const chatLimit = Math.max(chatMin, Math.min((this.preferences.chatHeight ?? this.automaticHeight) + chatSearch,
             historyHeight - activityMin - 1));
-          const activityHeight = this.preferences.zoom || this.preferences.layout === "columns" ? historyHeight :
+          const activityHeight = this.effectiveZoom || this.preferences.layout === "columns" ? historyHeight :
             historyHeight - 1 - Math.min(chatLimit, Math.max(chatMin, chatPane.render(width).length));
           // Do not clip opaque interactive surfaces: their own wheel handlers may consume scrolling.
           // If the entire surface cannot fit, leave Pi's original dock available instead.
@@ -428,7 +433,7 @@ export class TranscriptLayout {
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(
         () => this.preferences.buttonStyle === "icons" ? (this.preferences.layout === "columns" ? "↔" : "↕") : "Swap", () => this.swap(),
-        () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
+        () => this.preferences.mode === "split" && !this.effectiveZoom && !this.fallback && !this.failed,
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Settings", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
     ], [
@@ -476,8 +481,8 @@ export class TranscriptLayout {
           this.openSearch(target);
         }, () => true, () => palette().fill), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
         { component: this.button(
-          () => this.preferences.zoom === target ? (this.preferences.buttonStyle === "icons" ? "↙" : "Restore") : (this.preferences.buttonStyle === "icons" ? "↗" : "Maximize"),
-          () => this.maximize(target), () => true, () => palette().fill,
+          () => this.effectiveZoom === target ? (this.preferences.buttonStyle === "icons" ? "↙" : "Restore") : (this.preferences.buttonStyle === "icons" ? "↗" : "Maximize"),
+          () => this.maximize(target), () => !this.dialogActive, () => palette().fill,
         ), basis: 5, shrink: 0 },
       ], target === "activity" ? [
         { index: 1, icon: 6 },
@@ -493,7 +498,7 @@ export class TranscriptLayout {
       headers.push(label);
       const header = new VStack([
         { component: line, basis: 1, shrink: 0, visible: () =>
-          this.preferences.zoom !== null || this.preferences.layout === "columns" ||
+          this.effectiveZoom !== null || this.preferences.layout === "columns" ||
           (this.preferences.side === "left" ? target === "chat" : target === "activity") },
         { component: label, basis: "auto", shrink: 0 },
         { component: line, basis: 1, shrink: 0 },
@@ -578,13 +583,13 @@ export class TranscriptLayout {
         invalidate() {},
       }, basis: 1, shrink: 0, visible: viewport => !shown(viewport) },
       { component: columns, basis: 0, grow: 1, minSize: 1,
-        visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "columns" },
+        visible: viewport => shown(viewport) && !this.effectiveZoom && this.preferences.layout === "columns" },
       { component: rows, basis: "auto", minSize: 1,
-        visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "rows" },
+        visible: viewport => shown(viewport) && !this.effectiveZoom && this.preferences.layout === "rows" },
       { component: activityPane, basis: "auto", minSize: MIN_ROWS,
-        visible: viewport => shown(viewport) && this.preferences.zoom === "activity" },
+        visible: viewport => shown(viewport) && this.effectiveZoom === "activity" },
       { component: chatPane, basis: "auto", minSize: MIN_ROWS,
-        visible: viewport => shown(viewport) && this.preferences.zoom === "chat" },
+        visible: viewport => shown(viewport) && this.effectiveZoom === "chat" },
       { component: transcript, basis: 0, grow: 1, minSize: 1, visible: viewport => !shown(viewport) },
       ...(projectedDock ? [{ component: projectedDock, basis: "auto" as const, shrink: 0, minSize: 1,
         visible: () => projectSurface }] : []),
@@ -605,7 +610,7 @@ export class TranscriptLayout {
   searchPane(): Pane | undefined {
     if (!this.host || this.host.layoutRoot !== this.mounted || this.failed || this.fallback ||
       this.preferences.mode !== "split") return undefined;
-    return this.preferences.zoom ?? this.activePane;
+    return this.effectiveZoom ?? this.activePane;
   }
 
   /** Offer block copying only from a currently visible split panel. */
@@ -777,7 +782,7 @@ export class TranscriptLayout {
   }
 
   private currentHeight(): number {
-    if (this.preferences.layout === "rows" && !this.preferences.zoom && this.chat?.viewportHeight) {
+    if (this.preferences.layout === "rows" && !this.effectiveZoom && this.chat?.viewportHeight) {
       return this.chat.viewportHeight + (this.preferences.side === "left" ? 3 : 2);
     }
     return this.preferences.chatHeight ?? this.automaticHeight;
@@ -830,7 +835,7 @@ export class TranscriptLayout {
   /** Cycle keyboard scrolling and search to the other panel. */
   cyclePanel(): void {
     const pane = this.searchPane();
-    if (!pane || this.preferences.zoom) return;
+    if (!pane || this.effectiveZoom) return;
     this.activate(pane === "chat" ? "activity" : "chat");
   }
 
@@ -857,6 +862,7 @@ export class TranscriptLayout {
     this.activity = undefined;
     this.chat = undefined;
     this.documents = undefined;
+    this.dialogActive = false;
     this.drag = undefined;
     this.rebuild = () => {};
   }

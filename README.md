@@ -29,9 +29,17 @@ Late output linked to a tool call appears directly below that call in Activity, 
 
 Expand a parent tool such as Codemode to browse its nested call tree. Adjacent calls of the same tool form a group with individual call headers. Each independent native result opens under its call. A combined result covering several calls stays whole inside their group. Panels without child execution identities remain available inside the parent's output disclosure. Session restoration uses Pi's saved nested-call metadata and the original saved panels.
 
-Messages and tools keep their familiar appearance. Extension widgets and inline dialogs appear at the bottom of Activity, below its independently scrolling history. Standard select, confirm, input and editor dialogs and non-overlay custom components keep Pi's native input, focus and completion behavior. The message editor, including extension-provided replacements, stays full width whenever Pi displays it. Explicit overlays keep their native placement.
+Messages and tools keep their familiar appearance.
+Extension widgets and inline dialogs appear at the bottom of Activity, below its independently scrolling history.
+Activity temporarily maximizes while an inline dialog is open, then restores the previous split or zoom when it closes, including on cancellation.
+Standard select, confirm, input and editor dialogs and non-overlay custom components keep Pi's native input, focus and completion behavior.
+The message editor, including extension-provided replacements, stays full width whenever Pi displays it.
+Explicit overlays keep their native placement.
 
-If the Activity surface cannot fit without clipping, the view temporarily returns to combined history and Pi's normal placement. Combined history, zoomed Conversation and unsupported native layouts also leave dialogs and widgets in Pi's dock. Open forms stay live as layouts change and disappear when their producer closes them; they are not added to history.
+If the Activity surface cannot fit without clipping, the view temporarily returns to combined history and Pi's normal placement.
+Combined history and unsupported native layouts also leave dialogs and widgets in Pi's dock.
+Zoomed Conversation leaves widgets in Pi's dock until an inline dialog opens.
+Open forms stay live as layouts change and disappear when their producer closes them; they are not added to history.
 
 ## Features
 
