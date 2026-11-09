@@ -12,6 +12,8 @@ npm run check:package
 
 The integration tests run real Pi with scripted responses. The package check installs the exact npm archive in a clean runtime without development dependencies and verifies the loaded split, native tool output and full-width dock.
 
+The shipped display defaults are text buttons, Compact Activity tools and Stream latest tools. The test launchers (`test/fixtures/pi-host.sh`, `startup-host.sh`) seed missing display preferences with the earlier full-card, icon-button baseline so unrelated checks stay stable; `PI_TRANSCRIPT_TEST_DEFAULTS=1` skips that, and `test/default-display.integration.test.ts` runs a fresh install that way.
+
 The test launcher disables automatic network activity with `PI_OFFLINE=1` so update and model-catalog notifications cannot change the expected terminal layout.
 
 The optional nested IDE rendering test needs a Pi Agent IDE checkout:
