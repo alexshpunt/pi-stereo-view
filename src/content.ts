@@ -145,9 +145,9 @@ export class NativeContentIndex {
   private readonly expandedPanels = new WeakMap<Component, Component>();
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
 
-  private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number } };
+  private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number; groupTools: boolean } };
 
-  constructor(private readonly source: Container, readonly nested = new NestedCalls()) {}
+  constructor(private readonly source: Container, readonly nested = new NestedCalls(), readonly groupTools: () => boolean = () => true) {}
 
   /**
    * Native history cannot change while Pi lays out one frame, so the panes of a pass
@@ -187,7 +187,7 @@ export class NativeContentIndex {
 
   /** Visit every native identity that classification depends on, in a fixed order. */
   private visitSignature(history: Container, visit: (value: unknown) => boolean): boolean {
-    if (!visit(this.nested.revision)) return false;
+    if (!visit(this.nested.revision) || !visit(this.groupTools())) return false;
     for (const component of this.source.children) if (!visit(component)) return false;
     for (const component of history.children) if (!visit(component)) return false;
     for (const component of history.children) {
@@ -215,9 +215,9 @@ export class NativeContentIndex {
     const children = history.children;
     const verified = pass?.verified;
     if (verified && verified.children === children && verified.length === children.length && verified.last === children.at(-1) &&
-      verified.parts === this.source.children.length && verified.revision === this.nested.revision) return;
+      verified.parts === this.source.children.length && verified.revision === this.nested.revision && verified.groupTools === this.groupTools()) return;
     this.verify(history);
-    if (pass) pass.verified = { children, length: children.length, last: children.at(-1), parts: this.source.children.length, revision: this.nested.revision };
+    if (pass) pass.verified = { children, length: children.length, last: children.at(-1), parts: this.source.children.length, revision: this.nested.revision, groupTools: this.groupTools() };
   }
 
   private verify(history: Container): void {
@@ -257,7 +257,7 @@ export class NativeContentIndex {
           native.setExpanded?.(true);
           this.expandedPanels.set(component, owner);
         } else if (!owner) this.expandedPanels.delete(component);
-        const parts = owner && this.nested.entries(owner.toolCallId!).length ? nativePanelParts(native) : undefined;
+        const parts = this.groupTools() && owner && this.nested.entries(owner.toolCallId!).length ? nativePanelParts(native) : undefined;
         if (parts) for (const part of parts) {
           const adapter = nativeKinds[nameOf(part)];
           const partKind = adapter?.accepts(part as NativeContent) ? adapter.kind : "system";

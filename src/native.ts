@@ -319,7 +319,7 @@ export class NativeDocument extends Container {
     this.compactActive = compactTools && this.streaming?.enabled() === true;
     if (this.compactActive) this.streamer!.observe(this.index.entries());
     else this.streamer?.clear();
-    const groups = compactTools ? toolGroups(this.index.entries(), this.present, source => this.live(source)) : new Map<Component, ToolGroup>();
+    const groups = compactTools && this.index.groupTools() ? toolGroups(this.index.entries(), this.present, source => this.live(source)) : new Map<Component, ToolGroup>();
     // Carry visible expansion through state-driven splits and merges, without
     // reopening explicitly collapsed runs. Read the old state before adding heads.
     const opening: Component[] = [];
@@ -330,7 +330,7 @@ export class NativeDocument extends Container {
         return previous && (previous.calls.length > 1 ? this.openGroups.has(previous.calls[0].source) : this.openTools.has(call.source));
       })) opening.push(source);
     }
-    if (compactTools) for (const [source, previous] of this.groups) {
+    if (compactTools && this.index.groupTools()) for (const [source, previous] of this.groups) {
       const current = groups.get(source);
       if (previous.calls[0].source === source && previous.calls.length > 1 &&
         (!current || current.calls.length < 2 || current.calls[0].source !== source)) this.openGroups.delete(source);
@@ -341,7 +341,7 @@ export class NativeDocument extends Container {
     this.searchTool = searched?.owner;
     const entries = this.index.entries(this.pane);
     const trees = new Map<Component, NestedTree>();
-    if (this.pane === "activity") for (const entry of entries) {
+    if (this.pane === "activity" && this.index.groupTools()) for (const entry of entries) {
       if (!entry.tool) continue;
       const id = Reflect.get(entry.source, "toolCallId") as string | undefined;
       if (!id || (!this.index.nested.entries(id).length && !this.index.nested.isIncomplete(id))) continue;
