@@ -2,6 +2,7 @@
 # The harness normally disables discovery; this case verifies ordinary configured packages.
 if [ "$1" = "--no-extensions" ]; then shift; fi
 export PI_OFFLINE=1
+. "$(dirname "$0")/baseline-preferences.sh"
 if [ -n "${PI_TRANSCRIPT_TEST_SESSION:-}" ]; then
   set -- --session "$PI_TRANSCRIPT_TEST_SESSION" "$@"
 fi

@@ -1,6 +1,7 @@
 #!/bin/sh
 # Scripted UI checks must not receive automatic update or catalog notifications.
 export PI_OFFLINE=1
+. "$(dirname "$0")/baseline-preferences.sh"
 if [ -n "${PI_TRANSCRIPT_IDE_PATH:-}" ]; then
   set -- -e "$PI_TRANSCRIPT_IDE_PATH/src/pi-agent-ide.ts" "$@"
 fi
