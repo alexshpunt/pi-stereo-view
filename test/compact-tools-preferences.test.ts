@@ -32,3 +32,25 @@ test.each(["on", null, 1])("rejects invalid compact tool preference %s", async c
     await expect(loadPreferences(file)).rejects.toThrow();
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test("streams latest tools after five seconds only when chosen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "compact-tools-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    expect(await loadPreferences(file)).toMatchObject({ streamTools: false, streamDelay: 5 });
+    await writeFile(file, JSON.stringify({ side: "right", chatWidth: 73, compactTools: true }));
+    expect(await loadPreferences(file)).toMatchObject({ streamTools: false, streamDelay: 5 });
+    await savePreferences(file, { ...defaults, streamTools: true, streamDelay: 10 });
+    expect(await loadPreferences(file)).toEqual({ ...defaults, streamTools: true, streamDelay: 10 });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test.each([["streamTools", "on"], ["streamTools", 1], ["streamDelay", 0], ["streamDelay", 1.5], ["streamDelay", 301], ["streamDelay", "5"]])(
+  "rejects invalid %s preference %s", async (key, value) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "compact-tools-preferences-"));
+    const file = path.join(directory, "transcript.json");
+    try {
+      await writeFile(file, JSON.stringify({ ...defaults, [key]: value }));
+      await expect(loadPreferences(file)).rejects.toThrow();
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
