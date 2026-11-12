@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { Container, MouseRegion, Text, stripTerminalSequences, type Component, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { SearchEntry, SearchHit } from "../../src/search.ts";
 import { emittedFrame } from "./emitted-frame.ts";
