@@ -16,6 +16,15 @@ export default function streamToolsProbe(pi: ExtensionAPI): void {
     await emittedFrame(tui, () => tui.requestRender(true));
     frames[name] = tui.getScreenLines().map(stripTerminalSequences);
   };
+  const click = async (label: string): Promise<void> => {
+    const lines = tui.getScreenLines().map(stripTerminalSequences);
+    const y = lines.findIndex(line => line.includes(label));
+    if (y < 0) throw new Error("Missing control: " + label);
+    const x = visibleWidth(lines[y].slice(0, lines[y].indexOf(label))) + 2;
+    tui.handleTerminalInput(`\x1b[<0;${x + 1};${y + 1}M`);
+    tui.handleTerminalInput(`\x1b[<0;${x + 1};${y + 1}m`);
+    await setTimeout(50);
+  };
   pi.on("session_start", async (_event, ctx) => {
     let finish = (): void => {};
     await ctx.ui.custom<void>((host, _theme, _keys, done) => {
@@ -42,12 +51,24 @@ export default function streamToolsProbe(pi: ExtensionAPI): void {
     await capture("collapsed");
     const lines = tui.getScreenLines().map(stripTerminalSequences);
     const label = lines.some(line => line.includes("[Settings]")) ? "[Settings]" : "[ ≡ ]";
-    const y = lines.findIndex(line => line.includes(label));
-    const x = visibleWidth(lines[y].slice(0, lines[y].indexOf(label))) + 2;
-    tui.handleTerminalInput(`\x1b[<0;${x + 1};${y + 1}M`);
-    tui.handleTerminalInput(`\x1b[<0;${x + 1};${y + 1}m`);
-    await setTimeout(50);
+    await click(label);
     await capture("settings");
+    if (process.env.GROUP_TOOLS_TOGGLE === "1") {
+      tui.handleTerminalInput("\x1b");
+      await capture("closedSettings");
+      await click("[ ⊞ ]");
+      await capture("toolbar");
+      await click("[ ⊟ ]");
+      await capture("compactAgain");
+      await click(label);
+      await click("Group Activity tools");
+      tui.handleTerminalInput("\x1b");
+      await capture("grouped");
+      await click(label);
+      await click("Group Activity tools");
+      tui.handleTerminalInput("\x1b");
+      await capture("ungroupedAgain");
+    }
     await writeFile(path.join(ctx.cwd, "stream-observation.json"), JSON.stringify(frames));
   });
 }

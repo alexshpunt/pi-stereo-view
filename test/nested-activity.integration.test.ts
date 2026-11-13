@@ -8,21 +8,22 @@ import { expect, test } from "vitest";
 interface Capture { panes: Record<string, string[]>; search: Record<string, { text: string; label: string }[]>; screen: string[]; toolIds: string[]; originalSources: boolean; originalRenderers: boolean; copies: string[]; folded: string[]; group?: { closed: string[]; opened: string[]; reclosed: string[]; reopened: string[]; panelCounts: number[][] } }
 const plain = (lines: string[]) => lines.map(stripTerminalSequences).join("\n");
 
-test.each([[false, "parent"], [true, "parent"], [false, "codemode"], [true, "codemode"]] as const)("expands the nested call tree while retaining the parent's renderer live and after resume (compact: %s, caller: %s)", async (compactTools, caller) => {
+test.each([[false, "parent", true], [true, "parent", true], [false, "codemode", true], [true, "codemode", true],
+  [false, "codemode", false], [true, "codemode", false]] as const)("retains the parent renderer live and after resume (compact: %s, caller: %s, grouping: %s)", async (compactTools, caller, groupTools) => {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/nested-activity-"));
   const agent = await mkdtemp(path.resolve("tmp/nested-activity-agent-"));
   try {
     await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true }));
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
-      layout: "columns", side: "left", chatWidth: 45, showTimestamps: false, compactTools,
+      layout: "columns", side: "left", chatWidth: 45, showTimestamps: false, compactTools, groupTools,
     }));
     const session = SessionManager.create(cwd, cwd);
     session.appendMessage({ role: "user", content: "SAVED-USER-82", timestamp: Date.now() });
     for (const phase of ["live", "resume"] as const) {
       const captureFile = path.join(cwd, phase + ".json");
       const result = await new PiIntegrationTest({
-        testName: `nested-activity-${caller}-${compactTools}-${phase}`, artifactsDir: path.resolve("tmp/test-runs"), cwd,
+        testName: `nested-activity-${caller}-${compactTools}-${groupTools}-${phase}`, artifactsDir: path.resolve("tmp/test-runs"), cwd,
         piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
         environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_TEST_SESSION: session.getSessionFile()!, NESTED_ACTIVITY_CAPTURE: captureFile, NESTED_ACTIVITY_CALLER: caller },
         rawMode: false, tuiSize: { cols: 180, rows: 60 }, timeoutMs: 60_000,
@@ -60,9 +61,10 @@ test.each([[false, "parent"], [true, "parent"], [false, "codemode"], [true, "cod
         expect(snapshot.originalSources).toBe(true);
         expect(snapshot.originalRenderers).toBe(true);
         const leaves = plain(snapshot.panes.activity).split("\n").filter(line => /●\s+(?:[▸▾]\s+)?nested_activity_leaf\b/u.test(line) && /ARG-[PQ]82/u.test(line));
-        expect(leaves).toHaveLength(2);
-        for (const marker of ["ARG-P82", "ARG-Q82"]) expect(leaves.some(line => line.includes(marker))).toBe(true);
-        if (compactTools) {
+        expect(leaves).toHaveLength(groupTools ? 2 : 0);
+        if (groupTools) for (const marker of ["ARG-P82", "ARG-Q82"]) expect(leaves.some(line => line.includes(marker))).toBe(true);
+        else expect(plain(snapshot.panes.activity)).not.toContain("codemode output");
+        if (groupTools && compactTools) {
           const parentName = caller === "parent" ? "nested_activity_parent" : caller;
           const root = snapshot.folded.find(line => /●\s+▾/u.test(line) && line.includes(parentName));
           expect(root).toBeDefined();

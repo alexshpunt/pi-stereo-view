@@ -39,6 +39,7 @@ test("a fresh install starts side by side with compact, streaming tools and text
     expect(body("justFinished")).toContain("NATIVE-HEADER-B");
     expect(body("collapsed")).not.toContain("NATIVE-HEADER");
     expect(body("collapsed")).toMatch(/stream_probe ×2/);
+    expect(body("settings")).toMatch(/Group Activity tools\s+on/);
     expect(body("settings")).toMatch(/Stream latest tools\s+on/);
     expect(body("settings")).toMatch(/Compact Activity tools\s+on/);
     expect(body("settings")).toMatch(/Collapse delay\s+5s/);

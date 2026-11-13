@@ -98,6 +98,13 @@ Swap the panels whenever you want. Zoom a panel to give it the whole history are
 
 ## Compact Activity
 
+**Group Activity tools** is on by default in `/stereo-view settings`.
+Turn it off to disable stereo-view's adjacent compact groups and nested-call trees.
+**Compact Activity tools** and **Stream latest tools** still work: each call streams its original card, then collapses individually after the delay.
+Expand a call to see its original card and intact linked output panels.
+Turn Compact Activity tools off as well to keep all original cards visible.
+The compact toolbar button works independently of grouping; all choices survive restart.
+
 Click `[ ⊟ ]` or `[Compact tools]` beside Find and Maximize in the Activity header to show compact tool calls. Adjacent calls to the same tool in the same state share a header with a count; every failed call stays separate, even beside another failure. Click that header to show the individual compact rows, then click a row to open its original full card and linked output. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls. Thinking, Conversation content and different tools end a group.
 
 Group and call headers show `▸` when collapsed and `▾` when expanded. Each call row has a one-cell left gutter, a colored status dot, its tool name and a short argument description. A group shows its shared running or successful state. Failed calls expose their own status and argument preview without opening a group. Long descriptions are truncated, not the saved calls. Verified local MCP forwarding aliases use their native tool's name; foreign, ambiguous and unknown tools keep their original identity.
@@ -108,7 +115,10 @@ Compact tools work in columns, rows and zoomed Activity. The choice survives res
 
 ### Stream latest tools
 
-**Stream latest tools** (on by default, in Settings) lets you watch the current work while keeping history short. With Compact Activity tools on, a new tool call appears as its full card and updates live. When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place into a compact row and joins the adjacent identical collapsed calls (`read ×3`).
+**Stream latest tools** (on by default, in Settings) lets you watch the current work while keeping history short.
+With Compact Activity tools on, a new tool call appears as its full card and updates live.
+When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place into a compact row.
+With Group Activity tools on, it also joins adjacent identical collapsed calls (`read ×3`); otherwise each call keeps its own row.
 
 Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both options survive restart; streaming defaults to on.
 

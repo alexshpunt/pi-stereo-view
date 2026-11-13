@@ -85,9 +85,16 @@ If a custom tool renderer omits saved matching text, a temporary Search match fr
 
 ## Persisted settings and tool times
 
-`compactTools` is a boolean display preference. Missing values default to `false` so existing installations keep full tool rendering.
+`groupTools` and `compactTools` are boolean display preferences that default to `true`, including in older files without those fields.
+With grouping off, the index retains original linked panels and Activity bypasses adjacent groups and nested trees.
+Compact rows and streaming collapse timers work independently of grouping, so each call can collapse and expand on its own with its linked output.
+Changing grouping preserves the compact and streaming preferences and active collapse timers, but closes search because indexed component identities may change.
 
-Layout, panel order, sizes, compact Activity, timestamp visibility and copy-button visibility are saved in `transcript.json` in Pi's agent directory. Zoom and split on/off are session-only state and are excluded from that file. Every session starts split and unzoomed; legacy saved `mode` and `zoom` fields are ignored without discarding the saved arrangement. Saved numeric Conversation heights remain manual until the user selects automatic height. Saved arrangements are not reset when defaults change.
+Layout, panel order, sizes, tool grouping, compact Activity, timestamp visibility and copy-button visibility are saved in `transcript.json` in Pi's agent directory.
+Zoom and split on/off are session-only state and are excluded from that file.
+Every session starts split and unzoomed; legacy saved `mode` and `zoom` fields are ignored without discarding the saved arrangement.
+Saved numeric Conversation heights remain manual until the user selects automatic height.
+Saved arrangements are not reset when defaults change.
 
 Tool-start times are collected as display-only session metadata; they do not become messages in the model's context. New calls keep their recorded start time through streaming, completion and restart. Historical calls without that metadata use the agent message's time as an approximation, marked with `~`. Blocks with unknown times keep their native content without clock or copy-button rows, regardless of timestamp visibility.
 
