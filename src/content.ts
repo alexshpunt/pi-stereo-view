@@ -181,9 +181,13 @@ export class NativeContentIndex {
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
   private readonly diagnostics = new WeakMap<NativeAssistant, Component[]>();
 
-  private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number } };
+  private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number; trees: boolean } };
 
-  constructor(private readonly source: Container, readonly nested = new NestedCalls()) {}
+  /**
+   * With `nestedTrees` on, a parented output panel is split into the native parts of its nested calls, which Activity
+   * shows as the caller's tree. Off, the panel stays one original entry beside its owner.
+   */
+  constructor(private readonly source: Container, readonly nested = new NestedCalls(), readonly nestedTrees: () => boolean = () => true) {}
 
   /**
    * Native history cannot change while Pi lays out one frame, so the panes of a pass
@@ -228,9 +232,9 @@ export class NativeContentIndex {
     const children = history.children;
     const verified = pass?.verified;
     if (verified && verified.children === children && verified.length === children.length && verified.last === children.at(-1) &&
-      verified.parts === this.source.children.length && verified.revision === this.nested.revision) return;
+      verified.parts === this.source.children.length && verified.revision === this.nested.revision && verified.trees === this.nestedTrees()) return;
     this.verify(history);
-    if (pass) pass.verified = { children, length: children.length, last: children.at(-1), parts: this.source.children.length, revision: this.nested.revision };
+    if (pass) pass.verified = { children, length: children.length, last: children.at(-1), parts: this.source.children.length, revision: this.nested.revision, trees: this.nestedTrees() };
   }
 
   /** Whether a classified block still has the native inputs its entries were built from. */
@@ -245,7 +249,7 @@ export class NativeContentIndex {
     if (block.parent) {
       const owner = this.owners.get(block.parent.id);
       if (owner !== block.parent.owner) return false;
-      const parts = owner?.toolCallId && this.nested.entries(owner.toolCallId).length ? nativePanelParts(component) : undefined;
+      const parts = owner?.toolCallId ? this.panelParts(component, owner.toolCallId) : undefined;
       if (parts ? !sameValues(block.parent.parts, parts) : block.parent.parts) return false;
     }
     return true;
@@ -315,6 +319,11 @@ export class NativeContentIndex {
     this.panes = {};
   }
 
+  /** The parts a nested-call tree shows for an owner's linked panel, or none to keep the panel whole. */
+  private panelParts(panel: NativeContent, owner: string): Component[] | undefined {
+    return this.nestedTrees() && this.nested.entries(owner).length ? nativePanelParts(panel) : undefined;
+  }
+
   /** Build the entries of one native history block, keeping previous entry objects that did not change. */
   private classify(component: Component, spacing: Component[], old: Classified | undefined): Classified {
     const native = component as NativeContent;
@@ -335,7 +344,7 @@ export class NativeContentIndex {
         content.setExpanded?.(true);
         this.expandedPanels.set(component, owner);
       } else if (!owner) this.expandedPanels.delete(component);
-      const parts = owner && this.nested.entries(owner.toolCallId!).length ? nativePanelParts(content) : undefined;
+      const parts = owner ? this.panelParts(content, owner.toolCallId!) : undefined;
       if (kind === "system" && typeof parentId === "string") block.parent = { id: parentId, owner, parts };
       if (parts) for (const part of parts) {
         const adapter = nativeKinds[nameOf(part)];

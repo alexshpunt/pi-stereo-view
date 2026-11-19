@@ -68,11 +68,19 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           currentValue: preferences.buttonStyle, values: ["icons", "text"],
         }, {
           id: "compactTools", label: "Compact Activity tools",
-          description: "Group adjacent tools and expand individual calls inline. Full text stays searchable and copyable.",
+          description: "Show each finished call as one row that opens its full card. Full text stays searchable and copyable.",
           currentValue: preferences.compactTools ? "on" : "off", values: ["on", "off"],
         }, {
+          id: "groupTools", label: "Group Activity tools",
+          description: "Merge adjacent calls of the same tool and state under one counted header.",
+          currentValue: preferences.groupTools ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "nestedTree", label: "Nested call tree",
+          description: "Show the calls a tool makes, such as Codemode's, as a tree. Off keeps the tool's own output panel.",
+          currentValue: preferences.nestedTree ? "on" : "off", values: ["on", "off"],
+        }, {
           id: "streamTools", label: "Stream latest tools",
-          description: "In compact Activity, show new tool calls in full and collapse them after the delay.",
+          description: "While compact or grouped, show new tool calls in full and collapse them after the delay.",
           currentValue: preferences.streamTools ? "on" : "off", values: ["on", "off"],
         }, {
           id: "streamDelay", label: "Collapse delay",
@@ -82,11 +90,13 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "height", label: "Conversation height",
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
-        }], 7, getSettingsListTheme(), (id, value) => {
+        }], 9, getSettingsListTheme(), (id, value) => {
           if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
           else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");
           else if (id === "compactTools") layout?.setCompactTools(value === "on");
+          else if (id === "groupTools") layout?.setGroupTools(value === "on");
+          else if (id === "nestedTree") layout?.setNestedTree(value === "on");
           else if (id === "streamTools") layout?.setStreamTools(value === "on");
           else if (id === "streamDelay") layout?.setStreamDelay(Number.parseInt(value, 10));
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");

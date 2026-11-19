@@ -48,6 +48,15 @@ class SearchHighlight implements Component {
 /** Scroll state of the panel showing a document, read before the panel's layout in a frame. */
 export interface DocumentViewport { top: number; height: number; following: boolean }
 
+/** How Activity presents finished tool calls; the two choices are independent. */
+export interface ToolDisplay {
+  /** Each call is a one-line row that opens its original card and linked output. */
+  compact: boolean;
+  /** Adjacent calls of one tool in one state share a counted header. */
+  group: boolean;
+}
+const FULL_TOOLS: ToolDisplay = { compact: false, group: false };
+
 /** Time per frame for measuring offscreen entries that are new, changed or stale. */
 const LAZY_BUDGET_MS = 4;
 /** Offscreen entries checked for native changes per frame, in rotation. */
@@ -157,7 +166,7 @@ export class NativeDocument extends Container {
     private readonly index = new NativeContentIndex(source),
     private readonly copy?: (text: string | undefined) => void,
     private readonly showCopy: () => boolean = () => true,
-    private readonly compactTools: () => boolean = () => false,
+    private readonly toolDisplay: () => ToolDisplay = () => FULL_TOOLS,
     private readonly getTools: () => readonly ToolInfo[] = () => [],
     private readonly beforeExpand: () => void = () => {},
     private readonly buttonStyle: () => "icons" | "text" = () => "text",
@@ -167,9 +176,9 @@ export class NativeDocument extends Container {
     if (streaming) this.streamer = new ToolStreaming(() => streaming.delay(), () => streaming.changed());
   }
   private readonly streamer?: ToolStreaming;
-  /** Calls Compact Activity still shows as full native cards. */
-  private live(source: Component): boolean { return this.compactActive && this.streamer?.isLive(source) === true; }
-  private compactActive = false;
+  /** Calls still shown as separate full cards, although Compact or Group would hide them. */
+  private live(source: Component): boolean { return this.streamActive && this.streamer?.isLive(source) === true; }
+  private streamActive = false;
 
   /**
    * Start a native frame; only repeated measurements within that frame may reuse routing.
@@ -399,7 +408,7 @@ export class NativeDocument extends Container {
     let stamped = this.stamped.get(routed);
     if (!stamped) {
       stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
-        this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.compactTools() && entry.kind === "tool" && !this.live(entry.owner)),
+        this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.toolDisplay().compact && entry.kind === "tool" && !this.live(entry.owner)),
         this.copy ? () => this.copyBlock(component) : undefined, this.showCopy, this.buttonStyle, () => {
           // Nested panels render inside their owner's segment.
           this.dirty.add(component).add(entry.owner);
@@ -431,14 +440,14 @@ export class NativeDocument extends Container {
    * Regroup calls only when the entries, presentation, live calls or a call's status change. Pi updates a call's
    * result without invalidating it, so the status is read from its native fields on every frame.
    */
-  private updateGroups(compactTools: boolean): void {
+  private updateGroups(group: boolean): void {
     const all = this.index.entries();
-    const inputs = [compactTools, all, this.present, this.compactActive, this.streamer?.revision];
+    const inputs = [group, all, this.present, this.streamActive, this.streamer?.revision];
     if (sameValues(this.groupInputs, inputs) && this.callStatesUnchanged(all)) return;
     this.groupInputs = inputs;
     this.callStates.length = 0;
     pushCallStates(all, this.callStates);
-    const groups = compactTools ? toolGroups(all, this.present, source => this.live(source)) : new Map<Component, ToolGroup>();
+    const groups = group ? toolGroups(all, this.present, source => this.live(source)) : new Map<Component, ToolGroup>();
     // Carry visible expansion through state-driven splits and merges, without
     // reopening explicitly collapsed runs. Read the old state before adding heads.
     const opening: Component[] = [];
@@ -449,7 +458,8 @@ export class NativeDocument extends Container {
         return previous && (previous.calls.length > 1 ? this.openGroups.has(previous.calls[0].source) : this.openTools.has(call.source));
       })) opening.push(source);
     }
-    if (compactTools) for (const [source, previous] of this.groups) {
+    // While grouping is off, keep the open groups for when it is turned on again.
+    if (group) for (const [source, previous] of this.groups) {
       const current = groups.get(source);
       if (previous.calls[0].source === source && previous.calls.length > 1 &&
         (!current || current.calls.length < 2 || current.calls[0].source !== source)) this.openGroups.delete(source);
@@ -468,21 +478,22 @@ export class NativeDocument extends Container {
     return position === states.length;
   }
 
-  /** Nested call trees of Activity calls, rebuilt only when the entries or nested calls change. */
+  /** Nested call trees of Activity calls, rebuilt only when the entries, nested calls or the tree setting change. */
   private treesFor(entries: readonly ContentEntry[]): Map<Component, NestedTree> {
-    const inputs = [entries, this.index.nested.revision];
+    const enabled = this.pane === "activity" && this.index.nestedTrees();
+    const inputs = [entries, this.index.nested.revision, enabled];
     if (this.trees && sameValues(this.trees.inputs, inputs)) return this.trees.map;
     const trees = new Map<Component, NestedTree>();
-    if (this.pane === "activity") for (const entry of entries) {
+    if (enabled) for (const entry of entries) {
       if (!entry.tool) continue;
       const id = Reflect.get(entry.source, "toolCallId") as string | undefined;
       if (!id || (!this.index.nested.entries(id).length && !this.index.nested.isIncomplete(id))) continue;
       let tree = this.nestedTrees.get(entry.source);
       if (!tree) {
-        tree = new NestedTree(id, this.index.nested, this.theme, name => this.present(name), () => this.compactTools() && !this.live(entry.source), () => {
+        tree = new NestedTree(id, this.index.nested, this.theme, name => this.present(name), () => this.toolDisplay().compact && !this.live(entry.source), () => {
           this.beforeExpand(); if (this.searchAnchor) this.clearSearch(); this.frameWidth = undefined;
         }, () => {
-          const clock = this.showTimestamps() && this.compactTools() ? this.timestamps.label(entry.source) : "";
+          const clock = this.showTimestamps() && this.toolDisplay().compact ? this.timestamps.label(entry.source) : "";
           return clock ? clock.length + 1 : 0;
         });
         this.nestedTrees.set(entry.source, tree);
@@ -505,12 +516,14 @@ export class NativeDocument extends Container {
     let row = 0;
     let visibleBlock = false;
     let toolRun = false;
-    const compactTools = this.pane === "activity" && this.compactTools();
-    this.updatePresentations(compactTools ? this.getTools() : []);
-    this.compactActive = compactTools && this.streaming?.enabled() === true;
-    if (this.compactActive) this.streamer!.observe(this.index.entries());
+    const display = this.pane === "activity" ? this.toolDisplay() : FULL_TOOLS;
+    // Streaming shows new calls in full only while a row or a group would hide them.
+    const hiding = display.compact || display.group;
+    this.updatePresentations(hiding ? this.getTools() : []);
+    this.streamActive = hiding && this.streaming?.enabled() === true;
+    if (this.streamActive) this.streamer!.observe(this.index.entries());
     else this.streamer?.clear();
-    this.updateGroups(compactTools);
+    this.updateGroups(display.group);
     const searched = this.searchAnchor ? this.index.entries(this.pane).find(entry => entry.source === this.searchAnchor!.entry.source) : undefined;
     this.searchTool = searched?.owner;
     const entries = this.index.entries(this.pane);
@@ -518,8 +531,8 @@ export class NativeDocument extends Container {
     const view = locateMatch ? undefined : this.viewport?.();
     // The first frame and search measure every entry; later frames reuse offscreen rows.
     const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
-    const presentation = [this.theme(), compactTools, this.compactActive, this.showTimestamps(), this.showCopy(), this.buttonStyle(),
-      this.timestampGutter(), this.invalidations];
+    const presentation = [this.theme(), display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
+      this.showCopy(), this.buttonStyle(), this.timestampGutter(), this.invalidations];
     if (!sameValues(presentation, this.presentation)) {
       this.presentation = presentation;
       this.epoch++;
@@ -541,7 +554,7 @@ export class NativeDocument extends Container {
     let shift = 0;
     let pending = false;
     const order: Segment[] = [];
-    const renderEntry = (entry: ContentEntry, compactTool: boolean, tree: NestedTree | undefined): Segment => {
+    const renderEntry = (entry: ContentEntry, rowed: boolean, tree: NestedTree | undefined): Segment => {
       const component = entry.source;
       const routed = entry.component;
       const result: Component[] = [];
@@ -550,34 +563,44 @@ export class NativeDocument extends Container {
       let clock: SearchClock | undefined;
       let nativeBody = true;
       let bodyDepth = 0;
-      if (compactTool) {
-        const group = this.groups.get(entry.owner);
-        const grouped = group !== undefined && group.calls.length > 1;
-        bodyDepth = grouped ? 2 : 1;
+      let separate = visibleBlock;
+      const group = this.groups.get(entry.owner);
+      const grouped = group !== undefined && group.calls.length > 1;
+      if (rowed || grouped) {
+        bodyDepth = (grouped ? 1 : 0) + (rowed ? 1 : 0);
         const members = !grouped || this.groupOpen(group);
+        const head = grouped && group.calls[0].source === component;
         if (entry.tool) {
-          if (visibleBlock && !toolRun) result.push(new Spacer(1));
-          if (grouped && group.calls[0].source === component) result.push(this.groupRow(group));
-          if (members) result.push(this.indent(this.compactRow(entry), grouped ? 1 : 0));
+          const row = members && rowed;
+          // Only header rows need this separator; a member's full card brings its own.
+          if (visibleBlock && !toolRun && (head || row)) result.push(new Spacer(1));
+          if (head) result.push(this.groupRow(group));
+          if (row) result.push(this.indent(this.compactRow(entry), grouped ? 1 : 0));
           toolRun = true;
           visibleBlock = true;
         }
-        nativeBody = members && this.toolOpen(entry.owner);
+        nativeBody = members && (!rowed || this.toolOpen(entry.owner));
+        // A body directly under its call's row or its group's header needs no separator.
+        separate = !rowed && !head && visibleBlock;
       }
       const contentStart = result.length;
       const bodyWidth = Math.max(0, width - (bodyDepth ? bodyDepth * 2 + 1 : 0));
+      let treeOffset = 0;
       if (nativeBody && tree) {
+        // Native blocks bring their own separator; a tree needs one to stand apart from the block above.
+        if (separate) { result.push(new Spacer(1)); treeOffset = 1; }
         const panels = entries.filter(panel => panel.owner === component && panel.source !== component);
         tree.setBodies(this.treeBody(entry), panels.map(panel => this.treeBody(panel)), this.searchAnchor?.entry.source);
         result.push(tree);
+        if (!rowed) toolRun = false;
         visibleBlock = true;
       } else if (nativeBody && !entry.compact) {
         toolRun = false;
         result.push(...entry.spacing, routed);
       } else if (nativeBody) {
-        if (!compactTool) toolRun = false;
+        if (!rowed) toolRun = false;
         const stamped = this.nativeBlock(entry);
-        visibleBlock = stamped.prepare(bodyWidth, compactTool ? false : visibleBlock) || visibleBlock;
+        visibleBlock = stamped.prepare(bodyWidth, separate) || visibleBlock;
         result.push(stamped);
         clock = stamped.searchClock();
       }
@@ -604,8 +627,8 @@ export class NativeDocument extends Container {
         const prefixRows = prefix.length;
         if (tree && nativeBody) {
           for (const [source, position] of tree.positions) this.positions.set(source, {
-            ...position, row: row + prefixRows + position.row,
-            excerptRow: position.excerptRow === undefined ? undefined : row + prefixRows + position.excerptRow,
+            ...position, row: row + prefixRows + treeOffset + position.row,
+            excerptRow: position.excerptRow === undefined ? undefined : row + prefixRows + treeOffset + position.excerptRow,
           });
           if (excerptRow !== undefined) this.positions.set(component, { row, lines: [], excerptRow });
         } else this.positions.set(component, { row: row + prefixRows, lines: lines.slice(prefixRows), clock, excerptRow });
@@ -620,7 +643,7 @@ export class NativeDocument extends Container {
         for (const line of childLines) lines.push(line);
       }
       const print: unknown[] = [];
-      this.fingerprint(entry, compactTool, tree, print);
+      this.fingerprint(entry, rowed, tree, print);
       let segment = this.segments.get(component);
       if (!segment) {
         segment = { components: result, heights, lines, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
@@ -639,7 +662,7 @@ export class NativeDocument extends Container {
       const entry = entries[index];
       if (entry.owner !== entry.source && trees.has(entry.owner)) continue;
       const component = entry.source;
-      const compactTool = compactTools && entry.kind === "tool" && !this.live(entry.owner);
+      const rowed = display.compact && entry.kind === "tool" && !this.live(entry.owner);
       const tree = trees.get(component);
       let segment = this.segments.get(component);
       const previous = segment?.build === build - 1 ? { start: segment.start, height: segment.lines.length } : undefined;
@@ -657,7 +680,7 @@ export class NativeDocument extends Container {
           // Check a rotating slice per frame so heights converge without reading every entry each frame.
           const swept = this.dirty.delete(component) ||
             (index >= sweep && index < sweep + SWEEP_ENTRIES) || index + entries.length < sweep + SWEEP_ENTRIES;
-          if (measured && swept) this.fingerprint(entry, compactTool, tree, this.print);
+          if (measured && swept) this.fingerprint(entry, rowed, tree, this.print);
           if (!measured || (swept && !sameValues(segment!.print, this.print))) {
             if (performance.now() < started + LAZY_BUDGET_MS) render = true;
             // Native changes request their own frames; only unmeasured layout needs follow-up frames.
@@ -669,7 +692,7 @@ export class NativeDocument extends Container {
       }
       if (render) {
         this.dirty.delete(component);
-        segment = renderEntry(entry, compactTool, tree);
+        segment = renderEntry(entry, rowed, tree);
       }
       else {
         if (!segment) {
@@ -742,14 +765,14 @@ export class NativeDocument extends Container {
   }
 
   /** Native state an offscreen entry's rows depend on, read without rendering it. */
-  private fingerprint(entry: ContentEntry, compactTool: boolean, tree: NestedTree | undefined, out: unknown[]): void {
+  private fingerprint(entry: ContentEntry, rowed: boolean, tree: NestedTree | undefined, out: unknown[]): void {
     out.length = 0;
     const routed = entry.component;
     pushShellInputs(routed, out);
     const children = (routed as Partial<Container>).children;
-    const group = compactTool ? this.groups.get(entry.owner) : undefined;
+    const group = this.groups.get(entry.owner);
     out.push(children, (children?.[0] as Partial<Container> | undefined)?.children, entry.spacing.length,
-      this.stamped.get(routed)?.revision, compactTool, this.toolOpen(entry.owner),
+      this.stamped.get(routed)?.revision, rowed, this.toolOpen(entry.owner),
       group?.calls[0].source, group?.calls.length, group && group.calls.length > 1 ? this.groupOpen(group) : undefined,
       tree ? this.index.nested.revision : undefined);
   }

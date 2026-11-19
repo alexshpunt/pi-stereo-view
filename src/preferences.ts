@@ -15,8 +15,13 @@ export interface Preferences {
   zoom: "activity" | "chat" | null;
   showTimestamps: boolean;
   showCopyButtons: boolean;
+  /** Show each finished Activity call as a one-line row that opens its full card. */
   compactTools: boolean;
-  /** Show the latest tool calls in full inside compact Activity, then collapse them. */
+  /** Merge adjacent Activity calls of one tool in one state under a counted header. */
+  groupTools: boolean;
+  /** Show the calls a tool made, such as Codemode's, as a tree instead of the parent's native output panel. */
+  nestedTree: boolean;
+  /** Show the latest tool calls in full while Compact or Group would hide them, then collapse them. */
   streamTools: boolean;
   /** Seconds a finished streamed call stays in full before it collapses. */
   streamDelay: number;
@@ -24,7 +29,7 @@ export interface Preferences {
 }
 
 export const defaults: Preferences = {
-  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
+  mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -44,6 +49,9 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const showTimestamps = record.showTimestamps === undefined ? defaults.showTimestamps : record.showTimestamps;
   const showCopyButtons = record.showCopyButtons === undefined ? defaults.showCopyButtons : record.showCopyButtons;
   const compactTools = record.compactTools === undefined ? defaults.compactTools : record.compactTools;
+  // Grouping used to be part of Compact; files saved before the split keep that combination.
+  const groupTools = record.groupTools === undefined ? compactTools : record.groupTools;
+  const nestedTree = record.nestedTree === undefined ? defaults.nestedTree : record.nestedTree;
   const streamTools = record.streamTools === undefined ? defaults.streamTools : record.streamTools;
   const streamDelay = record.streamDelay === undefined ? defaults.streamDelay : record.streamDelay;
   const buttonStyle = record.buttonStyle === undefined ? defaults.buttonStyle : record.buttonStyle;
@@ -53,12 +61,13 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       (layout !== "columns" && layout !== "rows") ||
       (chatHeight !== null && (typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 4 || chatHeight > 240)) ||
       typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean" || typeof compactTools !== "boolean" ||
+      typeof groupTools !== "boolean" || typeof nestedTree !== "boolean" ||
       typeof streamTools !== "boolean" || typeof streamDelay !== "number" || !Number.isInteger(streamDelay) || streamDelay < 1 || streamDelay > 300 ||
       (buttonStyle !== "icons" && buttonStyle !== "text")) {
     throw new Error("Invalid pi-stereo-view preferences");
   }
   // Legacy files may contain mode/zoom. Every session starts with both panels visible.
-  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, streamTools, streamDelay, buttonStyle };
+  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle };
 }
 
 /** Atomically save only the display settings, never session messages. */
@@ -66,8 +75,8 @@ export async function savePreferences(file: string, preferences: Preferences): P
   await mkdir(path.dirname(file), { recursive: true });
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
-    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, streamTools, streamDelay, buttonStyle } = preferences;
-    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, streamTools, streamDelay, buttonStyle };
+    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle } = preferences;
+    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle };
     await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
   } finally {

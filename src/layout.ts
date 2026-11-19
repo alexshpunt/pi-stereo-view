@@ -343,9 +343,10 @@ export class TranscriptLayout {
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
     const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
-    const index = new NativeContentIndex(document, this.nested);
+    const index = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree);
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("activity"), false, index, this.copy, showCopyButtons, () => this.preferences.compactTools, this.getTools,
+      () => this.activate("activity"), false, index, this.copy, showCopyButtons,
+      () => ({ compact: this.preferences.compactTools, group: this.preferences.groupTools }), this.getTools,
       () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); }, () => this.preferences.buttonStyle, {
         enabled: () => this.preferences.streamTools, delay: () => this.preferences.streamDelay * 1000,
         changed: () => this.host?.requestRender(),
@@ -786,7 +787,20 @@ export class TranscriptLayout {
     this.preferences.compactTools = compact;
     this.changed();
   }
-  /** Show the latest compact tool calls in full until they have been finished for the delay. */
+
+  /** Merge adjacent calls of one tool in one state under a counted header, with or without compact rows. */
+  setGroupTools(group: boolean): void {
+    this.preferences.groupTools = group;
+    this.changed();
+  }
+
+  /** Show nested calls as a tree, or keep the parent's native output panel. */
+  setNestedTree(tree: boolean): void {
+    this.preferences.nestedTree = tree;
+    this.changed();
+  }
+
+  /** Show the latest tool calls in full while Compact or Group would hide them, until they have been finished for the delay. */
   setStreamTools(stream: boolean): void {
     this.preferences.streamTools = stream;
     this.changed();
