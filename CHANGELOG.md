@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.20 - 2026-11-19
+
 ### Added
 
 - **Group Activity tools** and **Nested call tree** settings. Compact rows, `read ×3` groups and the nested call tree of tools such as Codemode now turn on and off independently. With only grouping on, a group opens into full cards; with only compact on, every call keeps its own row; with the tree off, a tool keeps its own output panel. Thanks to Oula Kuuva for the idea and the first implementation (#100).
