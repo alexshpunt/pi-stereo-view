@@ -37,6 +37,8 @@ export interface ToolSummary {
   name: string;
   args: unknown;
   status: "running" | "success" | "error" | "unknown";
+  /** Image blocks in the call's result, shown on compact rows that hide the native card. */
+  images?: number;
 }
 /** One native owner and its pane projection; spacing and search retain that same owner. */
 export interface ContentEntry {
@@ -54,6 +56,13 @@ export interface ContentEntry {
 export function callStatus(call: Component): ToolSummary["status"] {
   const { result, isPartial } = call as NativeContent;
   return !result || isPartial !== false ? "running" : result.isError ? "error" : "success";
+}
+/** Number of image blocks in a tool result's content. */
+export function imageCount(content: unknown): number {
+  if (!Array.isArray(content)) return 0;
+  let count = 0;
+  for (const block of content) if (block?.type === "image") count++;
+  return count;
 }
 
 const nameOf = (component: Component): string => component.constructor.name;
@@ -361,7 +370,7 @@ export class NativeContentIndex {
       const native = source as NativeContent;
       return {
         name: native.toolName!, args: native.args,
-        status: callStatus(native),
+        status: callStatus(native), images: imageCount(native.result?.content),
       };
     } : undefined;
     return { source, owner: owner ?? source, component: source, kind: owner ? "tool" : kind, spacing, compact, tool, search: width => {

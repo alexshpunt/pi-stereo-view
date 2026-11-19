@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Compact tool rows show how many images a call returned, such as `read (1 image)`, so a collapsed screenshot or image read is not missed. Groups show the total for their calls (#103).
+
 ## 0.1.20 - 2026-11-19
 
 ### Added
