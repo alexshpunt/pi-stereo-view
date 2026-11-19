@@ -57,7 +57,7 @@ test("each original native result opens independently inside a mixed linked cont
   const index = new NativeContentIndex(source, calls);
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
   const document = new NativeDocument(source, "activity", timestamps, () => theme, () => 0, () => false,
-    undefined, true, index, undefined, () => false, () => true);
+    undefined, true, index, undefined, () => false, () => ({ compact: true, group: true }));
   const render = () => { document.beginFrame(); return document.render(120).map(stripTerminalSequences); };
   const click = (row: number) => {
     const lines = render();
@@ -107,5 +107,46 @@ test("each original native result opens independently inside a mixed linked cont
     const references = (component: Component): Component[] => [component, ...((component as Container).children ?? []).flatMap(references)];
     click(header("root/5")); render();
     expect(references(document).filter(component => component === late)).toHaveLength(1);
+  } finally { document.dispose(); }
+});
+
+test.each([false, true])("with the nested tree off, the caller keeps its native output panel (compact: %s)", compact => {
+  const calls = new NestedCalls();
+  const parent = new ToolExecutionComponent("root", "caller", "PARENT-PARTS-FIXTURE");
+  const children = ["root/1", "root/2"].map(id => new ToolExecutionComponent(id, "bash", "CHILD-" + id));
+  for (const child of children) calls.start({ parentToolCallId: "root", toolCallId: child.toolCallId, toolName: "bash", args: child.args });
+  const panel = new CustomEntryComponent();
+  panel.customComponent.children = [new Text("PANEL-HEADING", 0, 0), ...children];
+  const history = new Container(); history.children = [parent, panel];
+  const source = new Container(); source.children = [new Container(), new Container(), history];
+  let tree = false;
+  const index = new NativeContentIndex(source, calls, () => tree);
+  const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
+  const document = new NativeDocument(source, "activity", timestamps, () => theme, () => 0, () => false,
+    undefined, true, index, undefined, () => false, () => ({ compact, group: true }));
+  const render = () => { document.beginFrame(); return document.render(120).map(stripTerminalSequences); };
+  try {
+    let lines = render();
+    if (compact) {
+      expect(lines).toHaveLength(1);
+      const event: TuiMouseEvent = { type: "click", button: "left", x: 3, y: 0, screenX: 3, screenY: 0,
+        width: 120, height: 1, shift: false, alt: false, ctrl: false };
+      document.handleMouse({ ...event, type: "press" }); document.handleMouse(event);
+      lines = render();
+    }
+    expect(index.entries("activity").map(entry => entry.source)).toEqual([parent, panel]);
+    for (const marker of ["PARENT-PARTS-FIXTURE", "PANEL-HEADING", "CHILD-root/1", "CHILD-root/2"])
+      expect(lines.filter(line => line.includes(marker))).toHaveLength(1);
+    expect(lines.join("\n")).not.toContain("caller output");
+    expect(document.searchEntries().find(entry => entry.source === panel)?.text).toContain("CHILD-root/2");
+    // Turning the tree on within a verified frame splits the panel into its calls again.
+    document.beginFrame();
+    expect(index.entries("activity").map(entry => entry.source)).toEqual([parent, panel]);
+    tree = true;
+    expect(index.entries("activity").map(entry => entry.source)).toEqual([parent, panel.customComponent.children[0], ...children]);
+    expect(render().join("\n")).toContain("caller output");
+    tree = false;
+    expect(render().join("\n")).not.toContain("caller output");
+    expect(history.children).toEqual([parent, panel]);
   } finally { document.dispose(); }
 });

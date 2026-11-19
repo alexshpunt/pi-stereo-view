@@ -55,9 +55,37 @@ test.each([["streamTools", "on"], ["streamTools", 1], ["streamDelay", 0], ["stre
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
+test.each([true, false])("files saved before grouping was separate keep grouping equal to compact %s", async compactTools => {
+  const directory = await mkdtemp(path.join(tmpdir(), "compact-tools-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    await writeFile(file, JSON.stringify({ side: "left", chatWidth: null, compactTools }));
+    expect(await loadPreferences(file)).toMatchObject({ compactTools, groupTools: compactTools, nestedTree: true });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test.each([["groupTools", false], ["nestedTree", false], ["groupTools", true], ["nestedTree", true]] as const)("persists %s set to %s across reloads", async (key, value) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "compact-tools-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    await savePreferences(file, { ...defaults, compactTools: !value, [key]: value });
+    expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject({ [key]: value });
+    expect(await loadPreferences(file)).toEqual({ ...defaults, compactTools: !value, [key]: value });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test.each([["groupTools", "on"], ["groupTools", null], ["nestedTree", 1], ["nestedTree", "off"]])("rejects invalid %s value %s", async (key, value) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "compact-tools-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    await writeFile(file, JSON.stringify({ ...defaults, [key]: value }));
+    await expect(loadPreferences(file)).rejects.toThrow();
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("ships the compact side-by-side defaults", () => {
   expect(defaults).toMatchObject({
     layout: "columns", side: "left", chatWidth: null, chatHeight: null, showTimestamps: true, showCopyButtons: true,
-    buttonStyle: "text", compactTools: true, streamTools: true, streamDelay: 5,
+    buttonStyle: "text", compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5,
   });
 });

@@ -1,6 +1,7 @@
 # The shipped defaults are compact tools, streaming and text buttons. Most checks exercise the
 # original full-card, icon-button display, so they start from that baseline: a saved preference
-# wins, and PI_TRANSCRIPT_TEST_DEFAULTS=1 leaves the shipped defaults untouched.
+# wins, and PI_TRANSCRIPT_TEST_DEFAULTS=1 leaves the shipped defaults untouched. Grouping is left
+# out, so like a file saved before it was a separate setting, it follows the saved compactTools.
 if [ -n "${PI_CODING_AGENT_DIR:-}" ] && [ -z "${PI_TRANSCRIPT_TEST_DEFAULTS:-}" ]; then
   node -e '
     const fs = require("fs"), path = require("path");

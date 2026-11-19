@@ -53,6 +53,13 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
     await input(`\x1b[<0;${x + 1};${y + 1}M`);
     await input(`\x1b[<0;${x + 1};${y + 1}m`);
   };
+  // Grouping is the fifth setting; the toolbar button changes only compact rows.
+  const toggleGrouping = async (): Promise<void> => {
+    await click("[ ≡ ]");
+    for (let row = 0; row < 4; row++) await input("\x1b[B");
+    await input(" ");
+    await input("\x1b");
+  };
   const clickGroup = (): Promise<void> => click("compact_probe", "", line =>
     !["A938", "D938", "B938", "E938", "C938"].some(tag => line.includes(tag)));
   pi.on("session_start", async (_event, ctx) => {
@@ -91,6 +98,7 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
       if (args.tag === "A938") {
         await capture("normal");
         await click("[ ⊟ ]", "Activity");
+        await toggleGrouping();
         await capture("initialGroup");
         await click("compact_probe");
         await capture("started");
@@ -191,6 +199,7 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
       for (let index = 1; index < Number(choice); index++) await input("\x1b[B");
       await input("\r");
       for (let attempt = 0; attempt < 100 && !copied; attempt++) await setTimeout(10);
+      await toggleGrouping();
       await click("[ ⊞ ]", "Activity");
       await capture("restored");
       await click("[ ⊟ ]", "Activity");

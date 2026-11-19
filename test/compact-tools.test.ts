@@ -34,7 +34,7 @@ function setup(...components: Component[]) {
   const history = new Container(); history.children = components;
   const source = new Container(); source.children = [new Container(), new Container(), history];
   const index = new NativeContentIndex(source);
-  let compact = true;
+  let display = { compact: true, group: true };
   let copied: string | undefined;
   const starts = new Map<string, number>();
   let showTime = true;
@@ -42,7 +42,7 @@ function setup(...components: Component[]) {
     type: "custom", customType: TOOL_START_ENTRY, data: { toolCallId, time },
   })) } as unknown as ExtensionContext["sessionManager"]);
   const document = new NativeDocument(source, "activity", timestamps, () => theme, () => 0, () => showTime,
-    undefined, true, index, text => { copied = text; }, () => true, () => compact);
+    undefined, true, index, text => { copied = text; }, () => true, () => display);
   const render = (width = 80) => { document.beginFrame(); return document.render(width).map(stripTerminalSequences); };
   const click = (y: number, width = 80, x = 5): void => {
     const event: TuiMouseEvent = { type: "click", button: "left", x, y, screenX: x, screenY: y,
@@ -51,7 +51,7 @@ function setup(...components: Component[]) {
     document.handleMouse(event);
   };
   return { history, index, document, render, click, starts, hideTime: () => { showTime = false; },
-    toggle: () => { compact = !compact; }, copied: () => copied };
+    toggle: () => { display = { compact: !display.compact, group: !display.group }; }, copied: () => copied };
 }
 
 function complete(tool: ToolExecutionComponent, error = false): void {
