@@ -56,7 +56,9 @@ Stereo builds nested disclosure structure from `tool_execution_start`/`tool_exec
 
 Split history reuses unchanged native blocks between frames. Custom renderers must invalidate changed components before requesting a render, as required by Pi's component API. Native text setters, history rebuilds, streaming, tool updates, expansion, width and theme changes refresh the affected output. Image placement blocks are never retained in this cache. Detaching the layout removes its invalidation observers.
 
-Every streamed delta and spinner tick requests a frame, so per-frame work must not grow with history length. `NativeDocument` keeps one cached segment of rows per projected entry. Each frame renders only the entries near its panel's viewport (from the scroll position before layout, or the tail while following the end), plus entries whose native nodes invalidated or whose cheap shell inputs changed; a rotating check reads the shell inputs of 64 offscreen entries per frame. Entries never measured at the current width or settings epoch are measured lazily within a 4 ms budget per frame, with a follow-up frame until they converge. When an entry wholly above the viewport changes height and the panel is not following the end, the document reports the difference through `takeScrollShift()` and the split layout moves the scroll position by it, so the visible rows stay in place. Search with a jump target renders every entry. Compact call and group headers are reused until a displayed input changes: width, name, argument object, state, member count, expansion, clock or theme. Running calls rebuild their header on every frame because streamed arguments may change in place. Hierarchy guides are reused while the wrapped rows are unchanged. Timestamps reread the session only when its leaf entry changes. Content classification depends on each answer's block layout and child components, not on the message object that streaming replaces, and unchanged answers keep their child arrays so their native caches stay valid.
+Every streamed delta and spinner tick requests a frame, so per-frame work must not grow with history length. `NativeDocument` keeps one cached segment of rows per projected entry. Each frame renders only the entries near its panel's viewport (from the scroll position before layout, or the tail while following the end), plus entries whose native nodes invalidated or whose cheap shell inputs changed; a rotating check reads the shell inputs of 64 offscreen entries per frame. Entries never measured at the current width or settings epoch are measured lazily within a 4 ms budget per frame, with a follow-up frame until they converge. When an entry wholly above the viewport changes height and the panel is not following the end, the document reports the difference through `takeScrollShift()` and the split layout moves the scroll position by it, so the visible rows stay in place. Search with a jump target renders every entry. Compact call and group headers are reused until a displayed input changes: width, name, argument object, state, member count, expansion, clock or theme. Running calls rebuild their header on every frame because streamed arguments may change in place. Hierarchy guides are reused while the wrapped rows are unchanged. Timestamps reread the session only when its leaf entry changes. A streamed answer is classified again on each delta, but its projected entries and child arrays stay the same while its block layout and child components do not change, so their native caches stay valid.
+
+The passes that feed the document run every frame too, so each reuses its result until its inputs change. `NativeContentIndex` keeps one classification per history child and reclassifies only new children, children whose preceding spacers changed, assistants whose content array or message Pi replaced, and linked panels whose owner or parts changed; unchanged entries keep their objects, and the entry arrays keep their identity while no entry changed. Tool grouping reruns when the entries, tool presentation or live calls change, or when a call's status changes; the status is read from the call's `result` and `isPartial` fields every frame, because Pi updates results without invalidating the component. Nested trees reuse their map while the entries and nested calls are unchanged. `ToolStreaming` looks only at live calls while the entry array is the same. Timestamp metadata is checked for new blocks, the last block and a rotating slice of 64 older blocks per frame.
 
 ## Rendering profiles
 
@@ -80,6 +82,19 @@ Reference results (LPT-1652; ZinPC, idle, Pi 1.5.2, 290x91, columns, compact Act
 | tool output | 2.0 | 13.3 | 2.3 | 4.1 | 16.2 | 2.8 |
 
 Streaming over a copy of a real 2,145-entry session at 290x91 (`test/session.profile.ts`): stock Pi 56% CPU, split before 97% with a 30 ms median event-loop delay, split after 26% with 5 ms.
+
+Incremental history passes (LPT-1671; same setup, columns only, 100 samples per action, median of three runs; per-frame CPU P50 in ms):
+
+| action | before 100 calls | after 100 | before 1,000 calls | after 1,000 | ratio before | ratio after |
+|---|---|---|---|---|---|---|
+| repaint (spinner) | 1.45 | 1.47 | 2.01 | 1.65 | 1.39 | 1.12 |
+| typing | 1.05 | 0.99 | 1.45 | 1.19 | 1.37 | 1.20 |
+| scroll | 2.48 | 2.28 | 3.08 | 2.69 | 1.24 | 1.18 |
+| streamed text | 2.08 | 1.94 | 3.32 | 2.37 | 1.60 | 1.22 |
+| tool output | 1.88 | 1.79 | 2.34 | 2.00 | 1.24 | 1.12 |
+| streamed arguments | 1.69 | 1.63 | 2.13 | 1.81 | 1.26 | 1.12 |
+
+The remaining growth is Pi's own layout and painting; the extension's per-frame time stays at about 0.2–0.35 ms at both sizes.
 
 `test/session.profile.ts` streams a scripted answer and command over a copy of a real saved session and reports process CPU and event-loop delay for the agent run. It is skipped unless `PROFILE_SESSION` names a session file; `PROFILE_MODE` is `split` or `stock`, and `PROFILE_CPU_DIR` writes a V8 profile of the Pi process. Keep personal sessions and their profiles out of Git.
 
