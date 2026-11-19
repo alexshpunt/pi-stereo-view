@@ -26,7 +26,9 @@ export default function timestampProbe(pi: ExtensionAPI): void {
     if (tui.layoutRoot) walk(tui.layoutRoot);
     return [...found];
   };
-  const views = (): ScrollView[] => containers().filter((component): component is ScrollView => component instanceof ScrollView);
+  // The split's keyboard proxy forwards to the active panel; scroll each real view once.
+  const views = (): ScrollView[] => containers().filter((component): component is ScrollView =>
+    component instanceof ScrollView && component.constructor.name !== "ActivePaneScrollView");
   const click = async (label: string, owner?: string): Promise<void> => {
     const lines = (await capture()).map(stripTerminalSequences);
     const y = lines.findIndex(line => line.includes(label) && (!owner || line.includes(owner)));
