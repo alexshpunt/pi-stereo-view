@@ -21,7 +21,9 @@ export function toolGroups(entries: readonly ContentEntry[], present: (name: str
   return groups;
 }
 
-/** Every group has one state; failed calls always remain individual rows. */
+/** Every group has one state; failed calls always remain individual rows. Images are counted across members. */
 export function groupSummary(group: ToolGroup): ToolSummary {
-  return { name: group.name, args: undefined, status: group.status };
+  let images = 0;
+  for (const call of group.calls) images += call.tool?.().images ?? 0;
+  return { name: group.name, args: undefined, status: group.status, images };
 }
