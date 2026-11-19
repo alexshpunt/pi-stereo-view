@@ -10,6 +10,8 @@ import { NestedCalls } from "./nested-calls.ts";
 import type { Preferences } from "./preferences.ts";
 import type { TranscriptTimestamps } from "./timestamps.ts";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.ts";
+import { SplitSurface } from "./surface.ts";
+import { sameValues } from "./render-cache.ts";
 
 type NativeTui = TUI & {
   layoutRoot?: Container;
@@ -20,6 +22,23 @@ const MIN_CHAT = 24;
 const MIN_ACTIVITY = 40;
 const MIN_ROWS = 4;
 const TOOLBAR_BUTTON_WIDTH = 6;
+
+/**
+ * A control that renders again only when one of its inputs changes. Every spinner frame lays out
+ * all toolbar and panel controls; restyling unchanged labels would cost more than the panels themselves.
+ */
+function memoized(inputs: (width: number) => unknown[], render: (width: number) => string[]): Component {
+  let last: { inputs: unknown[]; lines: string[] } | undefined;
+  return {
+    render: width => {
+      const current = inputs(width);
+      if (last && sameValues(last.inputs, current)) return last.lines;
+      last = { inputs: current, lines: render(width) };
+      return last.lines;
+    },
+    invalidate: () => { last = undefined; },
+  };
+}
 
 class PanelScrollView extends ScrollView {
   constructor(component: Component, options: ScrollViewOptions, private readonly interact: () => void, active: () => boolean) {
@@ -111,7 +130,9 @@ class ButtonStack extends VStack {
         flush();
       }
     }
-    return super.render(width);
+    // Pi and the split surface lay out these rows themselves and read render only for the height.
+    // Rendering the rows here would composite every button into a full-width row on every frame.
+    return Array<string>(this.children.length).fill("");
   }
 }
 class TranscriptColumns extends HStack {
@@ -137,9 +158,15 @@ class TranscriptRows extends VStack {
 class TranscriptRoot extends VStack {
   private readonly owned: Component[];
 
-  constructor(children: StackChild[]) {
+  constructor(children: StackChild[], private readonly unhandled: (event: TuiMouseEvent) => void) {
     super(children);
     this.owned = [...this.children];
+  }
+
+  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+    // Pi offers the root only events no component handled, such as pointer moves outside the split panels.
+    this.unhandled(event);
+    return undefined;
   }
 
   unchanged(): boolean {
@@ -194,6 +221,7 @@ export class TranscriptLayout {
   private activity?: ScrollView;
   private chat?: ScrollView;
   private documents?: Record<Pane, NativeDocument>;
+  private surface?: SplitSurface;
   private disposeDocuments?: () => void;
   private activePane: Pane = "chat";
   private readonly searchShortcut = new PanelSearchShortcut();
@@ -225,12 +253,10 @@ export class TranscriptLayout {
   ) {}
 
   private button(label: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
-    const button = new MouseRegion({
-      render: width => new Text(this.theme().style((this.preferences.buttonStyle === "icons" ? "[ " + label() + " ]" : "[" + label() + "]").padEnd(width), {
+    const button = new MouseRegion(memoized(width => [width, this.theme(), this.preferences.buttonStyle, label(), enabled(), background?.()],
+      width => new Text(this.theme().style((this.preferences.buttonStyle === "icons" ? "[ " + label() + " ]" : "[" + label() + "]").padEnd(width), {
         fg: enabled() ? "accent" : "dim", bg: background?.(),
-      }), 0, 0).render(width),
-      invalidate() {},
-    }, event => {
+      }), 0, 0).render(width)), event => {
       if (event.button !== "left") return;
       if (event.type === "press") return { capture: true };
       if (event.type === "click" && enabled() && event.x >= 0 && event.x < event.width && event.y === 0) {
@@ -342,6 +368,11 @@ export class TranscriptLayout {
     this.activity = new PanelScrollView(activityDocument, scrollOptions, () => this.activate("activity"),
       () => this.searchPane() === "activity");
     this.chat = new PanelScrollView(chatDocument, scrollOptions, () => this.activate("chat"), () => this.searchPane() === "chat");
+    // Each document renders only the history near its panel's viewport from the previous layout.
+    for (const [document, view] of [[activityDocument, this.activity], [chatDocument, this.chat]] as const) {
+      document.setViewport(() => view.viewportHeight ?
+        { top: view.scrollTop, height: view.viewportHeight, following: view.isFollowingEnd } : undefined, () => this.host?.requestRender());
+    }
     let historyHeight = 0;
     let chatHeader: Component;
     let activityHeader: Component;
@@ -439,25 +470,25 @@ export class TranscriptLayout {
     ]);
     const pane = (title: string, target: Pane, view: ScrollView): Component => {
       const hue = target === "chat" ? rgbColor(104, 158, 115) : rgbColor(107, 152, 190);
+      let colors: { inputs: unknown[]; palette: { fill: Color; text: Color; border: Color } } | undefined;
+      // Mixed colors keep their identity while the theme is unchanged, so memoized controls can compare them.
       const palette = () => {
         const theme = this.theme();
-        return {
+        const inputs = [theme, theme.colors.customMessageBg, theme.colors.text, theme.colors.border];
+        if (!colors || !sameValues(colors.inputs, inputs)) colors = { inputs, palette: {
           fill: mixColors(theme.colors.customMessageBg, hue, 0.15, "srgb"),
           text: mixColors(theme.colors.text, hue, 0.25),
           border: mixColors(theme.colors.border, hue, 0.3),
-        };
+        } };
+        return colors.palette;
       };
-      const line: Component = {
-        render: width => [this.theme().style("─".repeat(width), { fg: palette().border })],
-        invalidate() {},
-      };
+      const line = memoized(width => [width, this.theme(), palette()],
+        width => [this.theme().style("─".repeat(width), { fg: palette().border })]);
       const label = new ButtonStack([
-        { component: new MouseRegion({
-          render: width => new Text(this.theme().style(truncateToWidth(width < title.length + 3 ? title : " " + (this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
+        { component: new MouseRegion(memoized(width => [width, this.theme(), palette(), this.searchPane() === target],
+          width => new Text(this.theme().style(truncateToWidth(width < title.length + 3 ? title : " " + (this.searchPane() === target ? "● " : " ") + title, width, "").padEnd(width), {
             fg: this.searchPane() === target ? "accent" : palette().text, bg: palette().fill,
-          }), 0, 0).render(width),
-          invalidate() {},
-        }, event => {
+          }), 0, 0).render(width)), event => {
           if (event.button === "left" && (event.type === "press" || event.type === "click")) {
             this.activate(target);
             return { handled: true, render: true };
@@ -486,10 +517,8 @@ export class TranscriptLayout {
       ] : [
         { index: 1, icon: 6 },
         { index: 2, icon: 5 },
-      ], title.length, {
-        render: width => [this.theme().style(" ".repeat(width), { bg: palette().fill })],
-        invalidate() {},
-      });
+      ], title.length, memoized(width => [width, this.theme(), palette()],
+        width => [this.theme().style(" ".repeat(width), { bg: palette().fill })]));
       headers.push(label);
       const header = new VStack([
         { component: line, basis: 1, shrink: 0, visible: () =>
@@ -507,12 +536,10 @@ export class TranscriptLayout {
     };
     const activityPane = pane("Activity", "activity", this.activity);
     const chatPane = pane("Conversation", "chat", this.chat);
-    const divider = (axis: "columns" | "rows"): Component => new MouseRegion({
-      render: width => axis === "columns" ?
+    const divider = (axis: "columns" | "rows"): Component => new MouseRegion(memoized(width => [width, host.terminal.rows, this.theme()],
+      width => axis === "columns" ?
         Array.from({ length: host.terminal.rows }, () => this.theme().fg("dim", "║")) :
-        [this.theme().fg("dim", "═".repeat(width))],
-      invalidate() {},
-    }, event => {
+        [this.theme().fg("dim", "═".repeat(width))]), event => {
       if (event.button !== "left" && event.type !== "release") return;
       const position = axis === "columns" ? event.screenX : event.screenY;
       if (event.type === "press") {
@@ -564,32 +591,42 @@ export class TranscriptLayout {
       }
     };
     this.rebuild();
+    const surface = new SplitSurface(host, {
+      model: () => {
+        const zoom = this.preferences.zoom;
+        if (zoom) return { component: zoom === "chat" ? chatPane : activityPane, fill: false, minSize: MIN_ROWS };
+        return this.preferences.layout === "columns" ? { component: columns, fill: true, minSize: 1 } : { component: rows, fill: false, minSize: 1 };
+      },
+      height: () => historyHeight,
+      active: () => {
+        const pane = this.searchPane();
+        return pane === "chat" ? this.chat : pane === "activity" ? this.activity : undefined;
+      },
+    });
+    surface.setModels([columns, rows, activityPane, chatPane]);
+    this.surface = surface;
     const mounted = new TranscriptRoot([
       { component: toolbar, basis: "auto", shrink: 0, visible: () => {
         // Root visibility is evaluated once at the start of each native layout pass.
         pass = undefined;
         this.timestamps.beginFrame();
-        activityDocument.beginFrame();
-        chatDocument.beginFrame();
+        index.beginFrame();
+        activityDocument.beginFrame(true);
+        chatDocument.beginFrame(true);
         return true;
       } },
       { component: {
         render: width => [this.theme().style("─".repeat(width), { fg: this.theme().colors.border })],
         invalidate() {},
       }, basis: 1, shrink: 0, visible: viewport => !shown(viewport) },
-      { component: columns, basis: 0, grow: 1, minSize: 1,
-        visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "columns" },
-      { component: rows, basis: "auto", minSize: 1,
-        visible: viewport => shown(viewport) && !this.preferences.zoom && this.preferences.layout === "rows" },
-      { component: activityPane, basis: "auto", minSize: MIN_ROWS,
-        visible: viewport => shown(viewport) && this.preferences.zoom === "activity" },
-      { component: chatPane, basis: "auto", minSize: MIN_ROWS,
-        visible: viewport => shown(viewport) && this.preferences.zoom === "chat" },
+      // The split paints as one full-width row block; the proxy gives Pi's keyboard scrolling the active panel.
+      { component: surface, basis: "auto", minSize: 1, visible: viewport => shown(viewport) },
+      { component: surface.proxy, basis: 0, shrink: 0, visible: viewport => shown(viewport) },
       { component: transcript, basis: 0, grow: 1, minSize: 1, visible: viewport => !shown(viewport) },
       ...(projectedDock ? [{ component: projectedDock, basis: "auto" as const, shrink: 0, minSize: 1,
         visible: () => projectSurface }] : []),
       { component: dock, basis: "auto", shrink: 0, minSize: 1, visible: () => !projectSurface },
-    ]);
+    ], event => surface.unhandled(event));
     this.mounted = mounted;
     host.setLayoutRoot(mounted);
     host.requestRender();
@@ -846,6 +883,8 @@ export class TranscriptLayout {
     this.searchShortcut.dispose();
     this.disposeDocuments?.();
     this.disposeDocuments = undefined;
+    this.surface?.dispose();
+    this.surface = undefined;
     const host = this.host;
     this.activity?.setScrollbar("hidden");
     this.chat?.setScrollbar("hidden");

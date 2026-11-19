@@ -10,6 +10,7 @@ import { ToolStreaming } from "./tool-streaming.ts";
 import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.ts";
 import { ToolIndent } from "./tool-indent.ts";
 import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
+import { pushShellInputs, sameValues } from "./render-cache.ts";
 export type { Pane } from "./content.ts";
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
@@ -44,6 +45,47 @@ class SearchHighlight implements Component {
   }
 }
 
+/** Scroll state of the panel showing a document, read before the panel's layout in a frame. */
+export interface DocumentViewport { top: number; height: number; following: boolean }
+
+/** Time per frame for measuring offscreen entries that are new, changed or stale. */
+const LAZY_BUDGET_MS = 4;
+/** Offscreen entries checked for native changes per frame, in rotation. */
+const SWEEP_ENTRIES = 64;
+
+/** One projected entry's rows, the components that produced them, and the inputs they depend on. */
+interface Segment {
+  components: Component[];
+  heights: number[];
+  lines: string[];
+  width: number;
+  epoch: number;
+  /** Rows are blank placeholders with the entry's last known height. */
+  estimate: boolean;
+  visibleIn: boolean;
+  toolRunIn: boolean;
+  visibleOut: boolean;
+  toolRunOut: boolean;
+  /** Cheap fingerprint of native state, compared while the entry stays offscreen. */
+  print: unknown[];
+  /** First row and build of the last document this segment was part of. */
+  start: number;
+  build: number;
+}
+
+/** The last document: segment order with the row and child offsets of each segment. */
+interface Built {
+  order: Segment[];
+  lines: string[][];
+  components: Component[][];
+  rows: number[];
+  childRows: number[];
+  document: string[];
+  children: Component[];
+}
+
+const blankLines = (height: number): string[] => Array<string>(height).fill("");
+
 /**
  * Project the live native component tree, not messages or renderer strings.
  * Assistant shells keep the native render method and original content components.
@@ -76,6 +118,22 @@ export class NativeDocument extends Container {
   private checked = false;
   private releasedFor?: readonly ContentEntry[];
   private disposed = false;
+  // Virtualized history: one cached segment per projected entry, reused while it stays offscreen.
+  private readonly segments = new Map<Component, Segment>();
+  private built?: Built;
+  private segmentsFor?: readonly ContentEntry[];
+  private buildId = 0;
+  private epoch = 0;
+  private presentation: unknown[] = [];
+  private invalidations = 0;
+  private scrollShift = 0;
+  private sweep = 0;
+  /** Entries whose native nodes invalidated since they last rendered. */
+  private readonly dirty = new Set<Component>();
+  private viewport?: () => DocumentViewport | undefined;
+  private requestRender?: () => void;
+  private followUp = false;
+  private readonly print: unknown[] = [];
 
   constructor(
     private readonly source: Container,
@@ -103,11 +161,15 @@ export class NativeDocument extends Container {
   private live(source: Component): boolean { return this.compactActive && this.streamer?.isLive(source) === true; }
   private compactActive = false;
 
-  /** Start a native frame; only repeated measurements within that frame may reuse routing. */
-  beginFrame(): void {
+  /**
+   * Start a native frame; only repeated measurements within that frame may reuse routing.
+   * Documents sharing one index pass `indexStarted` after the owner started the index's frame,
+   * so the shared history is verified once per frame, not once per panel.
+   */
+  beginFrame(indexStarted = false): void {
     this.frameActive = true;
     this.frameWidth = undefined;
-    this.index.beginFrame();
+    if (!indexStarted) this.index.beginFrame();
     // Blocks are only added from the current entries, so an unchanged index has nothing to release.
     const entries = this.index.entries(this.pane);
     if (this.compactBlocks.size && entries !== this.releasedFor) {
@@ -124,11 +186,32 @@ export class NativeDocument extends Container {
     if (this.frameActive && this.checked) return;
     const chat = this.source.children[2] as Container;
     if (!Array.isArray(chat?.children)) throw new Error("Pi's history document is not supported");
-    for (const component of chat.children) {
-      this.timestamps.check(component);
-    }
+    // Existing blocks can change shape too; this cheap type check covers the whole history.
+    for (const component of chat.children) this.timestamps.check(component);
     this.index.entries(this.pane);
     this.checked = true;
+  }
+
+  /**
+   * Render only entries near the panel's viewport; other entries keep their rows from earlier frames.
+   * Without a provider, or before the panel has a height, every entry renders each frame.
+   */
+  setViewport(provider: (() => DocumentViewport | undefined) | undefined, requestRender?: () => void): void {
+    this.viewport = provider;
+    this.requestRender = requestRender;
+  }
+
+  /** Rows entries above the viewport grew by since the last call; the panel adds them to keep its content in place. */
+  takeScrollShift(): number {
+    const shift = this.scrollShift;
+    this.scrollShift = 0;
+    return shift;
+  }
+
+  /** Render a segment again on its next frame, even offscreen. */
+  private stale(source: Component | undefined): void {
+    const segment = source && this.segments.get(source);
+    if (segment) segment.epoch = -1;
   }
 
   /** Read full saved text from the current native branch, including collapsed blocks. */
@@ -170,6 +253,9 @@ export class NativeDocument extends Container {
 
   /** Clear search-only fragments, measurements and highlighting without invalidating native blocks. */
   clearSearch(): void {
+    // Highlights and excerpts live in these entries' cached rows.
+    this.stale(this.searchAnchor?.entry.source);
+    this.stale(this.excerpt?.entry.source);
     this.searchTool = undefined;
     this.searchAnchor = undefined;
     this.excerpt = undefined;
@@ -214,12 +300,31 @@ export class NativeDocument extends Container {
     this.streamer?.dispose();
     for (const block of this.compactBlocks.values()) block.dispose();
     this.compactBlocks.clear();
+    this.segments.clear();
+    this.dirty.clear();
+    this.built = undefined;
     this.frameWidth = undefined;
     this.frameLines = undefined;
   }
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
     if (event.type === "wheel" || (event.type === "press" && event.button === "left")) this.interact();
-    return super.handleMouse(event);
+    const built = this.built;
+    if (!built || event.y < 0) return undefined;
+    // Find the entry under the pointer, then route like a container of that entry's components.
+    let low = 0;
+    let high = built.order.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (built.rows[middle] <= event.y) low = middle; else high = middle - 1;
+    }
+    const segment = built.order[low];
+    const row = event.y - (built.rows[low] ?? 0);
+    if (!segment || segment.estimate || row >= segment.lines.length) return undefined;
+    const entry = {
+      children: segment.components,
+      mouseLayout: { width: event.width, children: segment.components.map((component, index) => ({ component, height: segment.heights[index] })) },
+    };
+    return Container.prototype.handleMouse.call(entry, { ...event, y: row, height: segment.lines.length });
   }
   private toolOpen(source: Component): boolean {
     return this.openTools.has(source) || this.searchTool === source;
@@ -286,7 +391,10 @@ export class NativeDocument extends Container {
     if (!stamped) {
       stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
         this.theme, this.timestampGutter, () => this.showTimestamps() && !(this.pane === "activity" && this.compactTools() && entry.kind === "tool" && !this.live(entry.owner)),
-        this.copy ? () => this.copyBlock(component) : undefined, this.showCopy, this.buttonStyle);
+        this.copy ? () => this.copyBlock(component) : undefined, this.showCopy, this.buttonStyle, () => {
+          // Nested panels render inside their owner's segment.
+          this.dirty.add(component).add(entry.owner);
+        });
       this.stamped.set(routed, stamped);
     }
     this.compactBlocks.set(component, stamped);
@@ -309,7 +417,6 @@ export class NativeDocument extends Container {
     this.positions.clear();
     if (this.excerpt && !this.index.contains(this.excerpt.entry.source, this.pane)) this.excerpt = undefined;
     if (this.searchAnchor && !this.index.contains(this.searchAnchor.entry.source, this.pane)) this.searchAnchor = undefined;
-    const result: Component[] = [];
     const locateMatch = this.searchAnchor !== undefined || this.excerpt !== undefined;
     let row = 0;
     let visibleBlock = false;
@@ -357,17 +464,41 @@ export class NativeDocument extends Container {
       }
       trees.set(entry.source, tree);
     }
-    for (const entry of entries) {
-      if (entry.owner !== entry.source && trees.has(entry.owner)) continue;
+    const view = locateMatch ? undefined : this.viewport?.();
+    // The first frame and search measure every entry; later frames reuse offscreen rows.
+    const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
+    const presentation = [this.theme(), compactTools, this.compactActive, this.showTimestamps(), this.showCopy(), this.buttonStyle(),
+      this.timestampGutter(), this.invalidations];
+    if (!sameValues(presentation, this.presentation)) {
+      this.presentation = presentation;
+      this.epoch++;
+    }
+    const build = ++this.buildId;
+    const started = performance.now();
+    // Render the viewport plus half a viewport on each side; scrolling moves the window before layout.
+    const margin = virtual ? Math.ceil(view.height / 2) : 0;
+    // A following panel shows the end; find the entries of its last rows from cached heights.
+    let tail = 0;
+    if (virtual && view.following) {
+      let rows = 0;
+      tail = entries.length;
+      while (tail > 0 && rows < view.height + margin) rows += this.segments.get(entries[--tail].source)?.lines.length ?? 1;
+    }
+    const sweep = entries.length ? this.sweep % entries.length : 0;
+    this.sweep = sweep + SWEEP_ENTRIES;
+    const top = virtual && !view.following ? view.top : 0;
+    let shift = 0;
+    let pending = false;
+    const order: Segment[] = [];
+    const renderEntry = (entry: ContentEntry, compactTool: boolean, tree: NestedTree | undefined): Segment => {
       const component = entry.source;
       const routed = entry.component;
-      this.clockOwners.set(component, entry.owner);
-      const start = result.length;
-      const wasVisible = visibleBlock;
+      const result: Component[] = [];
+      const visibleIn = visibleBlock;
+      const toolRunIn = toolRun;
       let clock: SearchClock | undefined;
       let nativeBody = true;
       let bodyDepth = 0;
-      const compactTool = compactTools && entry.kind === "tool" && !this.live(entry.owner);
       if (compactTool) {
         const group = this.groups.get(entry.owner);
         const grouped = group !== undefined && group.calls.length > 1;
@@ -382,7 +513,6 @@ export class NativeDocument extends Container {
         }
         nativeBody = members && this.toolOpen(entry.owner);
       }
-      const tree = trees.get(component);
       const contentStart = result.length;
       const bodyWidth = Math.max(0, width - (bodyDepth ? bodyDepth * 2 + 1 : 0));
       if (nativeBody && tree) {
@@ -400,16 +530,16 @@ export class NativeDocument extends Container {
         result.push(stamped);
         clock = stamped.searchClock();
       }
-      if (!tree && this.searchAnchor?.entry.source === component && !this.excerpt && result.length > start) {
+      if (!tree && this.searchAnchor?.entry.source === component && !this.excerpt && result.length > 0) {
         const last = result.length - 1;
         result[last] = this.highlighted(result[last]);
       }
       if (locateMatch) {
-        const prefix = result.slice(start, contentStart).flatMap(child => child.render(width));
+        const prefix = result.slice(0, contentStart).flatMap(child => child.render(width));
         const lines = [...prefix, ...result.slice(contentStart).flatMap(child => child.render(bodyWidth))];
         let excerptRow: number | undefined;
         if (this.excerpt?.entry.source === component) {
-          if (!lines.length && wasVisible) {
+          if (!lines.length && visibleIn) {
             result.push(new Spacer(1));
             lines.push("");
           }
@@ -428,20 +558,165 @@ export class NativeDocument extends Container {
           });
           if (excerptRow !== undefined) this.positions.set(component, { row, lines: [], excerptRow });
         } else this.positions.set(component, { row: row + prefixRows, lines: lines.slice(prefixRows), clock, excerptRow });
-        row += lines.length;
       }
       for (let child = contentStart; child < result.length; child++) result[child] = this.indent(result[child], bodyDepth, true);
+      const heights: number[] = [];
+      // Copy rows: native renderers may reuse and later mutate their row arrays.
+      const lines: string[] = [];
+      for (const child of result) {
+        const childLines = child.render(width);
+        heights.push(childLines.length);
+        for (const line of childLines) lines.push(line);
+      }
+      const print: unknown[] = [];
+      this.fingerprint(entry, compactTool, tree, print);
+      let segment = this.segments.get(component);
+      if (!segment) {
+        segment = { components: result, heights, lines, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
+          visibleOut: visibleBlock, toolRunOut: toolRun, print, start: row, build };
+        this.segments.set(component, segment);
+        return segment;
+      }
+      // Keep unchanged arrays, so the document can reuse the rows before the first changed entry.
+      if (segment.estimate || !sameValues(segment.lines, lines)) segment.lines = lines;
+      if (!sameValues(segment.components, result)) segment.components = result;
+      Object.assign(segment, { heights, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
+        visibleOut: visibleBlock, toolRunOut: toolRun, print });
+      return segment;
+    };
+    for (let index = 0; index < entries.length; index++) {
+      const entry = entries[index];
+      if (entry.owner !== entry.source && trees.has(entry.owner)) continue;
+      const component = entry.source;
+      const compactTool = compactTools && entry.kind === "tool" && !this.live(entry.owner);
+      const tree = trees.get(component);
+      let segment = this.segments.get(component);
+      const previous = segment?.build === build - 1 ? { start: segment.start, height: segment.lines.length } : undefined;
+      let render = !virtual;
+      if (virtual) {
+        const height = segment?.lines.length ?? 1;
+        // Rows near the viewport always render; offscreen entries render only when changed, within a budget.
+        const hot = view.following ? index >= tail :
+          row + height > top + shift - margin && row < top + shift + view.height + margin;
+        if (hot) render = true;
+        else {
+          const measured = segment !== undefined && !segment.estimate && segment.width === width && segment.epoch === this.epoch &&
+            segment.visibleIn === visibleBlock && segment.toolRunIn === toolRun;
+          // Offscreen changes are invisible until the entry nears the viewport, where it renders anyway.
+          // Check a rotating slice per frame so heights converge without reading every entry each frame.
+          const swept = this.dirty.delete(component) ||
+            (index >= sweep && index < sweep + SWEEP_ENTRIES) || index + entries.length < sweep + SWEEP_ENTRIES;
+          if (measured && swept) this.fingerprint(entry, compactTool, tree, this.print);
+          if (!measured || (swept && !sameValues(segment!.print, this.print))) {
+            if (performance.now() < started + LAZY_BUDGET_MS) render = true;
+            // Native changes request their own frames; only unmeasured layout needs follow-up frames.
+            // This also keeps an unstable fingerprint from scheduling frames forever.
+            else if (!measured) pending = true;
+            else this.dirty.add(component);
+          }
+        }
+      }
+      if (render) {
+        this.dirty.delete(component);
+        segment = renderEntry(entry, compactTool, tree);
+      }
+      else {
+        if (!segment) {
+          segment = { components: [], heights: [], lines: blankLines(1), width, epoch: -1, estimate: true, visibleIn: visibleBlock,
+            toolRunIn: toolRun, visibleOut: visibleBlock, toolRunOut: toolRun, print: [], start: row, build };
+          this.segments.set(component, segment);
+        } else if (segment.width !== width && !segment.estimate) {
+          // Rows at another width would overflow the panel; keep only the height until measured.
+          Object.assign(segment, { lines: blankLines(segment.lines.length), components: [], heights: [], estimate: true });
+        }
+        // An entry without rows passes the separator state through.
+        if (segment.lines.length) {
+          visibleBlock = segment.visibleOut;
+          toolRun = segment.toolRunOut;
+        }
+      }
+      // Entries above the viewport that changed height move the visible rows; the panel scrolls by the difference.
+      if (virtual && !view.following && previous && previous.start + previous.height <= top) shift += segment.lines.length - previous.height;
+      segment.start = row;
+      segment.build = build;
+      order.push(segment);
+      row += segment.lines.length;
     }
+    const built = this.document(order);
+    if (entries !== this.segmentsFor) {
+      this.segmentsFor = entries;
+      for (const [source, segment] of this.segments) if (segment.build !== build) this.segments.delete(source);
+      for (const source of this.dirty) if (!this.segments.has(source)) this.dirty.delete(source);
+    }
+    if (virtual && !view.following) this.scrollShift += shift;
+    let lines = built.document;
+    let children = built.children;
     // Native follow-end guidance overlays the bottom row. Keep the selected last line above it.
-    if (this.searchAnchor) result.push(new Spacer(1));
-    this.children = result;
+    if (this.searchAnchor) {
+      lines = [...lines, ""];
+      children = [...children, new Spacer(1)];
+    }
+    this.children = children;
     this.frameWidth = width;
-    this.frameLines = super.render(width);
-    return this.frameLines;
+    this.frameLines = lines;
+    if (pending) this.scheduleFollowUp();
+    return lines;
+  }
+
+  /** Join segment rows, reusing the previous document up to the first changed segment. */
+  private document(order: Segment[]): Built {
+    const built = this.built;
+    let same = 0;
+    if (built) {
+      const limit = Math.min(order.length, built.order.length);
+      while (same < limit && order[same] === built.order[same] && order[same].lines === built.lines[same] &&
+        order[same].components === built.components[same]) same++;
+      if (same === order.length && same === built.order.length) return built;
+    }
+    const rowEnd = !built || same === 0 ? 0 : same < built.order.length ? built.rows[same] : built.document.length;
+    const childEnd = !built || same === 0 ? 0 : same < built.order.length ? built.childRows[same] : built.children.length;
+    const next: Built = {
+      order, lines: order.map(segment => segment.lines), components: order.map(segment => segment.components),
+      rows: built ? built.rows.slice(0, same) : [], childRows: built ? built.childRows.slice(0, same) : [],
+      document: built ? built.document.slice(0, rowEnd) : [], children: built ? built.children.slice(0, childEnd) : [],
+    };
+    for (let index = same; index < order.length; index++) {
+      const segment = order[index];
+      next.rows.push(next.document.length);
+      next.childRows.push(next.children.length);
+      for (const line of segment.lines) next.document.push(line);
+      for (const component of segment.components) next.children.push(component);
+    }
+    this.built = next;
+    return next;
+  }
+
+  /** Native state an offscreen entry's rows depend on, read without rendering it. */
+  private fingerprint(entry: ContentEntry, compactTool: boolean, tree: NestedTree | undefined, out: unknown[]): void {
+    out.length = 0;
+    const routed = entry.component;
+    pushShellInputs(routed, out);
+    const children = (routed as Partial<Container>).children;
+    const group = compactTool ? this.groups.get(entry.owner) : undefined;
+    out.push(children, (children?.[0] as Partial<Container> | undefined)?.children, entry.spacing.length,
+      this.stamped.get(routed)?.revision, compactTool, this.toolOpen(entry.owner),
+      group?.calls[0].source, group?.calls.length, group && group.calls.length > 1 ? this.groupOpen(group) : undefined,
+      tree ? this.index.nested.revision : undefined);
+  }
+
+  /** Measure the remaining offscreen entries in later frames. */
+  private scheduleFollowUp(): void {
+    if (this.followUp || !this.requestRender || this.disposed) return;
+    this.followUp = true;
+    setImmediate(() => {
+      this.followUp = false;
+      if (!this.disposed) this.requestRender?.();
+    });
   }
 
   override invalidate(): void {
     this.highlightRevision++;
+    this.invalidations++;
     this.frameWidth = undefined;
     this.checked = false;
     // Theme changes must rebuild native parents, including collapsed thinking text.

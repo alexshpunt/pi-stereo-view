@@ -4,7 +4,7 @@ import {
   type Component, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 
-import { NativeRenderCache } from "./render-cache.ts";
+import { NativeRenderCache, sameValues } from "./render-cache.ts";
 type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
 type UserSlot = { kind: string; text?: string; time: unknown };
@@ -73,6 +73,7 @@ export class TranscriptTimestamps {
   private readonly liveUsers = new Map<number, TimedSource>();
   private frameActive = false;
   private preparedComponents?: Component[];
+  private preparedKey?: unknown[];
 
   constructor(private readonly session: ExtensionContext["sessionManager"]) {}
 
@@ -121,6 +122,7 @@ export class TranscriptTimestamps {
   /** Include the current unpersisted user and streamed tool IDs before UI delivery. */
   observe(message: Message, ended = false): void {
     this.preparedComponents = undefined;
+    this.preparedKey = undefined;
     if (message.role === "user") {
       if (!ended) {
         this.pendingUser = {
@@ -143,6 +145,7 @@ export class TranscriptTimestamps {
   /** Forget ephemeral identities when the selected history changes. */
   reset(): void {
     this.preparedComponents = undefined;
+    this.preparedKey = undefined;
     this.pendingUser = undefined;
     this.liveCalls.clear();
     this.liveUsers.clear();
@@ -162,7 +165,15 @@ export class TranscriptTimestamps {
   prepare(components: Component[]): void {
     if (this.frameActive && this.preparedComponents === components) return;
     this.preparedComponents = components;
-    const { messageTimes, users, bash, starts, owners } = this.times();
+    const derived = this.times();
+    // Pi appends to native history, replaces it, inserts custom entries before the streaming answer
+    // or removes that answer. None of these reorders user or bash blocks, and each changes the length,
+    // an end child or the branch. Skip the per-frame scan while none of them changed.
+    const key = [components, components.length, components[0], components.at(-1), derived,
+      this.pendingUser, this.pendingUser?.ended, this.liveUsers.size];
+    if (sameValues(this.preparedKey, key)) return;
+    this.preparedKey = key;
+    const { messageTimes, users, bash, starts, owners } = derived;
     this.messageTimes = messageTimes;
     if (this.pendingUser?.ended && users.length > this.pendingUser.before) this.pendingUser = undefined;
     const nativeUsers = components.filter(component =>
@@ -267,11 +278,14 @@ export class CompactMessage extends Container {
     private readonly theme: () => Theme, private readonly gutter: () => number,
     private readonly show: () => boolean, private readonly copy?: () => void,
     private readonly showCopy: () => boolean = () => true,
-    private readonly buttonStyle: () => "icons" | "text" = () => "text") {
+    private readonly buttonStyle: () => "icons" | "text" = () => "text", changed?: () => void) {
     super();
     this.addChild(component);
-    this.nativeCache = new NativeRenderCache(component);
+    this.nativeCache = new NativeRenderCache(component, changed);
   }
+
+  /** Changes when an observed native node of this block invalidates. */
+  get revision(): number { return this.nativeCache.revision; }
 
   /** Prepare one visible block and its separator once per document render. */
   prepare(width: number, separate: boolean): boolean {
