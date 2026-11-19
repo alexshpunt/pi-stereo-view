@@ -10,7 +10,7 @@ class ToolExecutionComponent extends Text {
   toolCallId: string;
   args: unknown;
   isPartial = true;
-  result?: { content: { type: string; text: string }[]; isError: boolean };
+  result?: { content: { type: string; text?: string; data?: string; mimeType?: string }[]; isError: boolean };
   constructor(id: string, args: unknown) { super(`BODY-${id}`, 0, 0); this.toolCallId = id; this.args = args; }
   setExpanded(): void {}
 }
@@ -234,6 +234,34 @@ test("compact mode hides linked output but preserves full search, copy and norma
   toggle(); expect(render()).toHaveLength(1);
 });
 
+const image = { type: "image", data: "AAAA", mimeType: "image/png" };
+test("compact rows label result images before the description and count them across a group", () => {
+  const shot = new ToolExecutionComponent("shot", { path: "SHOT-FIXTURE" });
+  const plain = new ToolExecutionComponent("plain", { path: "PLAIN-FIXTURE" });
+  const { render, click, history } = setup(shot, new AssistantMessageComponent(), plain);
+  shot.isPartial = false;
+  shot.result = { content: [{ type: "text", text: "RESULT" }, image], isError: false };
+  complete(plain);
+  let lines = render();
+  expect(lines[0]).toMatch(/fixture_tool \(1 image\) SHOT-FIXTURE/);
+  expect(lines.find(line => line.includes("PLAIN-FIXTURE"))).not.toContain("image");
+  // The label survives truncation of a long description.
+  shot.args = { path: "SHOT-FIXTURE " + "x".repeat(200) };
+  expect(render(40)[0]).toContain("(1 image)");
+  // Results change in place without invalidation; the cached row must follow them.
+  plain.result!.content.push(image, image);
+  expect(render().find(line => line.includes("PLAIN-FIXTURE"))).toContain("(2 images)");
+  const late = new ToolExecutionComponent("late", { path: "LATE-CALL" });
+  complete(late);
+  history.addChild(late);
+  lines = render();
+  const header = lines.find(line => line.includes("×2"))!;
+  expect(header).toContain("(2 images)");
+  click(lines.indexOf(header));
+  lines = render();
+  expect(lines.find(line => line.includes("PLAIN-FIXTURE"))).toContain("(2 images)");
+  expect(lines.find(line => line.includes("LATE-CALL"))).not.toContain("image");
+});
 test("query tools describe their query and scope; custom inputs use bounded previews", () => {
   const search = new ToolExecutionComponent("query", { path: ".", query: "QUERY-FIXTURE" });
   const custom = new ToolExecutionComponent("custom", { task: "CUSTOM-FIXTURE", payload: { secret: "BODY-FIXTURE" } });

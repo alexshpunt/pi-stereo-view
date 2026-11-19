@@ -32,11 +32,11 @@ interface CompactToolOptions {
 }
 
 interface HeaderInputs {
-  width: number; name: string; args: unknown; status: ToolSummary["status"]; count?: number; expanded?: boolean;
+  width: number; name: string; args: unknown; status: ToolSummary["status"]; images: number; count?: number; expanded?: boolean;
   label: string; theme: Theme;
 }
 const sameInputs = (a: HeaderInputs, b: HeaderInputs): boolean => a.width === b.width && a.name === b.name &&
-  a.args === b.args && a.status === b.status && a.count === b.count && a.expanded === b.expanded && a.label === b.label && a.theme === b.theme;
+  a.args === b.args && a.status === b.status && a.images === b.images && a.count === b.count && a.expanded === b.expanded && a.label === b.label && a.theme === b.theme;
 
 /** A display-only call or group header; the original renderer owns the body. */
 export class CompactTool implements Component {
@@ -49,8 +49,8 @@ export class CompactTool implements Component {
 
   render(width: number): string[] {
     width = Math.max(0, width - (this.options.gutter?.() ?? 0));
-    const { name, args, status } = this.summary();
-    const inputs: HeaderInputs = { width, name, args, status, count: this.options.count?.(),
+    const { name, args, status, images = 0 } = this.summary();
+    const inputs: HeaderInputs = { width, name, args, status, images, count: this.options.count?.(),
       expanded: this.options.toggle ? this.options.expanded?.() : undefined, label: this.options.clock?.() ?? "", theme: this.theme() };
     // Streamed arguments may be updated in place, so running calls always rebuild.
     if (this.cached && status !== "running" && sameInputs(this.cached.inputs, inputs)) return this.cached.lines;
@@ -58,11 +58,13 @@ export class CompactTool implements Component {
     this.cached = { inputs, lines };
     return lines;
   }
-  private header({ width, name, args, status, count, expanded, label, theme }: HeaderInputs): string[] {
+  private header({ width, name, args, status, images, count, expanded, label, theme }: HeaderInputs): string[] {
     const dot = theme.fg(status === "running" ? "warning" : status === "unknown" ? "dim" : status, "●");
     const description = count ? "" : toolDescription(args);
     const control = this.options.toggle ? theme.fg("muted", expanded ? "▾" : "▸") + " " : this.options.alignControl ? "  " : "";
-    const text = `${dot} ${control}${singleLine(name)}${count ? ` ×${count}` : ""}${description ? " " + theme.fg("muted", description) : ""}`;
+    // Before the description, so truncation keeps it: the collapsed row is the only sign of a hidden image.
+    const attachment = images ? " " + theme.fg("accent", `(${images} ${images === 1 ? "image" : "images"})`) : "";
+    const text = `${dot} ${control}${singleLine(name)}${count ? ` ×${count}` : ""}${attachment}${description ? " " + theme.fg("muted", description) : ""}`;
     const clock = label && width >= visibleWidth(label) + 8 ? label : "";
     const available = Math.max(0, width - 1 - (clock ? visibleWidth(clock) + 1 : 0));
     const body = truncateToWidth(text, available, "…");
