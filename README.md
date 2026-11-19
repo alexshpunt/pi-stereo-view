@@ -27,7 +27,7 @@ Unrecognized content stays in Conversation unless its metadata links it to a kno
 
 Late output linked to a tool call appears directly below that call in Activity, even if other work has happened since. Combined history keeps its original order.
 
-Expand a parent tool such as Codemode to browse its nested call tree. Adjacent calls of the same tool form a group with individual call headers. Each independent native result opens under its call. A combined result covering several calls stays whole inside their group. Panels without child execution identities remain available inside the parent's output disclosure. Session restoration uses Pi's saved nested-call metadata and the original saved panels.
+Expand a parent tool such as Codemode to browse its nested call tree. To keep the parent's own output panel instead, turn off **Nested call tree** in Settings. Adjacent calls of the same tool form a group with individual call headers. Each independent native result opens under its call. A combined result covering several calls stays whole inside their group. Panels without child execution identities remain available inside the parent's output disclosure. Session restoration uses Pi's saved nested-call metadata and the original saved panels.
 
 Messages and tools keep their familiar appearance. Extension widgets and inline dialogs appear at the bottom of Activity, below its independently scrolling history. Standard select, confirm, input and editor dialogs and non-overlay custom components keep Pi's native input, focus and completion behavior. The message editor, including extension-provided replacements, stays full width whenever Pi displays it. Explicit overlays keep their native placement.
 
@@ -98,17 +98,29 @@ Swap the panels whenever you want. Zoom a panel to give it the whole history are
 
 ## Compact Activity
 
-Click `[ ⊟ ]` or `[Compact tools]` beside Find and Maximize in the Activity header to show compact tool calls. Adjacent calls to the same tool in the same state share a header with a count; every failed call stays separate, even beside another failure. Click that header to show the individual compact rows, then click a row to open its original full card and linked output. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls. Thinking, Conversation content and different tools end a group.
+Three independent settings in `/stereo-view settings` control how Activity shows tool calls. All three are on by default and survive restart.
+
+| Setting | On | Off |
+| --- | --- | --- |
+| **Compact Activity tools** | Each call is a one-line row; click it to open its full card and linked output. | Calls show their full cards. |
+| **Group Activity tools** | Adjacent calls to the same tool in the same state share one header with a count, such as `read ×3`. | Every call stands alone. |
+| **Nested call tree** | Calls made by a tool such as Codemode appear as a tree under it. | The tool keeps its own output panel. |
+
+Compact and Group combine freely. With both on, a group opens into compact rows, and each row opens its card. With only Group on, a group opens straight into the members' full cards. With only Compact on, every call keeps its own row. With both off, Activity shows the original cards; this suits other extensions that draw their own tool cards.
+
+Click `[ ⊟ ]` or `[Compact tools]` beside Find and Maximize in the Activity header to turn compact rows on, and `[ ⊞ ]` or `[Full tools]` to turn them off. The button changes only **Compact Activity tools**.
+
+Every failed call stays separate, even beside another failure. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls, and so does turning grouping off and on again. Thinking, Conversation content and different tools end a group.
 
 Group and call headers show `▸` when collapsed and `▾` when expanded. Each call row has a one-cell left gutter, a colored status dot, its tool name and a short argument description. A group shows its shared running or successful state. Failed calls expose their own status and argument preview without opening a group. Long descriptions are truncated, not the saved calls. Verified local MCP forwarding aliases use their native tool's name; foreign, ambiguous and unknown tools keep their original identity.
 
-Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. You can also click `[ ⊞ ]` or `[Full tools]` in the Activity header to restore full tools. Conversation and combined history keep their normal display.
+Search and `/stereo-view copy` still include full saved results and linked output. A search match opens its group and call temporarily; clearing the search restores your previous expansion. Conversation and combined history keep their normal display.
 
-Compact tools work in columns, rows and zoomed Activity. The choice survives restart and defaults to on. For keyboard access, run `/stereo-view settings` and change **Compact Activity tools**.
+Compact rows and groups work in columns, rows and zoomed Activity. Settings saved before grouping was a separate setting keep their look: grouping follows the saved compact choice.
 
 ### Stream latest tools
 
-**Stream latest tools** (on by default, in Settings) lets you watch the current work while keeping history short. With Compact Activity tools on, a new tool call appears as its full card and updates live. When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place into a compact row and joins the adjacent identical collapsed calls (`read ×3`).
+**Stream latest tools** (on by default, in Settings) lets you watch the current work while keeping history short. While Compact or Group is on, a new tool call appears as its full card and updates live. When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place: into a compact row with Compact on, and into the adjacent identical calls' group (`read ×3`) with Group on. With both off, every call already shows in full, so streaming changes nothing.
 
 Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both options survive restart; streaming defaults to on.
 
