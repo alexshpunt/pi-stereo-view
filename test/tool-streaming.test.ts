@@ -33,6 +33,24 @@ test("a call stays live for the delay after it finishes, then collapses and asks
   streaming.dispose();
 });
 
+test("the same entry array still advances live calls and reports each live change", () => {
+  const changed = vi.fn();
+  const streaming = new ToolStreaming(() => 5000, changed);
+  const status = { value: "running" as ToolSummary["status"] };
+  const entries = [call(status), call({ value: "success" })];
+  streaming.observe(entries);
+  const revision = streaming.revision;
+  expect(streaming.isLive(entries[0].source)).toBe(true);
+  status.value = "success";
+  streaming.observe(entries);
+  vi.advanceTimersByTime(5100);
+  expect(changed).toHaveBeenCalledTimes(1);
+  streaming.observe(entries);
+  expect(streaming.isLive(entries[0].source)).toBe(false);
+  expect(streaming.revision).not.toBe(revision);
+  streaming.dispose();
+});
+
 test("calls that are already finished on first sight were never live", () => {
   const streaming = new ToolStreaming(() => 5000, vi.fn());
   const entry = call({ value: "success" });

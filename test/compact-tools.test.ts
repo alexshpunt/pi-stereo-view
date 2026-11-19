@@ -74,6 +74,19 @@ test("groups only equal states and exposes every failed call separately", () => 
   expect(render().join("\n")).not.toContain("BODY-error-two");
 });
 
+test("an unchanged history regroups when a finished call's result changes without invalidation", () => {
+  const calls = ["one", "two", "three"].map(id => new ToolExecutionComponent(id, { path: "ARG-" + id }));
+  for (const call of calls) complete(call);
+  const { render } = setup(...calls);
+  expect(render()).toHaveLength(1);
+  expect(render()).toHaveLength(1);
+  // Like Pi's updateResult: fields change in place and nothing is invalidated.
+  calls[1].isPartial = true;
+  expect(render().join("\n")).toContain("ARG-two");
+  calls[1].isPartial = false;
+  expect(render()).toHaveLength(1);
+});
+
 test("state changes split open runs without hiding their members or selected original card", () => {
   const calls = ["one", "two", "three"].map(id => new ToolExecutionComponent(id, { path: "ARG-" + id }));
   const { render, click } = setup(...calls);

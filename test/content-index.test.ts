@@ -77,6 +77,32 @@ test("only positive execution identities go to Activity; wording and status upda
   expect(index.entries("activity").map(entry => entry.source)).toEqual([shell]);
 });
 
+test("appending and rebuilding one block keep the other entries and an unchanged index keeps its arrays", () => {
+  const tool = new ToolExecutionComponent("FIRST TOOL", 0, 0);
+  const assistant = new AssistantMessageComponent();
+  const { history, index } = setup(tool, new Spacer(1), assistant);
+  const before = index.entries();
+  const activity = index.entries("activity");
+  expect(index.entries()).toBe(before);
+  expect(index.entries("activity")).toBe(activity);
+  // Invalidation rebuilds the same native children; the projection stays as it was.
+  assistant.invalidate();
+  expect(index.entries()).toBe(before);
+  const shell = new BashExecutionComponent("APPENDED SHELL", 0, 0);
+  history.addChild(shell);
+  const appended = index.entries();
+  expect(appended.slice(0, before.length).every((entry, position) => entry === before[position])).toBe(true);
+  expect(appended.at(-1)?.source).toBe(shell);
+  // Streaming replaces the message and its children: only that block is classified again.
+  assistant.lastMessage = { content: [{ type: "text", text: "DIALOGUE" }] };
+  assistant.contentContainer.children = assistant.contentContainer.children.slice(0, 2);
+  const streamed = index.entries();
+  expect(streamed.find(entry => entry.source === tool)).toBe(before.find(entry => entry.source === tool));
+  expect(streamed.find(entry => entry.source === shell)).toBe(appended.find(entry => entry.source === shell));
+  expect(index.entries("activity").map(entry => entry.source)).toEqual([tool, shell]);
+  expect(visible(index.entries("chat").find(entry => entry.source === assistant)!.component as Container)).not.toContain("GENERATION FAILED");
+});
+
 test("assistant content metadata separates thinking from dialogue and generation diagnostics for render and search", () => {
   const assistant = new AssistantMessageComponent();
   const { index } = setup(assistant);
