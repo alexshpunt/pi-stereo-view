@@ -3,17 +3,17 @@ import path from "node:path";
 import { assistantMessage, PiIntegrationTest, text, toolCall } from "pi-coding-agent-test";
 import { expect, test } from "vitest";
 
-test("streams the latest compact tools in full, then collapses and merges them after the delay", async () => {
+test.each([[true, true], [true, false], [false, true]])("streams the latest tools in full, then hides them after the delay (compact: %s, group: %s)", async (compactTools, groupTools) => {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/stream-tools-"));
   const agent = await mkdtemp(path.resolve("tmp/stream-tools-agent-"));
   try {
     await writeFile(path.join(agent, "settings.json"), JSON.stringify({ quietStartup: true, hideThinkingBlock: false }));
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
-      layout: "columns", side: "left", chatWidth: null, compactTools: true, streamTools: true, streamDelay: 1,
+      layout: "columns", side: "left", chatWidth: null, compactTools, groupTools, streamTools: true, streamDelay: 1,
     }));
     const result = await new PiIntegrationTest({
-      testName: "stream-tools", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+      testName: `stream-tools-${compactTools}-${groupTools}`, artifactsDir: path.resolve("tmp/test-runs"), cwd,
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: {
         PI_CODING_AGENT_DIR: agent, TZ: "UTC", DISPLAY: "", WAYLAND_DISPLAY: "", TERMUX_VERSION: "",
@@ -40,9 +40,16 @@ test("streams the latest compact tools in full, then collapses and merges them a
     expect(body("secondRunning")).toContain("NATIVE-HEADER-B");
     expect(body("justFinished")).toContain("RESULT-B");
     expect(body("justFinished")).not.toContain("×2");
-    // After the delay both collapse in place and merge into one counted row.
+    // After the delay both hide in place: merged into one counted header, or each as its own row.
     expect(body("collapsed")).not.toContain("NATIVE-HEADER");
-    expect(body("collapsed")).toMatch(/stream_probe ×2/);
+    if (groupTools) expect(body("collapsed")).toMatch(/stream_probe ×2/);
+    else {
+      expect(body("collapsed")).not.toContain("×2");
+      expect(frames.collapsed.filter(line => /●\s+▸\s+stream_probe/u.test(line))).toHaveLength(2);
+    }
+    expect(body("settings")).toMatch(new RegExp("Compact Activity tools\\s+" + (compactTools ? "on" : "off")));
+    expect(body("settings")).toMatch(new RegExp("Group Activity tools\\s+" + (groupTools ? "on" : "off")));
+    expect(body("settings")).toMatch(/Nested call tree\s+on/);
     expect(body("settings")).toContain("Stream latest tools");
     expect(body("settings")).toContain("Collapse delay");
     expect(body("settings")).toMatch(/Collapse delay\s+1s/);

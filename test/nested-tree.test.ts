@@ -150,7 +150,7 @@ test.each([false, true])("search reveals nested output and maps its row without 
   const index = new NativeContentIndex(source, calls);
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
   const document = new NativeDocument(source, "activity", timestamps, () => theme, () => 0, () => false,
-    undefined, true, index, undefined, () => false, () => true);
+    undefined, true, index, undefined, () => false, () => ({ compact: true, group: true }));
   try {
     const initial = document.render(100).map(stripTerminalSequences).join("\n");
     expect(initial).not.toContain("NATIVE-LEAF-FIXTURE");

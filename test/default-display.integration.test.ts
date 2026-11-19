@@ -41,6 +41,8 @@ test("a fresh install starts side by side with compact, streaming tools and text
     expect(body("collapsed")).toMatch(/stream_probe ×2/);
     expect(body("settings")).toMatch(/Stream latest tools\s+on/);
     expect(body("settings")).toMatch(/Compact Activity tools\s+on/);
+    expect(body("settings")).toMatch(/Group Activity tools\s+on/);
+    expect(body("settings")).toMatch(/Nested call tree\s+on/);
     expect(body("settings")).toMatch(/Collapse delay\s+5s/);
     expect(body("settings")).toMatch(/Conversation height\s+auto/);
     // The last header label keeps one cell clear of the panel's right edge.

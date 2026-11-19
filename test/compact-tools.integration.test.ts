@@ -176,7 +176,7 @@ test("compacts live tools without losing calls, full search, copy or normal hist
       expect(body(name)).toContain("LATE-RESULT-FIXTURE");
     }
     const saved = JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"));
-    expect(saved.compactTools).toBe(true);
+    expect(saved).toMatchObject({ compactTools: true, groupTools: false });
   } finally {
     await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
   }
