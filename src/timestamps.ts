@@ -62,6 +62,10 @@ const userSlots = ({ message, time }: TimedSource): UserSlot[] => {
   ];
 };
 
+const MESSAGE_COMPONENTS = new Set(["CustomMessageComponent", "BranchSummaryMessageComponent", "CompactionSummaryMessageComponent"]);
+/** Older history blocks whose metadata is checked again per frame, in rotation. */
+const CHECK_SWEEP = 64;
+
 /** Correlate only the active history, using order/identity rather than text keys. */
 export class TranscriptTimestamps {
   private orderedLabels = new WeakMap<Component, string>();
@@ -74,6 +78,8 @@ export class TranscriptTimestamps {
   private frameActive = false;
   private preparedComponents?: Component[];
   private preparedKey?: unknown[];
+  private checkedHistory: readonly Component[] = [];
+  private checkSweep = 0;
 
   constructor(private readonly session: ExtensionContext["sessionManager"]) {}
 
@@ -213,11 +219,27 @@ export class TranscriptTimestamps {
     this.owners = owners;
   }
 
+  /**
+   * Check the metadata of new history blocks, of the last one, which streaming updates in place, and of a rotating
+   * slice of older blocks. Metadata shape comes from Pi's component classes, so older blocks rarely need it.
+   */
+  checkHistory(components: readonly Component[]): void {
+    const checked = this.checkedHistory;
+    let same = 0;
+    const limit = Math.min(components.length, checked.length);
+    while (same < limit && components[same] === checked[same]) same++;
+    for (let index = Math.max(0, Math.min(same, components.length - 1)); index < components.length; index++) this.check(components[index]);
+    if (same !== components.length || same !== checked.length) this.checkedHistory = components.slice();
+    const sweep = Math.min(same, CHECK_SWEEP);
+    for (let step = 0; step < sweep; step++) this.check(components[(this.checkSweep + step) % same]);
+    this.checkSweep = same ? (this.checkSweep + sweep) % same : 0;
+  }
+
   /** Reject changed private metadata before relying on it for a label. */
   check(component: Component): void {
     const name = component.constructor.name;
     const native = component as Component & { text?: unknown; lastMessage?: unknown; toolCallId?: unknown; message?: unknown; entry?: unknown; command?: unknown };
-    const hasMessage = ["CustomMessageComponent", "BranchSummaryMessageComponent", "CompactionSummaryMessageComponent"].includes(name);
+    const hasMessage = MESSAGE_COMPONENTS.has(name);
     if ((name === "UserMessageComponent" && typeof native.text !== "string") ||
         (name === "BashExecutionComponent" && typeof native.command !== "string") ||
         (name === "AssistantMessageComponent" && (!("lastMessage" in native) ||
