@@ -37,12 +37,23 @@ export default function selectionScrollProbe(pi: ExtensionAPI): void {
       tui.handleTerminalInput(`\x1b[<${button};${x + 1};${y + 1}${suffix}`);
       await setImmediate();
     };
+    // The split paints its panels inside one full-width component; read their boxes from its own layout pass.
     const boxes = (): Box[] => {
+      const surfaces: Box[] = [];
+      const find = (box: Box) => {
+        if ((box.component as object | undefined)?.constructor.name === "SplitSurface") surfaces.push(box);
+        box.children.forEach(find);
+      };
+      find(tui.currentLayout!.root);
+      const surface = surfaces[0];
+      if (!surface) throw new Error("Missing split surface");
+      const frame = Reflect.get(surface.component as object, "frame") as { scrolls: Map<ScrollView, Box> } | undefined;
       const found: Box[] = [];
       // Only the two history panels: Activity widgets and dialogs can add their own scroll areas.
-      const panel = (box: Box) => Reflect.get((Reflect.get(box.component as object, "children") as unknown[] | undefined)?.[0] ?? {}, "pane") !== undefined;
-      const visit = (box: Box) => { if (box.scrollView && panel(box)) found.push(box); box.children.forEach(visit); };
-      visit(tui.currentLayout!.root);
+      for (const [view, box] of frame?.scrolls ?? []) {
+        if (Reflect.get(view.children[0], "pane") === undefined) continue;
+        found.push({ ...box, rect: { ...box.rect, x: box.rect.x + surface.rect.x, y: box.rect.y + surface.rect.y } });
+      }
       return found;
     };
     await capture();
