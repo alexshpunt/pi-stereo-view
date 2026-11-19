@@ -60,6 +60,8 @@ Every streamed delta and spinner tick requests a frame, so per-frame work must n
 
 The passes that feed the document run every frame too, so each reuses its result until its inputs change. `NativeContentIndex` keeps one classification per history child and reclassifies only new children, children whose preceding spacers changed, assistants whose content array or message Pi replaced, and linked panels whose owner or parts changed; unchanged entries keep their objects, and the entry arrays keep their identity while no entry changed. Tool grouping reruns when the entries, tool presentation or live calls change, or when a call's status changes; the status is read from the call's `result` and `isPartial` fields every frame, because Pi updates results without invalidating the component. Nested trees reuse their map while the entries and nested calls are unchanged. `ToolStreaming` looks only at live calls while the entry array is the same. Timestamp metadata is checked for new blocks, the last block and a rotating slice of 64 older blocks per frame.
 
+Render results stay immutable: when a segment changes, `NativeDocument.render` returns new row and child arrays instead of rewriting the previous ones, because probes and Pi's layout compare earlier results with later ones.
+
 ## Rendering profiles
 
 The profiles run real Pi with scripted responses and write measurements under `tmp/profiling`. Compare a candidate with a baseline checkout through `PROFILE_TRANSCRIPT_PATH`, on an otherwise idle machine, with the Pi version users run (`PI_COMMAND`); `npm run` puts the development dependency's older `pi` first on `PATH`.
@@ -70,6 +72,8 @@ PI_COMMAND=$(command -v pi) PROFILE_MODES=stock,columns PROFILE_COMPACT=1 PROFIL
 ```
 
 `test/rendering.profile.ts` builds a synthetic history of `PROFILE_HISTORY` turns with `PROFILE_CALLS` calls each and measures CPU per frame for repaint, typing, scrolling, resizing, streamed text, tool output and streamed arguments. `PROFILE_ARG_CHARS` gives calls Codemode-sized arguments and enables the streamed-argument action. `PROFILE_FOCUS=<action>` limits the CPU profile to one action. `scripts/summarize-render-profile.ts <artifact>` prints the hottest functions. Compare 10 and 100 turns to see how frame cost grows with history.
+
+On idle ZinPC, per-action P50 varies by 0.1–0.2 ms between runs at these sizes, so compare ratios over the median of several runs.
 
 Reference results (LPT-1652; ZinPC, idle, Pi 1.5.2, 290x91, columns, compact Activity, 10 calls per turn, 3,000-character arguments, auto scrollbars; per-frame CPU P50 in ms):
 
