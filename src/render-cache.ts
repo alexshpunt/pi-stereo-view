@@ -61,6 +61,16 @@ function subscribe(component: Component, changed: () => void): (() => void) | un
 const inputs = ["text", "paddingX", "paddingY", "customBgFn", "bgFn", "theme", "cachedText", "cachedWidth", "cachedLines"];
 const shellInputs = ["lastMessage", "args", "result", "isPartial", "expanded", "outputPad",
   "hideComponent", "showImages", "imageWidthCells"];
+/** Push the native shell inputs of one block; offscreen blocks compare these instead of a deep check. */
+export function pushShellInputs(component: Component, into: unknown[]): void {
+  for (const key of shellInputs) into.push(Reflect.get(component, key));
+}
+/** Whether two input lists hold the same values in the same order, compared by identity. */
+export function sameValues<T>(a: readonly T[] | undefined, b: readonly T[]): boolean {
+  if (!a || a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index++) if (a[index] !== b[index]) return false;
+  return true;
+}
 interface NodeLinks {
   children?: Component[];
   child?: Component;
@@ -151,17 +161,21 @@ function matches(root: Component, state: State): boolean {
  * unobservable components always render. Dispose restores subscribed methods.
  */
 export class NativeRenderCache {
-  private revision = 0;
+  private invalidations = 0;
   private outputVersion = 0;
   private imagePlacement = false;
-  private readonly changed = (): void => { this.revision++; this.cached = undefined; };
+  private readonly changed = (): void => { this.invalidations++; this.cached = undefined; this.notify?.(); };
   private readonly watched = new Map<Component, () => void>();
   private cached?: { width: number; theme: object; state: State; lines: string[] };
 
-  constructor(private readonly component: Component) {}
+  /** notify runs when an observed native node invalidates, before the next render. */
+  constructor(private readonly component: Component, private readonly notify?: () => void) {}
 
   /** Changes after each native render, even when it reuses a mutable row array. */
   get version(): number { return this.outputVersion; }
+
+  /** Changes whenever an observed native node invalidates; cheap to compare for offscreen blocks. */
+  get revision(): number { return this.invalidations; }
 
   /** Whether the latest native output contains placement-dependent image rows. */
   get hasImagePlacement(): boolean { return this.imagePlacement; }
@@ -198,7 +212,7 @@ export class NativeRenderCache {
     this.cached = undefined;
     const initial = components(this.component);
     const observed = this.watch(initial);
-    const before = this.revision;
+    const before = this.invalidations;
     const lines = nativeLines(this.component, width);
     this.outputVersion++;
     this.imagePlacement = lines.some(imagePlacement);
@@ -210,7 +224,7 @@ export class NativeRenderCache {
     const observable = stableGraph ? observed && after.every(component =>
       component.invalidate === subscriptions.get(component)?.wrapped) : this.watch(after);
     // A newly created child could invalidate during its first render, before observation.
-    if (observable && stableGraph && this.revision === before && !this.imagePlacement) {
+    if (observable && stableGraph && this.invalidations === before && !this.imagePlacement) {
       this.cached = { width, theme, state: snapshot(this.component, after, links), lines };
     }
     return lines;
