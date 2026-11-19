@@ -1,6 +1,7 @@
 import { Container, Markdown, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry } from "./search.ts";
 import { NestedCalls } from "./nested-calls.ts";
+import { sameValues } from "./render-cache.ts";
 
 export type Pane = "activity" | "chat";
 export type ContentKind = "dialogue" | "system" | "thinking" | "tool" | "shell";
@@ -49,6 +50,11 @@ export interface ContentEntry {
   /** Live execution metadata exists only on calls, never on linked output. */
   tool?(): ToolSummary;
 }
+/** A call's status from Pi's result fields, which Pi updates in place without invalidating the call. */
+export function callStatus(call: Component): ToolSummary["status"] {
+  const { result, isPartial } = call as NativeContent;
+  return !result || isPartial !== false ? "running" : result.isError ? "error" : "success";
+}
 
 const nameOf = (component: Component): string => component.constructor.name;
 const contentText = (content: unknown): string => typeof content === "string" ? content :
@@ -91,7 +97,31 @@ function forEachRun(source: NativeAssistant, visit: (kind: ContentKind) => void)
     }
   }
 }
-const runsEnd = Symbol("runs");
+/** One non-spacer native history child, its spacing and the entries projected from it. */
+interface Classified {
+  component: Component;
+  spacing: Component[];
+  entries: ContentEntry[];
+  /** Native identities that ownership depends on; Pi sets them at construction. */
+  toolCallId: unknown;
+  parentId: unknown;
+  custom: unknown;
+  /** Assistant inputs: Pi replaces the content array whenever it rebuilds the message's blocks. */
+  content?: Component[];
+  contentLength?: number;
+  message?: unknown;
+  /** Linked panel inputs: its resolved owner and the panel parts shown as nested calls. */
+  parent?: { id: string; owner?: NativeContent; parts?: Component[] };
+}
+
+const parentOf = (component: NativeContent): unknown => component.entry?.data?.parentToolCallId ?? component.message?.details?.parentToolCallId;
+
+/** The previous entry for the same native block, when every field that renders or searches it is equal. */
+function reuse(entry: ContentEntry, previous: readonly ContentEntry[]): ContentEntry {
+  const match = previous.find(candidate => candidate.source === entry.source && candidate.component === entry.component);
+  return match && match.owner === entry.owner && match.kind === entry.kind && match.compact === entry.compact &&
+    sameValues(match.spacing, entry.spacing) ? match : entry;
+}
 
 /** Read supported native execution identities; unrecognized content is system information. */
 const nativeKinds: Record<string, { kind: ContentKind; accepts(content: NativeContent): boolean }> = {
@@ -139,11 +169,17 @@ function nativePanelParts(source: NativeContent): Component[] | undefined {
 }
 /** Shared semantic index for painting and search, independent of wording, severity and lifecycle. */
 export class NativeContentIndex {
-  private signature: unknown[] = [];
   private content: ContentEntry[] = [];
+  /** History children, source parts and per-block classification from the last verification. */
+  private history: Component[] = [];
+  private head: Component[] = [];
+  private headEntries: ContentEntry[] = [];
+  private blocks: Classified[] = [];
+  private readonly owners = new Map<string, NativeContent>();
   private panes: Partial<Record<Pane, ContentEntry[]>> = {};
   private readonly expandedPanels = new WeakMap<Component, Component>();
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
+  private readonly diagnostics = new WeakMap<NativeAssistant, Component[]>();
 
   private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number } };
 
@@ -185,29 +221,6 @@ export class NativeContentIndex {
     return group.map(candidate => stripTerminalSequences(candidate.search(width).text)).filter(Boolean).join("\n\n");
   }
 
-  /** Visit every native identity that classification depends on, in a fixed order. */
-  private visitSignature(history: Container, visit: (value: unknown) => boolean): boolean {
-    if (!visit(this.nested.revision)) return false;
-    for (const component of this.source.children) if (!visit(component)) return false;
-    for (const component of history.children) if (!visit(component)) return false;
-    for (const component of history.children) {
-      const metadata = component as NativeContent;
-      if (!visit(metadata.toolCallId) || !visit(metadata.entry?.data?.parentToolCallId) ||
-        !visit(metadata.message?.details?.parentToolCallId) || !visit(metadata.customComponent)) return false;
-      if (metadata.entry?.data?.parentToolCallId || metadata.message?.details?.parentToolCallId)
-        for (const part of nativePanelParts(metadata) ?? []) if (!visit(part)) return false;
-      const native = assistant(component);
-      if (native) {
-        // Streaming replaces the message on every delta; only its block layout affects routing.
-        let changed = false;
-        forEachRun(native, kind => { if (!changed && !visit(kind)) changed = true; });
-        if (changed || !visit(runsEnd)) return false;
-        for (const child of native.contentContainer.children) if (!visit(child)) return false;
-      }
-    }
-    return true;
-  }
-
   private refresh(): void {
     const history = this.source.children[2] as Container;
     if (!Array.isArray(history?.children)) throw new Error("Pi's history document is not supported");
@@ -220,52 +233,73 @@ export class NativeContentIndex {
     if (pass) pass.verified = { children, length: children.length, last: children.at(-1), parts: this.source.children.length, revision: this.nested.revision };
   }
 
+  /** Whether a classified block still has the native inputs its entries were built from. */
+  private unchanged(block: Classified): boolean {
+    const component = block.component as NativeAssistant & NativeContent;
+    if (component.toolCallId !== block.toolCallId || parentOf(component) !== block.parentId || component.customComponent !== block.custom) return false;
+    if (block.content) {
+      const children = component.contentContainer?.children;
+      if (component.contentIsStale === true || children !== block.content || children.length !== block.contentLength ||
+        component.lastMessage !== block.message) return false;
+    }
+    if (block.parent) {
+      const owner = this.owners.get(block.parent.id);
+      if (owner !== block.parent.owner) return false;
+      const parts = owner?.toolCallId && this.nested.entries(owner.toolCallId).length ? nativePanelParts(component) : undefined;
+      if (parts ? !sameValues(block.parent.parts, parts) : block.parent.parts) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Reclassify only blocks whose native inputs changed: new or moved children, rebuilt assistant content,
+   * and parented panels whose owner or parts changed. Unchanged blocks keep their entry objects, and the
+   * content array keeps its identity while no entry changed, so streaming does not rebuild the index.
+   */
   private verify(history: Container): void {
-    const makeSignature = (): unknown[] => {
-      const values: unknown[] = [];
-      this.visitSignature(history, value => { values.push(value); return true; });
-      return values;
-    };
-    // Compare in place: this runs several times per frame over the whole history.
-    let position = 0;
-    const previous = this.signature;
-    if (this.visitSignature(history, value => value === previous[position++]) && position === previous.length) return;
-    const owners = new Map<string, NativeContent>();
-    for (const component of history.children) {
+    const children = history.children;
+    const head = this.source.children;
+    let same = 0;
+    const limit = Math.min(children.length, this.history.length);
+    while (same < limit && children[same] === this.history[same]) same++;
+    const structural = same !== children.length || same !== this.history.length;
+    if (!structural && sameValues(this.head, head) && this.blocks.every(block => this.unchanged(block))) return;
+    this.owners.clear();
+    for (const component of children) {
       const adapter = nativeKinds[nameOf(component)];
       const native = component as NativeContent;
       if (adapter?.kind === "tool" && adapter.accepts(native) && typeof native.toolCallId === "string") {
-        owners.set(native.toolCallId, native);
+        this.owners.set(native.toolCallId, native);
       }
     }
-    const entries = this.source.children.slice(0, 2).map(component => this.entry(component, "system", [], false));
+    // Blocks of the unchanged prefix keep their positions; later children may have moved.
+    let previous: Map<Component, Classified> | undefined;
+    const find = (component: Component, index: number): Classified | undefined => {
+      if (this.blocks[index]?.component === component) return this.blocks[index];
+      previous ??= new Map(this.blocks.map(block => [block.component, block]));
+      return previous.get(component);
+    };
+    const blocks: Classified[] = [];
+    const entries = head.slice(0, 2).map(component => reuse(this.entry(component, "system", [], false), this.headEntries));
+    this.headEntries = entries.slice();
     let spacing: Component[] = [];
-    for (const component of history.children) {
+    for (let position = 0; position < children.length; position++) {
+      const component = children[position];
       if (nameOf(component) === "Spacer") {
         spacing.push(component);
         continue;
       }
-      const native = assistant(component);
-      if (native) entries.push(...this.assistantEntries(native, spacing));
-      else {
-        const adapter = nativeKinds[nameOf(component)];
-        const native = component as NativeContent;
-        const kind = adapter?.accepts(native) ? adapter.kind : "system";
-        const parentId = native.entry?.data?.parentToolCallId ?? native.message?.details?.parentToolCallId;
-        const owner = kind === "system" && typeof parentId === "string" ? owners.get(parentId) : undefined;
-        if (owner && this.expandedPanels.get(component) !== owner) {
-          native.setExpanded?.(true);
-          this.expandedPanels.set(component, owner);
-        } else if (!owner) this.expandedPanels.delete(component);
-        const parts = owner && this.nested.entries(owner.toolCallId!).length ? nativePanelParts(native) : undefined;
-        if (parts) for (const part of parts) {
-          const adapter = nativeKinds[nameOf(part)];
-          const partKind = adapter?.accepts(part as NativeContent) ? adapter.kind : "system";
-          entries.push(this.entry(part, partKind, [], true, owner));
-        } else entries.push(this.entry(component, kind, spacing, true, owner));
-      }
+      const old = find(component, blocks.length);
+      // Spacing before a block in the unchanged prefix lies in that prefix too.
+      const sameSpacing = old !== undefined && (position < same || sameValues(old.spacing, spacing));
+      const block = old && sameSpacing && this.unchanged(old) ? old : this.classify(component, sameSpacing ? old!.spacing : spacing, old);
+      blocks.push(block);
+      for (const entry of block.entries) entries.push(entry);
       spacing = [];
     }
+    this.blocks = blocks;
+    this.history = children.slice();
+    this.head = head.slice();
     // Project late execution output beside its owner, never reorder native history.
     const linked = new Map<Component, ContentEntry[]>();
     for (const entry of entries) {
@@ -274,10 +308,43 @@ export class NativeContentIndex {
       group.push(entry);
       linked.set(entry.owner, group);
     }
-    this.content = entries.flatMap(entry => entry.owner === entry.source
-      ? [entry, ...(linked.get(entry.source) ?? [])] : []);
-    this.signature = makeSignature();
+    const content = linked.size ? entries.flatMap(entry => entry.owner === entry.source
+      ? [entry, ...(linked.get(entry.source) ?? [])] : []) : entries;
+    if (sameValues(this.content, content)) return;
+    this.content = content;
     this.panes = {};
+  }
+
+  /** Build the entries of one native history block, keeping previous entry objects that did not change. */
+  private classify(component: Component, spacing: Component[], old: Classified | undefined): Classified {
+    const native = component as NativeContent;
+    const block: Classified = { component, spacing, entries: [], toolCallId: native.toolCallId, parentId: parentOf(native), custom: native.customComponent };
+    const message = assistant(component);
+    if (message) {
+      block.entries = this.assistantEntries(message, spacing);
+      block.content = message.contentContainer.children;
+      block.contentLength = block.content.length;
+      block.message = message.lastMessage;
+    } else {
+      const adapter = nativeKinds[nameOf(component)];
+      const content = component as NativeContent;
+      const kind = adapter?.accepts(content) ? adapter.kind : "system";
+      const parentId = block.parentId;
+      const owner = kind === "system" && typeof parentId === "string" ? this.owners.get(parentId) : undefined;
+      if (owner && this.expandedPanels.get(component) !== owner) {
+        content.setExpanded?.(true);
+        this.expandedPanels.set(component, owner);
+      } else if (!owner) this.expandedPanels.delete(component);
+      const parts = owner && this.nested.entries(owner.toolCallId!).length ? nativePanelParts(content) : undefined;
+      if (kind === "system" && typeof parentId === "string") block.parent = { id: parentId, owner, parts };
+      if (parts) for (const part of parts) {
+        const adapter = nativeKinds[nameOf(part)];
+        const partKind = adapter?.accepts(part as NativeContent) ? adapter.kind : "system";
+        block.entries.push(this.entry(part, partKind, [], true, owner));
+      } else block.entries.push(this.entry(component, kind, spacing, true, owner));
+    }
+    if (old) block.entries = block.entries.map(entry => reuse(entry, old.entries));
+    return block;
   }
 
   private entry(source: Component, kind: ContentKind, spacing: Component[], compact: boolean, owner?: NativeContent): ContentEntry {
@@ -285,7 +352,7 @@ export class NativeContentIndex {
       const native = source as NativeContent;
       return {
         name: native.toolName!, args: native.args,
-        status: !native.result || native.isPartial !== false ? "running" : native.result.isError ? "error" : "success",
+        status: callStatus(native),
       };
     } : undefined;
     return { source, owner: owner ?? source, component: source, kind: owner ? "tool" : kind, spacing, compact, tool, search: width => {
@@ -343,6 +410,8 @@ export class NativeContentIndex {
       padding = [];
     }
     if (slot < runs.length) throw new Error("Pi's assistant content layout is not supported");
+    // Entries outlive one classification; search reads the current diagnostics.
+    this.diagnostics.set(source, diagnostics);
     const views = this.views.get(source) ?? {};
     this.views.set(source, views);
     const result: ContentEntry[] = [];
@@ -371,7 +440,7 @@ export class NativeContentIndex {
             .map(block => kind === "text" ? block.text ?? "" : block.thinking ?? "").join("\n\n");
           return {
             label: pane === "activity" ? "Thinking" : "Assistant",
-            text: [saved, ...(pane === "chat" ? diagnostics.map(child => searchText(child.render(width).join("\n"))) : [])].filter(Boolean).join("\n\n"),
+            text: [saved, ...(pane === "chat" ? (this.diagnostics.get(source) ?? []).map(child => searchText(child.render(width).join("\n"))) : [])].filter(Boolean).join("\n\n"),
             reveal: pane === "activity" ? () => source.setHideThinkingBlock(false) : undefined,
           };
         },

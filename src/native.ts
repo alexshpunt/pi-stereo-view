@@ -3,7 +3,7 @@ import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@ea
 import { searchText, type SearchEntry, type SearchHit } from "./search.ts";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.ts";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.ts";
-import { NativeContentIndex, type ContentEntry, type Pane } from "./content.ts";
+import { NativeContentIndex, callStatus, type ContentEntry, type Pane } from "./content.ts";
 import { CompactTool } from "./compact-tools.ts";
 import { toolPresentations, type ToolPresentation } from "./tool-presentation.ts";
 import { ToolStreaming } from "./tool-streaming.ts";
@@ -86,6 +86,11 @@ interface Built {
 
 const blankLines = (height: number): string[] => Array<string>(height).fill("");
 
+/** The status of every call, in entry order. */
+function pushCallStates(entries: readonly ContentEntry[], into: unknown[]): void {
+  for (const entry of entries) if (entry.tool && entry.owner === entry.source) into.push(callStatus(entry.source));
+}
+
 /**
  * Project the live native component tree, not messages or renderer strings.
  * Assistant shells keep the native render method and original content components.
@@ -102,6 +107,11 @@ export class NativeDocument extends Container {
   private readonly openTools = new WeakSet<Component>();
   private groups = new Map<Component, ToolGroup>();
   private present: (name: string) => ToolPresentation = name => ({ name, key: name });
+  private toolsKey?: unknown[];
+  /** Inputs of the current grouping, and the status of every call when it was made. */
+  private groupInputs?: unknown[];
+  private readonly callStates: unknown[] = [];
+  private trees?: { inputs: unknown[]; map: Map<Component, NestedTree> };
   private searchTool?: Component;
   private readonly clockOwners = new WeakMap<Component, Component>();
   private readonly compactBlocks = new Map<Component, CompactMessage>();
@@ -186,8 +196,7 @@ export class NativeDocument extends Container {
     if (this.frameActive && this.checked) return;
     const chat = this.source.children[2] as Container;
     if (!Array.isArray(chat?.children)) throw new Error("Pi's history document is not supported");
-    // Existing blocks can change shape too; this cheap type check covers the whole history.
-    for (const component of chat.children) this.timestamps.check(component);
+    this.timestamps.checkHistory(chat.children);
     this.index.entries(this.pane);
     this.checked = true;
   }
@@ -409,24 +418,27 @@ export class NativeDocument extends Container {
       clock: () => block.searchClock(),
       excerpt: this.excerpt?.entry.source === entry.source && entry.owner !== entry.source ? this.searchExcerpt() : undefined };
   }
-  override render(width: number): string[] {
-    if (this.frameActive && this.frameWidth === width && this.frameLines) return this.frameLines;
-    const chat = this.source.children[2] as Container;
-    this.timestamps.prepare(chat.children);
-    this.lastWidth = width;
-    this.positions.clear();
-    if (this.excerpt && !this.index.contains(this.excerpt.entry.source, this.pane)) this.excerpt = undefined;
-    if (this.searchAnchor && !this.index.contains(this.searchAnchor.entry.source, this.pane)) this.searchAnchor = undefined;
-    const locateMatch = this.searchAnchor !== undefined || this.excerpt !== undefined;
-    let row = 0;
-    let visibleBlock = false;
-    let toolRun = false;
-    const compactTools = this.pane === "activity" && this.compactTools();
-    this.present = toolPresentations(compactTools ? this.getTools() : []);
-    this.compactActive = compactTools && this.streaming?.enabled() === true;
-    if (this.compactActive) this.streamer!.observe(this.index.entries());
-    else this.streamer?.clear();
-    const groups = compactTools ? toolGroups(this.index.entries(), this.present, source => this.live(source)) : new Map<Component, ToolGroup>();
+  /** Pi lists its tools as new objects on every call; keep the resolver while their presented fields are the same. */
+  private updatePresentations(tools: readonly ToolInfo[]): void {
+    const key: unknown[] = [];
+    for (const tool of tools) key.push(tool.name, tool.description, tool.parameters, tool.exposure, tool.namespace?.name, tool.sourceInfo);
+    if (sameValues(this.toolsKey, key)) return;
+    this.toolsKey = key;
+    this.present = toolPresentations(tools);
+  }
+
+  /**
+   * Regroup calls only when the entries, presentation, live calls or a call's status change. Pi updates a call's
+   * result without invalidating it, so the status is read from its native fields on every frame.
+   */
+  private updateGroups(compactTools: boolean): void {
+    const all = this.index.entries();
+    const inputs = [compactTools, all, this.present, this.compactActive, this.streamer?.revision];
+    if (sameValues(this.groupInputs, inputs) && this.callStatesUnchanged(all)) return;
+    this.groupInputs = inputs;
+    this.callStates.length = 0;
+    pushCallStates(all, this.callStates);
+    const groups = compactTools ? toolGroups(all, this.present, source => this.live(source)) : new Map<Component, ToolGroup>();
     // Carry visible expansion through state-driven splits and merges, without
     // reopening explicitly collapsed runs. Read the old state before adding heads.
     const opening: Component[] = [];
@@ -444,9 +456,22 @@ export class NativeDocument extends Container {
     }
     for (const source of opening) this.openGroups.add(source);
     this.groups = groups;
-    const searched = this.searchAnchor ? this.index.entries(this.pane).find(entry => entry.source === this.searchAnchor!.entry.source) : undefined;
-    this.searchTool = searched?.owner;
-    const entries = this.index.entries(this.pane);
+  }
+
+  private callStatesUnchanged(entries: readonly ContentEntry[]): boolean {
+    const states = this.callStates;
+    let position = 0;
+    for (const entry of entries) {
+      if (!entry.tool || entry.owner !== entry.source) continue;
+      if (states[position++] !== callStatus(entry.source)) return false;
+    }
+    return position === states.length;
+  }
+
+  /** Nested call trees of Activity calls, rebuilt only when the entries or nested calls change. */
+  private treesFor(entries: readonly ContentEntry[]): Map<Component, NestedTree> {
+    const inputs = [entries, this.index.nested.revision];
+    if (this.trees && sameValues(this.trees.inputs, inputs)) return this.trees.map;
     const trees = new Map<Component, NestedTree>();
     if (this.pane === "activity") for (const entry of entries) {
       if (!entry.tool) continue;
@@ -464,6 +489,32 @@ export class NativeDocument extends Container {
       }
       trees.set(entry.source, tree);
     }
+    this.trees = { inputs, map: trees };
+    return trees;
+  }
+
+  override render(width: number): string[] {
+    if (this.frameActive && this.frameWidth === width && this.frameLines) return this.frameLines;
+    const chat = this.source.children[2] as Container;
+    this.timestamps.prepare(chat.children);
+    this.lastWidth = width;
+    this.positions.clear();
+    if (this.excerpt && !this.index.contains(this.excerpt.entry.source, this.pane)) this.excerpt = undefined;
+    if (this.searchAnchor && !this.index.contains(this.searchAnchor.entry.source, this.pane)) this.searchAnchor = undefined;
+    const locateMatch = this.searchAnchor !== undefined || this.excerpt !== undefined;
+    let row = 0;
+    let visibleBlock = false;
+    let toolRun = false;
+    const compactTools = this.pane === "activity" && this.compactTools();
+    this.updatePresentations(compactTools ? this.getTools() : []);
+    this.compactActive = compactTools && this.streaming?.enabled() === true;
+    if (this.compactActive) this.streamer!.observe(this.index.entries());
+    else this.streamer?.clear();
+    this.updateGroups(compactTools);
+    const searched = this.searchAnchor ? this.index.entries(this.pane).find(entry => entry.source === this.searchAnchor!.entry.source) : undefined;
+    this.searchTool = searched?.owner;
+    const entries = this.index.entries(this.pane);
+    const trees = this.treesFor(entries);
     const view = locateMatch ? undefined : this.viewport?.();
     // The first frame and search measure every entry; later frames reuse offscreen rows.
     const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
@@ -663,32 +714,31 @@ export class NativeDocument extends Container {
     return lines;
   }
 
-  /** Join segment rows, reusing the previous document up to the first changed segment. */
+  /**
+   * Join segment rows, reusing the previous document up to the first changed segment. The segment offsets are
+   * rewritten in place; the returned rows and children are new arrays, so earlier render results stay intact.
+   */
   private document(order: Segment[]): Built {
-    const built = this.built;
+    const built = this.built ??= { order: [], lines: [], components: [], rows: [], childRows: [], document: [], children: [] };
     let same = 0;
-    if (built) {
-      const limit = Math.min(order.length, built.order.length);
-      while (same < limit && order[same] === built.order[same] && order[same].lines === built.lines[same] &&
-        order[same].components === built.components[same]) same++;
-      if (same === order.length && same === built.order.length) return built;
-    }
-    const rowEnd = !built || same === 0 ? 0 : same < built.order.length ? built.rows[same] : built.document.length;
-    const childEnd = !built || same === 0 ? 0 : same < built.order.length ? built.childRows[same] : built.children.length;
-    const next: Built = {
-      order, lines: order.map(segment => segment.lines), components: order.map(segment => segment.components),
-      rows: built ? built.rows.slice(0, same) : [], childRows: built ? built.childRows.slice(0, same) : [],
-      document: built ? built.document.slice(0, rowEnd) : [], children: built ? built.children.slice(0, childEnd) : [],
-    };
+    const limit = Math.min(order.length, built.order.length);
+    while (same < limit && order[same] === built.order[same] && order[same].lines === built.lines[same] &&
+      order[same].components === built.components[same]) same++;
+    if (same === order.length && same === built.order.length) return built;
+    built.document = built.document.slice(0, same < built.order.length ? built.rows[same] : built.document.length);
+    built.children = built.children.slice(0, same < built.order.length ? built.childRows[same] : built.children.length);
+    for (const list of [built.order, built.lines, built.components, built.rows, built.childRows]) list.length = same;
     for (let index = same; index < order.length; index++) {
       const segment = order[index];
-      next.rows.push(next.document.length);
-      next.childRows.push(next.children.length);
-      for (const line of segment.lines) next.document.push(line);
-      for (const component of segment.components) next.children.push(component);
+      built.order.push(segment);
+      built.lines.push(segment.lines);
+      built.components.push(segment.components);
+      built.rows.push(built.document.length);
+      built.childRows.push(built.children.length);
+      for (const line of segment.lines) built.document.push(line);
+      for (const component of segment.components) built.children.push(component);
     }
-    this.built = next;
-    return next;
+    return built;
   }
 
   /** Native state an offscreen entry's rows depend on, read without rendering it. */
