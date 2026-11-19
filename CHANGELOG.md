@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Split view uses much less CPU while an agent works: the panels are drawn as one full-width block instead of being merged cell by cell, and only history near each panel's viewport is rendered on every frame.
+
 ## 0.1.18 - 2026-11-09
 
 ### Added
