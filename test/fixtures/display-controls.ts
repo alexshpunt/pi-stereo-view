@@ -2,13 +2,12 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { stripTerminalSequences, Text, visibleWidth, type TUI } from "@earendil-works/pi-tui";
-
-type Host = TUI & { getScreenLines(): string[]; handleTerminalInput(data: string): void };
+import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { captureTui, type TestHost } from "./tui-host.ts";
 
 /** Drive display settings and capture real headers in both theme appearances. */
 export default function displayControls(pi: ExtensionAPI): void {
-  let tui: Host;
+  let tui: TestHost;
   const capture = async (): Promise<string[]> => {
     tui.requestRender(true);
     await setImmediate();
@@ -25,12 +24,7 @@ export default function displayControls(pi: ExtensionAPI): void {
     }
   };
   pi.on("session_start", async (_event, ctx) => {
-    let finish = (): void => {};
-    await ctx.ui.custom<void>((host, _theme, _keys, done) => {
-      tui = host as Host;
-      finish = done;
-      return new Text("", 0, 0);
-    }, { overlay: true, overlayOptions: { visible: () => false, nonCapturing: true }, onHandle: () => finish() });
+    tui = await captureTui(ctx);
   });
   pi.on("agent_before_settle", async (_event, ctx) => {
     const frames: Record<string, string[]> = { initial: await capture() };
