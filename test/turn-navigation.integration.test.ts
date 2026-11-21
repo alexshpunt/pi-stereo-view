@@ -103,7 +103,8 @@ test("turn clock colors come from settings and hover is unavailable inside a ter
   const observation = await run("turn-settings", "settings", { ...NO_MARKS, turnHover: true, goTo: "clock" }, { TMUX: "/tmp/turn-test,1,0" });
   const settings = observation.frames.settings.join("\n");
   expect(settings).toMatch(/Highlight on hover\s+unavailable/);
-  expect(settings).toMatch(/^\s*Turns\s*$/m);
+  // The overlay floats over the panels, so its rows share lines with history text.
+  expect(settings).toMatch(/ {2}Turns {2,}\n.* {4}Clock color\s+off/);
   expect(settings).toMatch(/ {2}Clock color\s+off/);
   expect(settings).toMatch(/ {2}Clock color strength\s+10%/);
   expect(settings).toMatch(/ {2}Stripe\s+off/);
