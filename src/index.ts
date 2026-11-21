@@ -3,7 +3,7 @@ import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, 
 import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
-import { ACT_MIXES, ACT_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type ActStripe, type GoTo, type Preferences } from "./preferences.ts";
+import { TURN_MIXES, TURN_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type TurnStripe, type GoTo, type Preferences } from "./preferences.ts";
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -56,12 +56,13 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         };
         if (dismissOutside) viewport.dispatchMouseToOverlay = dismissOutside;
         const hoverAvailable = layout?.hoverAvailable() ?? false;
-        const HOVER_LABEL = "Highlight on hover";
+        const HOVER_LABEL = "  Highlight on hover";
+        const TURNS_HEADER = "Turns";
         const listTheme = getSettingsListTheme();
         // A saved mix outside the offered steps stays selectable until another is chosen.
-        const mixSetting = (id: "actClockMix" | "actStripeMix" | "actBackgroundMix", label: string, description: string) => ({
+        const mixSetting = (id: "turnClockMix" | "turnStripeMix" | "turnBackgroundMix", label: string, description: string) => ({
           id, label, description, currentValue: `${preferences[id]}%`,
-          values: [...new Set([...ACT_MIXES, preferences[id]])].sort((a, b) => a - b).map(percent => `${percent}%`),
+          values: [...new Set([...TURN_MIXES, preferences[id]])].sort((a, b) => a - b).map(percent => `${percent}%`),
         });
         const list = new SettingsList([{
           id: "timestamps", label: "Show timestamps",
@@ -100,50 +101,60 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
         }, {
-          id: "actClock", label: "Act clock color",
-          description: "Each request and the work that answers it share a color in both panels. This colors the background of every block's clock.",
-          currentValue: preferences.actClock ? "on" : "off", values: ["on", "off"],
+          // Turn settings sit indented under their own header, which has no value to change.
+          id: "turns", label: TURNS_HEADER,
+          description: "A turn is one request, yours or an extension's, with all the work that answers it. The settings below color each turn alike in both panels and connect the panels.",
+          currentValue: "", values: [],
         }, {
-          ...mixSetting("actClockMix", "Act clock mix", "How strongly the act's color shows behind the clock: the percent of the hue mixed into the terminal background."),
+          id: "turnClock", label: "  Clock color",
+          description: "Color the background of every block's clock in its turn's color.",
+          currentValue: preferences.turnClock ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "actStripe", label: "Act stripe",
-          description: "Mark every block of a request and its work on the left: a colored cell (block), a thin colored line, or nothing.",
-          currentValue: preferences.actStripe, values: [...ACT_STRIPES],
+          ...mixSetting("turnClockMix", "  Clock color strength", "How strongly the turn's color shows behind the clock: the percent of the hue mixed into the terminal background."),
         }, {
-          ...mixSetting("actStripeMix", "Act stripe mix", "How strongly the act's color shows in stripes, lines and separators: 100% is the full hue."),
+          id: "turnStripe", label: "  Stripe",
+          description: "Mark every block of a turn on the left: a colored cell (block), a thin colored line, or nothing.",
+          currentValue: preferences.turnStripe, values: [...TURN_STRIPES],
         }, {
-          id: "actBackground", label: "Act background",
-          description: "Tint the plain background of every block of a request and its work. Tool cards and messages keep their own backgrounds.",
-          currentValue: preferences.actBackground ? "on" : "off", values: ["on", "off"],
+          ...mixSetting("turnStripeMix", "  Stripe color strength", "How strongly the turn's color shows in stripes, lines and separators: 100% is the full hue."),
         }, {
-          ...mixSetting("actBackgroundMix", "Act background mix",
-            "How strongly the act's color tints block backgrounds and hover highlights. Over act backgrounds, hover uses twice as much."),
+          id: "turnBackground", label: "  Background",
+          description: "Tint the plain background of every block of a turn. Tool cards and messages keep their own backgrounds.",
+          currentValue: preferences.turnBackground ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "actSeparator", label: "Act separator",
-          description: "Draw a colored line in both panels where each new request and its work begin.",
-          currentValue: preferences.actSeparator ? "on" : "off", values: ["on", "off"],
+          ...mixSetting("turnBackgroundMix", "  Background color strength",
+            "How strongly the turn's color tints block backgrounds and hover highlights. Over turn backgrounds, hover uses twice as much."),
         }, {
-          id: "actHover", label: HOVER_LABEL,
-          description: hoverAvailable ? "While the pointer is over any block, highlight its request and all the work that answers it in both panels."
+          id: "turnSeparator", label: "  Separator",
+          description: "Draw a line in the turn's color in both panels where each new turn begins.",
+          currentValue: preferences.turnSeparator ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "turnHover", label: HOVER_LABEL,
+          description: hoverAvailable ? "While the pointer is over any block, highlight its whole turn in both panels."
             : "Unavailable: the terminal does not report pointer motion here, such as inside tmux, zellij or screen, or with Pi's mouse support off.",
-          currentValue: hoverAvailable ? (preferences.actHover ? "on" : "off") : "unavailable",
+          currentValue: hoverAvailable ? (preferences.turnHover ? "on" : "off") : "unavailable",
           values: hoverAvailable ? ["on", "off"] : ["unavailable"],
         }, {
-          id: "goTo", label: "Go to",
+          id: "goTo", label: "  Go to",
           description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
           currentValue: preferences.goTo, values: [...GO_TO],
-        }], 18, {
+        }], 19, {
           ...listTheme,
-          // An unavailable setting stays listed so its explanation can be read, but looks disabled.
-          label: (text, selected) => !hoverAvailable && text.trim() === HOVER_LABEL ? ui.theme.fg("dim", text) : listTheme.label(text, selected),
+          label: (text, selected) => {
+            const label = text.trim();
+            if (label === TURNS_HEADER) return ui.theme.bold(ui.theme.fg("accent", text));
+            // An unavailable setting stays listed so its explanation can be read, but looks disabled.
+            if (!hoverAvailable && label === HOVER_LABEL.trim()) return ui.theme.fg("dim", text);
+            return listTheme.label(text, selected);
+          },
           value: (text, selected) => text === "unavailable" ? ui.theme.fg("dim", text) : listTheme.value(text, selected),
         }, (id, value) => {
-          if (id === "actClock") layout?.setActMark("actClock", value === "on");
-          else if (id === "actStripe") layout?.setActMark("actStripe", value as ActStripe);
-          else if (id === "actBackground") layout?.setActMark("actBackground", value === "on");
-          else if (id === "actSeparator") layout?.setActMark("actSeparator", value === "on");
-          else if (id === "actClockMix" || id === "actStripeMix" || id === "actBackgroundMix") layout?.setActMark(id, Number.parseInt(value, 10));
-          else if (id === "actHover") { if (value !== "unavailable") layout?.setActHover(value === "on"); }
+          if (id === "turnClock") layout?.setTurnMark("turnClock", value === "on");
+          else if (id === "turnStripe") layout?.setTurnMark("turnStripe", value as TurnStripe);
+          else if (id === "turnBackground") layout?.setTurnMark("turnBackground", value === "on");
+          else if (id === "turnSeparator") layout?.setTurnMark("turnSeparator", value === "on");
+          else if (id === "turnClockMix" || id === "turnStripeMix" || id === "turnBackgroundMix") layout?.setTurnMark(id, Number.parseInt(value, 10));
+          else if (id === "turnHover") { if (value !== "unavailable") layout?.setTurnHover(value === "on"); }
           else if (id === "goTo") layout?.setGoTo(value as GoTo);
           else if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");

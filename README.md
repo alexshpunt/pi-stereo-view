@@ -129,20 +129,20 @@ Calls that are still running or waiting to collapse are never grouped. Thinking,
 
 ## Find your way between requests
 
-An act is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one act.
+A turn is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one turn.
 
-Every act gets its own color in both panels, so the work for one request is easy to tell from the next. Stereo View settings mark acts in four independent ways; turn on any combination:
+Every turn gets its own color in both panels, so the work for one request is easy to tell from the next. The **Turns** group of Stereo View settings marks turns in four independent ways; turn on any combination:
 
 | Setting | Values | What it marks |
 | --- | --- | --- |
-| **Act clock color** | `on` (default), `off` | The background of each block's clock. |
-| **Act stripe** | `block` (default), `line`, `off` | Every block's left column: a colored cell or a thin colored line. |
-| **Act background** | `on`, `off` (default) | The background of every block. |
-| **Act separator** | `on`, `off` (default) | A colored line across both panels where each new act begins. |
+| **Clock color** | `on` (default), `off` | The background of each block's clock. |
+| **Stripe** | `block` (default), `line`, `off` | Every block's left column: a colored cell or a thin colored line. |
+| **Background** | `on`, `off` (default) | The background of every block. |
+| **Separator** | `on`, `off` (default) | A colored line across both panels where each new turn begins. |
 
-Neighbouring acts get different hues. Each color is the act's hue mixed into your terminal's background; **Act clock mix** (10% by default), **Act stripe mix** (100%, also for separators) and **Act background mix** (5%, also for hover) set how much. Hovering over act backgrounds uses twice the background mix, so the act under the pointer still stands out. Tool cards, your messages and extension messages keep their own backgrounds; act backgrounds only fill the plain background around them.
+Neighbouring turns get different hues. Each color is the turn's hue mixed into your terminal's background; **Clock color strength** (10% by default), **Stripe color strength** (100%, also for separators) and **Background color strength** (5%, also for hover) set how much. Hovering over turn backgrounds uses twice the background strength, so the turn under the pointer still stands out. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
 
-**Highlight on hover** (on by default) highlights the act under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
+**Highlight on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 
 **Go to** opens the same moment of history in the other panel:
 
@@ -221,7 +221,7 @@ Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active p
 
 ## Settings and limits
 
-Your layout, panel order, sizes, compact Activity choice, act marks, hover and Go to choices, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
+Your layout, panel order, sizes, compact Activity choice, turn marks, hover and Go to choices, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
 
 - Tested with Pi 1.1.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.

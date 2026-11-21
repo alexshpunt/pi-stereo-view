@@ -15,8 +15,8 @@ interface Observation {
   error?: string;
 }
 
-/** Drive act marks, hover and Go to through real terminal mouse input. */
-export default function actNavigationProbe(pi: ExtensionAPI): void {
+/** Drive turn marks, hover and Go to through real terminal mouse input. */
+export default function turnNavigationProbe(pi: ExtensionAPI): void {
   let tui: Host;
   const observation: Observation = { frames: {}, raw: {}, tops: {} };
   const input = async (data: string): Promise<void> => {
@@ -86,7 +86,7 @@ export default function actNavigationProbe(pi: ExtensionAPI): void {
   };
   const top = (pane: string): number => view(pane).scrollTop;
   const save = (ctx: ExtensionContext): Promise<void> =>
-    writeFile(path.join(ctx.cwd, "act-navigation-observation.json"), JSON.stringify(observation));
+    writeFile(path.join(ctx.cwd, "turn-navigation-observation.json"), JSON.stringify(observation));
 
   pi.on("session_start", async (_event, ctx) => {
     let finish = (): void => {};
@@ -102,12 +102,13 @@ export default function actNavigationProbe(pi: ExtensionAPI): void {
       const header = first.findIndex(line => line.includes("Conversation") && line.includes("Activity"));
       if (header < 0) throw new Error("Missing panel headers");
       observation.divider = visibleWidth(first[header].slice(0, first[header].indexOf("║")));
-      if (process.env.ACT_SCENARIO === "settings") {
-        // Act clock colors from the settings list, with hover unavailable in a multiplexer.
+      if (process.env.TURN_SCENARIO === "settings") {
+        // Turn clock colors from the settings list, with hover unavailable in a multiplexer.
         const toolbar = first[0];
         await click(visibleWidth(toolbar.slice(0, toolbar.indexOf("[ ≡ ]"))) + 2, 0);
         await capture("settings");
-        for (let index = 0; index < 9; index++) await input("\x1b[B");
+        // Past the general settings and the Turns header to Clock color.
+        for (let index = 0; index < 10; index++) await input("\x1b[B");
         await input(" ");
         await input("\x1b");
         await reveal("activity", "FIRST-PATH");

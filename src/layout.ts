@@ -4,11 +4,11 @@ import {
   Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, visibleWidth, VStack,
   type Color, type Component, type RgbColor, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
-import { NativeDocument, type DocumentActs, type Pane } from "./native.ts";
-import { actColor, pointerMotionAvailable, type ActMix } from "./acts.ts";
+import { NativeDocument, type DocumentTurns, type Pane } from "./native.ts";
+import { turnColor, pointerMotionAvailable, type TurnMix } from "./turns.ts";
 import { NativeContentIndex } from "./content.ts";
 import { NestedCalls } from "./nested-calls.ts";
-import type { ActMarkSetting, Preferences } from "./preferences.ts";
+import type { TurnMarkSetting, Preferences } from "./preferences.ts";
 import type { TranscriptTimestamps } from "./timestamps.ts";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.ts";
 import { SplitSurface } from "./surface.ts";
@@ -241,10 +241,10 @@ export class TranscriptLayout {
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
   private index?: NativeContentIndex;
-  /** The act under the pointer; a pointer move collects the act its document reports. */
+  /** The turn under the pointer; a pointer move collects the turn its document reports. */
   private hoverAct?: number;
-  private moving?: { act: number };
-  /** The terminal's reported background, which act colors are mixed into. */
+  private moving?: { turn: number };
+  /** The terminal's reported background, which turn colors are mixed into. */
   private terminalBackground?: RgbColor;
 
   constructor(
@@ -377,15 +377,15 @@ export class TranscriptLayout {
     const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
     const index = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree);
     this.index = index;
-    const acts: DocumentActs = {
-      clock: () => this.preferences.actClock,
-      stripe: () => this.preferences.actStripe,
-      background: () => this.preferences.actBackground,
-      separator: () => this.preferences.actSeparator,
-      mix: () => this.actMix(),
-      color: act => actColor(this.theme(), act, this.terminalBackground, this.actMix()),
-      hovered: () => this.hoverAvailable() && this.preferences.actHover ? this.hoverAct : undefined,
-      hover: act => { if (this.moving) this.moving.act = act; },
+    const turns: DocumentTurns = {
+      clock: () => this.preferences.turnClock,
+      stripe: () => this.preferences.turnStripe,
+      background: () => this.preferences.turnBackground,
+      separator: () => this.preferences.turnSeparator,
+      mix: () => this.turnMix(),
+      color: turn => turnColor(this.theme(), turn, this.terminalBackground, this.turnMix()),
+      hovered: () => this.hoverAvailable() && this.preferences.turnHover ? this.hoverAct : undefined,
+      hover: turn => { if (this.moving) this.moving.turn = turn; },
       goTo: () => this.preferences.goTo,
       jump: (from, source) => {
         void this.goTo(from, source).catch(error => this.warn("Could not open the other panel: " + String(error)));
@@ -397,10 +397,10 @@ export class TranscriptLayout {
       () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); }, () => this.preferences.buttonStyle, {
         enabled: () => this.preferences.streamTools, delay: () => this.preferences.streamDelay * 1000,
         changed: () => this.host?.requestRender(),
-      }, acts);
+      }, turns);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle,
-      undefined, acts);
+      undefined, turns);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
@@ -652,11 +652,11 @@ export class TranscriptLayout {
       },
       failed: error => this.fail(error),
       pointer: {
-        start: () => { this.moving = { act: 0 }; },
+        start: () => { this.moving = { turn: 0 }; },
         end: () => {
-          const act = this.moving?.act ?? 0;
+          const turn = this.moving?.turn ?? 0;
           this.moving = undefined;
-          this.setHover(act);
+          this.setHover(turn);
         },
         leave: () => this.setHover(0),
       },
@@ -700,7 +700,7 @@ export class TranscriptLayout {
     this.queryBackground(host);
   }
 
-  /** Ask the terminal for its background once; act colors use a guess from the theme until it answers. */
+  /** Ask the terminal for its background once; turn colors use a guess from the theme until it answers. */
   private queryBackground(host: NativeTui): void {
     if (this.terminalBackground || typeof host.queryTerminalColors !== "function") return;
     void host.queryTerminalColors({ timeoutMs: 1000 }).then(colors => {
@@ -715,12 +715,12 @@ export class TranscriptLayout {
     return pointerMotionAvailable(this.host);
   }
 
-  /** Highlight another act; pointer moves within one act render nothing. */
-  private setHover(act: number): void {
-    const next = act || undefined;
+  /** Highlight another turn; pointer moves within one turn render nothing. */
+  private setHover(turn: number): void {
+    const next = turn || undefined;
     if (next === this.hoverAct) return;
     this.hoverAct = next;
-    if (this.preferences.actHover && this.hoverAvailable()) this.host?.requestRender();
+    if (this.preferences.turnHover && this.hoverAvailable()) this.host?.requestRender();
   }
 
   /** Scroll the other panel to the same point of history as a block, returning from a zoomed panel first. */
@@ -875,21 +875,21 @@ export class TranscriptLayout {
     if (persist) this.save();
   }
 
-  /** The act marks' mix strengths, as the palette reads them. */
-  private actMix(): ActMix {
-    const { actClockMix: clock, actStripeMix: stripe, actBackgroundMix: background } = this.preferences;
+  /** The turn marks' mix strengths, as the palette reads them. */
+  private turnMix(): TurnMix {
+    const { turnClockMix: clock, turnStripeMix: stripe, turnBackgroundMix: background } = this.preferences;
     return { clock, stripe, background };
   }
 
-  /** Change one act mark or its mix: clock background, stripe, block background or separator rule. */
-  setActMark<Key extends ActMarkSetting>(key: Key, value: Preferences[Key]): void {
+  /** Change one turn mark or its mix: clock background, stripe, block background or separator rule. */
+  setTurnMark<Key extends TurnMarkSetting>(key: Key, value: Preferences[Key]): void {
     this.preferences[key] = value;
     this.changed();
   }
 
-  /** Highlight the act under the pointer in both panels. */
-  setActHover(hover: boolean): void {
-    this.preferences.actHover = hover;
+  /** Highlight the turn under the pointer in both panels. */
+  setTurnHover(hover: boolean): void {
+    this.preferences.turnHover = hover;
     this.changed();
   }
 

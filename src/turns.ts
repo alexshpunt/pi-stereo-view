@@ -1,17 +1,17 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { backgroundAnsi, colorToOkhsl, foregroundAnsi, mixColors, okhslColor, rgbColor, type Color, type RgbColor, type TUI } from "@earendil-works/pi-tui";
 
-/** Hues of the act palette; consecutive acts step by a stride coprime with it, so neighbours differ strongly. */
+/** Hues of the turn palette; consecutive turns step by a stride coprime with it, so neighbours differ strongly. */
 const HUES = 16;
 const STRIDE = 7;
 
-/** Colors of one act for each mark; `undefined` for blocks before the first act. */
-export interface ActColor {
+/** Colors of one turn for each mark; `undefined` for blocks before the first turn. */
+export interface TurnColor {
   /** Background of the block's clock. */
   clock: Color;
-  /** Background of default cells when act backgrounds are on. */
+  /** Background of default cells when turn backgrounds are on. */
   fill: string;
-  /** Background of default cells while the act is under the pointer and act backgrounds are on. */
+  /** Background of default cells while the turn is under the pointer and turn backgrounds are on. */
   hover: string;
   /** Background of the one-cell block stripe on the left. */
   stripe: string;
@@ -19,17 +19,17 @@ export interface ActColor {
   line: string;
 }
 
-/** Percent of the act hue mixed into the terminal background for each mark. */
-export interface ActMix {
+/** Percent of the turn hue mixed into the terminal background for each mark. */
+export interface TurnMix {
   clock: number;
   stripe: number;
   background: number;
 }
 
 /** Default mixes: faint clocks and backgrounds, full-strength stripes and lines. */
-export const DEFAULT_MIX: ActMix = { clock: 10, stripe: 100, background: 5 };
+export const DEFAULT_MIX: TurnMix = { clock: 10, stripe: 100, background: 5 };
 
-const palettes = new WeakMap<Theme, { background?: RgbColor; mix: ActMix; colors: ActColor[] }>();
+const palettes = new WeakMap<Theme, { background?: RgbColor; mix: TurnMix; colors: TurnColor[] }>();
 
 /** Common dark and light terminal backgrounds, for a terminal that does not report its own. */
 const GUESSED_BACKGROUND = { dark: rgbColor(24, 24, 27), light: rgbColor(250, 250, 250) };
@@ -37,10 +37,10 @@ const GUESSED_BACKGROUND = { dark: rgbColor(24, 24, 27), light: rgbColor(250, 25
 /**
  * The palette for a theme over the terminal's background. Each color mixes a hue into that background by the mark's
  * percentage, so it stays a tint on dark and light terminals alike. Without a reported background, the theme's
- * appearance picks a guess. `hover` doubles the background mix, to stand out over act backgrounds.
+ * appearance picks a guess. `hover` doubles the background mix, to stand out over turn backgrounds.
  */
-export function actColor(theme: Theme, act: number, background?: RgbColor, mix: ActMix = DEFAULT_MIX): ActColor | undefined {
-  if (act <= 0) return undefined;
+export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix: TurnMix = DEFAULT_MIX): TurnColor | undefined {
+  if (turn <= 0) return undefined;
   let palette = palettes.get(theme);
   if (!palette || palette.background !== background || palette.mix.clock !== mix.clock || palette.mix.stripe !== mix.stripe ||
     palette.mix.background !== mix.background) {
@@ -49,7 +49,7 @@ export function actColor(theme: Theme, act: number, background?: RgbColor, mix: 
     const dark = colorToOkhsl(base).l < 0.5;
     const mode = theme.getColorMode();
     const share = (percent: number): number => Math.min(100, Math.max(0, percent)) / 100;
-    const colors: ActColor[] = [];
+    const colors: TurnColor[] = [];
     for (let index = 0; index < HUES; index++) {
       const hue = okhslColor((index * 360) / HUES + 15, 0.85, dark ? 0.62 : 0.55);
       const stripe = mixColors(base, hue, share(mix.stripe), "srgb");
@@ -64,7 +64,7 @@ export function actColor(theme: Theme, act: number, background?: RgbColor, mix: 
     palette = { background, mix: { ...mix }, colors };
     palettes.set(theme, palette);
   }
-  return palette.colors[((act - 1) * STRIDE) % HUES];
+  return palette.colors[((turn - 1) * STRIDE) % HUES];
 }
 
 /** SGR parameters that take arguments: extended foreground, background and underline colors. */

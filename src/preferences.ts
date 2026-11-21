@@ -27,42 +27,42 @@ export interface Preferences {
   streamDelay: number;
   buttonStyle: "icons" | "text";
   /*
-   * Act marks: every block of an act, a user or custom message and the work that follows it, gets the same color in
+   * Turn marks: every block of a turn, a user or custom message and the work that follows it, gets the same color in
    * both panels. Each mark is chosen independently.
    */
   /** Color the background of each block's clock. */
-  actClock: boolean;
+  turnClock: boolean;
   /** A one-column colored cell or line on the left of every block. */
-  actStripe: ActStripe;
+  turnStripe: TurnStripe;
   /** Tint the default background of every block. */
-  actBackground: boolean;
-  /** A colored rule above the first block of each act. */
-  actSeparator: boolean;
-  /** Percent of the act hue mixed into the terminal background behind clocks, in stripes and lines, and in blocks. */
-  actClockMix: number;
-  actStripeMix: number;
-  actBackgroundMix: number;
-  /** Highlight the act under the pointer in both panels, where the terminal reports pointer motion. */
-  actHover: boolean;
+  turnBackground: boolean;
+  /** A colored rule above the first block of each turn. */
+  turnSeparator: boolean;
+  /** Percent of the turn hue mixed into the terminal background behind clocks, in stripes and lines, and in blocks. */
+  turnClockMix: number;
+  turnStripeMix: number;
+  turnBackgroundMix: number;
+  /** Highlight the turn under the pointer in both panels, where the terminal reports pointer motion. */
+  turnHover: boolean;
   /** How a block opens the same point of history in the other panel. */
   goTo: GoTo;
 }
 
-export type ActStripe = "off" | "block" | "line";
-/** Settings that change how acts are marked; each applies at once without other effects. */
-export type ActMarkSetting = "actClock" | "actStripe" | "actBackground" | "actSeparator" | "actClockMix" | "actStripeMix" | "actBackgroundMix";
+export type TurnStripe = "off" | "block" | "line";
+/** Settings that change how turns are marked; each applies at once without other effects. */
+export type TurnMarkSetting = "turnClock" | "turnStripe" | "turnBackground" | "turnSeparator" | "turnClockMix" | "turnStripeMix" | "turnBackgroundMix";
 export type GoTo = "clock" | "button" | "both" | "off";
-export const ACT_STRIPES: readonly ActStripe[] = ["off", "block", "line"];
+export const TURN_STRIPES: readonly TurnStripe[] = ["off", "block", "line"];
 export const GO_TO: readonly GoTo[] = ["clock", "button", "both", "off"];
 
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
-  actClock: true, actStripe: "block", actBackground: false, actSeparator: false, actClockMix: 10, actStripeMix: 100, actBackgroundMix: 5,
-  actHover: true, goTo: "clock",
+  turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 100, turnBackgroundMix: 5,
+  turnHover: true, goTo: "clock",
 };
 
 /** Mix choices offered in settings, in percent; saved files may hold any whole percent from 1 to 100. */
-export const ACT_MIXES: readonly number[] = [2, 5, 8, 10, 15, 20, 30, 50, 75, 100];
+export const TURN_MIXES: readonly number[] = [2, 5, 8, 10, 15, 20, 30, 50, 75, 100];
 const validMix = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 100;
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -88,14 +88,14 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const streamTools = record.streamTools === undefined ? defaults.streamTools : record.streamTools;
   const streamDelay = record.streamDelay === undefined ? defaults.streamDelay : record.streamDelay;
   const buttonStyle = record.buttonStyle === undefined ? defaults.buttonStyle : record.buttonStyle;
-  const actClock = record.actClock === undefined ? defaults.actClock : record.actClock;
-  const actStripe = record.actStripe === undefined ? defaults.actStripe : record.actStripe;
-  const actBackground = record.actBackground === undefined ? defaults.actBackground : record.actBackground;
-  const actSeparator = record.actSeparator === undefined ? defaults.actSeparator : record.actSeparator;
-  const actClockMix = record.actClockMix === undefined ? defaults.actClockMix : record.actClockMix;
-  const actStripeMix = record.actStripeMix === undefined ? defaults.actStripeMix : record.actStripeMix;
-  const actBackgroundMix = record.actBackgroundMix === undefined ? defaults.actBackgroundMix : record.actBackgroundMix;
-  const actHover = record.actHover === undefined ? defaults.actHover : record.actHover;
+  const turnClock = record.turnClock === undefined ? defaults.turnClock : record.turnClock;
+  const turnStripe = record.turnStripe === undefined ? defaults.turnStripe : record.turnStripe;
+  const turnBackground = record.turnBackground === undefined ? defaults.turnBackground : record.turnBackground;
+  const turnSeparator = record.turnSeparator === undefined ? defaults.turnSeparator : record.turnSeparator;
+  const turnClockMix = record.turnClockMix === undefined ? defaults.turnClockMix : record.turnClockMix;
+  const turnStripeMix = record.turnStripeMix === undefined ? defaults.turnStripeMix : record.turnStripeMix;
+  const turnBackgroundMix = record.turnBackgroundMix === undefined ? defaults.turnBackgroundMix : record.turnBackgroundMix;
+  const turnHover = record.turnHover === undefined ? defaults.turnHover : record.turnHover;
   const goTo = record.goTo === undefined ? defaults.goTo : record.goTo;
   if ((record.side !== "left" && record.side !== "right") ||
       (record.chatWidth !== null && (typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
@@ -105,15 +105,15 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean" || typeof compactTools !== "boolean" ||
       typeof groupTools !== "boolean" || typeof nestedTree !== "boolean" ||
       typeof streamTools !== "boolean" || typeof streamDelay !== "number" || !Number.isInteger(streamDelay) || streamDelay < 1 || streamDelay > 300 ||
-      (buttonStyle !== "icons" && buttonStyle !== "text") || typeof actClock !== "boolean" || !ACT_STRIPES.includes(actStripe as ActStripe) ||
-      typeof actBackground !== "boolean" || typeof actSeparator !== "boolean" ||
-      !validMix(actClockMix) || !validMix(actStripeMix) || !validMix(actBackgroundMix) ||
-      typeof actHover !== "boolean" || !GO_TO.includes(goTo as GoTo)) {
+      (buttonStyle !== "icons" && buttonStyle !== "text") || typeof turnClock !== "boolean" || !TURN_STRIPES.includes(turnStripe as TurnStripe) ||
+      typeof turnBackground !== "boolean" || typeof turnSeparator !== "boolean" ||
+      !validMix(turnClockMix) || !validMix(turnStripeMix) || !validMix(turnBackgroundMix) ||
+      typeof turnHover !== "boolean" || !GO_TO.includes(goTo as GoTo)) {
     throw new Error("Invalid pi-stereo-view preferences");
   }
   // Legacy files may contain mode/zoom. Every session starts with both panels visible.
   return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-    actClock, actStripe: actStripe as ActStripe, actBackground, actSeparator, actClockMix, actStripeMix, actBackgroundMix, actHover, goTo: goTo as GoTo };
+    turnClock, turnStripe: turnStripe as TurnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHover, goTo: goTo as GoTo };
 }
 
 /** Atomically save only the display settings, never session messages. */
@@ -122,9 +122,9 @@ export async function savePreferences(file: string, preferences: Preferences): P
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
     const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-      actClock, actStripe, actBackground, actSeparator, actClockMix, actStripeMix, actBackgroundMix, actHover, goTo } = preferences;
+      turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHover, goTo } = preferences;
     const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-      actClock, actStripe, actBackground, actSeparator, actClockMix, actStripeMix, actBackgroundMix, actHover, goTo };
+      turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHover, goTo };
     await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
   } finally {

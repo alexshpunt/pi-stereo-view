@@ -113,7 +113,7 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     // PROFILE_FOCUS limits the CPU profile to one measured action, for attributing its own cost.
     const focus = process.env.PROFILE_FOCUS || undefined;
     let focusSamples = 0;
-    /** Work that emits no frame, such as pointer moves within one act: the CPU of the synchronous dispatch. */
+    /** Work that emits no frame, such as pointer moves within one turn: the CPU of the synchronous dispatch. */
     const measureSync = (name: string, action: () => void): void => {
       const before = { bytes, documents };
       const cpu = process.cpuUsage();
@@ -320,14 +320,14 @@ export default function renderingProfile(pi: ExtensionAPI): void {
       }
       phases.finished = await capture();
       if (split && process.env.PROFILE_POINTER === "1") {
-        // Pointer moves over Activity: within one act they must not render; across acts they repaint the highlight.
-        const acts = (await capture()).map(stripTerminalSequences).flatMap((line, row) => {
+        // Pointer moves over Activity: within one turn they must not render; across turns they repaint the highlight.
+        const turns = (await capture()).map(stripTerminalSequences).flatMap((line, row) => {
           const match = /SYNTHETIC THINKING (\d+)/.exec(line);
-          return match ? [{ row, column: match.index, act: match[1] }] : [];
+          return match ? [{ row, column: match.index, turn: match[1] }] : [];
         });
-        const first = acts[0];
-        const second = acts.find(candidate => candidate.act !== first?.act);
-        if (!first || !second) throw new Error("Two acts must be visible in Activity for pointer profiling");
+        const first = turns[0];
+        const second = turns.find(candidate => candidate.turn !== first?.turn);
+        if (!first || !second) throw new Error("Two turns must be visible in Activity for pointer profiling");
         const move = (column: number, row: number): void => tui.handleTerminalInput(`\x1b[<35;${column + 1};${row + 1}M`);
         move(first.column, first.row);
         await capture();

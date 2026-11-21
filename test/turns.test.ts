@@ -1,11 +1,11 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { backgroundAnsi, Container, rgbColor, stripTerminalSequences, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { actColor, decorateLine, decorateLines, DEFAULT_MIX, pointerMotionAvailable } from "../src/acts.ts";
+import { turnColor, decorateLine, decorateLines, DEFAULT_MIX, pointerMotionAvailable } from "../src/turns.ts";
 import { NativeContentIndex } from "../src/content.ts";
 import { CompactTool } from "../src/compact-tools.ts";
-import { NativeDocument, type DocumentActs } from "../src/native.ts";
-import type { ActStripe, GoTo } from "../src/preferences.ts";
+import { NativeDocument, type DocumentTurns } from "../src/native.ts";
+import type { TurnStripe, GoTo } from "../src/preferences.ts";
 import { CompactMessage, TranscriptTimestamps } from "../src/timestamps.ts";
 
 class UserMessageComponent extends Text {
@@ -57,7 +57,7 @@ function history(...children: Component[]): { source: Container; index: NativeCo
 const pointer = (type: TuiMouseEvent["type"], x: number, y: number, width = 40): TuiMouseEvent =>
   ({ type, button: type === "move" ? "none" : "left", x, y, width, height: 20, screenX: x, screenY: y } as unknown as TuiMouseEvent);
 
-test("acts start at user and custom messages; consecutive messages without work share one", () => {
+test("turns start at user and custom messages; consecutive messages without work share one", () => {
   const welcome = new Text("WELCOME", 0, 0);
   const first = new UserMessageComponent("FIRST");
   const reply = new AssistantMessageComponent("ON IT");
@@ -66,7 +66,7 @@ test("acts start at user and custom messages; consecutive messages without work 
   const custom = new CustomMessageComponent("RESULT", 0, 0);
   const second = new ToolExecutionComponent("call-2");
   const { index } = history(welcome, first, reply, call, queued, custom, second);
-  expect([welcome, first, reply, call, queued, custom, second].map(block => index.act(block))).toEqual([0, 1, 1, 1, 2, 2, 2]);
+  expect([welcome, first, reply, call, queued, custom, second].map(block => index.turn(block))).toEqual([0, 1, 1, 1, 2, 2, 2]);
 });
 
 test("Go to finds the same point of history in the other panel", () => {
@@ -85,7 +85,7 @@ test("Go to finds the same point of history in the other panel", () => {
   expect(index.counterpart(second, "chat")).toBe(later);
 });
 
-test("tinting keeps native backgrounds, restores the act color after every reset and keeps shell zones first", () => {
+test("tinting keeps native backgrounds, restores the turn color after every reset and keeps shell zones first", () => {
   const native = "plain \x1b[48;5;236mnative\x1b[0m after \x1b[38;5;0mfg\x1b[39m \x1b[48;2;1;1;1;1mx\x1b[49m end";
   expect(decorateLine(native, BG)).toBe(BG + "plain \x1b[48;5;236mnative\x1b[0m" + BG +
     " after \x1b[38;5;0mfg\x1b[39m \x1b[48;2;1;1;1;1mx\x1b[49m" + BG + " end");
@@ -101,18 +101,18 @@ test("tinting keeps native backgrounds, restores the act color after every reset
   expect(decorateLines(rows, BG)).toEqual([BG + "a", BG + "changed"]);
 });
 
-test("neighbouring acts get different colors and blocks before the first act get none", () => {
-  expect(actColor(theme, 0)).toBeUndefined();
-  const colors = Array.from({ length: 16 }, (_, act) => actColor(theme, act + 1)!.fill);
+test("neighbouring turns get different colors and blocks before the first turn get none", () => {
+  expect(turnColor(theme, 0)).toBeUndefined();
+  const colors = Array.from({ length: 16 }, (_, turn) => turnColor(theme, turn + 1)!.fill);
   expect(new Set(colors).size).toBe(16);
-  expect(actColor(theme, 17)).toBe(actColor(theme, 1));
+  expect(turnColor(theme, 17)).toBe(turnColor(theme, 1));
 });
 
-test("act backgrounds stay a faint shift from the terminal background", () => {
+test("turn backgrounds stay a faint shift from the terminal background", () => {
   const terminal = { r: 30, g: 30, b: 46 };
   const channels = (ansi: string): number[] => ansi.match(/48;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
-  for (let act = 1; act <= 16; act++) {
-    const color = actColor(theme, act, terminal)!;
+  for (let turn = 1; turn <= 16; turn++) {
+    const color = turnColor(theme, turn, terminal)!;
     // By default backgrounds take 5% of the way from the background to a full hue, hover over them and clocks 10%.
     for (const [ansi, limit] of [[color.fill, 13], [color.hover, 26], [backgroundAnsi(color.clock, "truecolor"), 26]] as const) {
       const shift = Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
@@ -122,16 +122,16 @@ test("act backgrounds stay a faint shift from the terminal background", () => {
   }
 });
 
-test("each mark mixes its own share of the act hue, and a new mix rebuilds the palette", () => {
+test("each mark mixes its own share of the turn hue, and a new mix rebuilds the palette", () => {
   const terminal = { r: 30, g: 30, b: 46 };
   const channels = (ansi: string): number[] => ansi.match(/[34]8;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
   const shift = (ansi: string): number => Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
-  const full = actColor(theme, 1, terminal, { clock: 100, stripe: 100, background: 100 })!;
-  const half = actColor(theme, 1, terminal, { clock: 50, stripe: 50, background: 20 })!;
+  const full = turnColor(theme, 1, terminal, { clock: 100, stripe: 100, background: 100 })!;
+  const half = turnColor(theme, 1, terminal, { clock: 50, stripe: 50, background: 20 })!;
   expect(shift(half.line)).toBeCloseTo(shift(full.line) / 2, -1);
   expect(shift(backgroundAnsi(half.clock, "truecolor"))).toBeCloseTo(shift(full.fill) / 2, -1);
   expect(shift(half.fill)).toBeCloseTo(shift(full.fill) / 5, -1);
-  // Hover doubles the background share, so it shows over act backgrounds.
+  // Hover doubles the background share, so it shows over turn backgrounds.
   expect(shift(half.hover)).toBeCloseTo(shift(full.fill) * 2 / 5, -1);
 });
 
@@ -143,7 +143,7 @@ test("hover is unavailable in terminal multiplexers and without Pi's mouse suppo
   expect(pointerMotionAvailable({ mouseEnabled: false } as never, { TERM: "xterm" })).toBe(false);
 });
 
-interface Marks { clock: boolean; stripe: ActStripe; background: boolean; separator: boolean }
+interface Marks { clock: boolean; stripe: TurnStripe; background: boolean; separator: boolean }
 
 function documentWith(pane: "chat" | "activity", marks: Partial<Marks>, goTo: GoTo = "clock") {
   const first = new UserMessageComponent("FIRST");
@@ -156,14 +156,14 @@ function documentWith(pane: "chat" | "activity", marks: Partial<Marks>, goTo: Go
     marks: { clock: false, stripe: "off", background: false, separator: false, ...marks } as Marks,
     hovered: undefined as number | undefined, reported: [] as number[], jumps: [] as Component[], goTo,
   };
-  const acts: DocumentActs = {
+  const turns: DocumentTurns = {
     clock: () => state.marks.clock, stripe: () => state.marks.stripe, background: () => state.marks.background, separator: () => state.marks.separator,
     mix: () => DEFAULT_MIX,
-    color: act => actColor(theme, act), hovered: () => state.hovered, hover: act => state.reported.push(act),
+    color: turn => turnColor(theme, turn), hovered: () => state.hovered, hover: turn => state.reported.push(turn),
     goTo: () => state.goTo, jump: (_from, block) => state.jumps.push(block),
   };
   const document = new NativeDocument(source, pane, timestamps, () => theme, () => 0, () => false, () => {}, true, index,
-    undefined, () => true, undefined, undefined, undefined, () => "text", undefined, acts);
+    undefined, () => true, undefined, undefined, undefined, () => "text", undefined, turns);
   return { document, state, first, call, second, later };
 }
 
@@ -174,29 +174,29 @@ test("a block stripe keeps native rows beside it and translates the pointer", ()
   const stripes = rows.filter(row => row.startsWith("\x1b[48;2;")).length;
   expect(stripes).toBe(rows.length);
   expect(rows.map(stripTerminalSequences).map(row => row.slice(1)).join("\n")).toMatch(/FIRST[\s\S]*SECOND/);
-  expect(actColor(theme, 1)!.stripe).not.toBe(actColor(theme, 2)!.stripe);
-  expect(rows[0].startsWith(actColor(theme, 1)!.stripe)).toBe(true);
-  expect(rows.at(-1)!.startsWith(actColor(theme, 2)!.stripe)).toBe(true);
+  expect(turnColor(theme, 1)!.stripe).not.toBe(turnColor(theme, 2)!.stripe);
+  expect(rows[0].startsWith(turnColor(theme, 1)!.stripe)).toBe(true);
+  expect(rows.at(-1)!.startsWith(turnColor(theme, 2)!.stripe)).toBe(true);
   // Native rows render one column narrower, beside the stripe.
   document.handleMouse(pointer("move", 0, 0, 20));
   expect(state.reported).toEqual([1]);
 });
 
-test("a line stripe draws a thin line in the act's color beside every row", () => {
+test("a line stripe draws a thin line in the turn's color beside every row", () => {
   const { document } = documentWith("chat", { stripe: "line" });
   document.beginFrame();
   const rows = document.render(20);
   expect(rows.every(row => stripTerminalSequences(row).startsWith("│"))).toBe(true);
-  expect(rows[0].startsWith(actColor(theme, 1)!.line)).toBe(true);
-  expect(rows.at(-1)!.startsWith(actColor(theme, 2)!.line)).toBe(true);
+  expect(rows[0].startsWith(turnColor(theme, 1)!.line)).toBe(true);
+  expect(rows.at(-1)!.startsWith(turnColor(theme, 2)!.line)).toBe(true);
 });
 
-test("a separator rule marks where each later act starts, combined with other marks", () => {
+test("a separator rule marks where each later turn starts, combined with other marks", () => {
   const { document, state } = documentWith("chat", { separator: true });
   document.beginFrame();
   const plain = document.render(20).map(stripTerminalSequences);
   const rules = plain.flatMap((row, index) => row === "─".repeat(20) ? [index] : []);
-  // The first act starts at the top and needs no rule; the second gets one, between blank rows, above its message.
+  // The first turn starts at the top and needs no rule; the second gets one, between blank rows, above its message.
   expect(rules).toHaveLength(1);
   expect(plain[rules[0] - 1].trim()).toBe("");
   expect(plain.slice(rules[0]).join("\n")).toMatch(/^─+\n\s*\n[\s\S]*SECOND/);
@@ -205,11 +205,11 @@ test("a separator rule marks where each later act starts, combined with other ma
   document.beginFrame();
   const rows = document.render(20);
   const rule = rows.find(row => stripTerminalSequences(row).endsWith("─".repeat(19)))!;
-  expect(rule.startsWith(actColor(theme, 2)!.stripe)).toBe(true);
-  expect(rule).toContain(actColor(theme, 2)!.line);
+  expect(rule.startsWith(turnColor(theme, 2)!.stripe)).toBe(true);
+  expect(rule).toContain(turnColor(theme, 2)!.line);
 });
 
-test("act backgrounds tint default cells of each act and hover tints the act under the pointer", () => {
+test("turn backgrounds tint default cells of each turn and hover tints the turn under the pointer", () => {
   const { document, state } = documentWith("activity", {});
   document.beginFrame();
   const plain = document.render(30);
@@ -219,21 +219,21 @@ test("act backgrounds tint default cells of each act and hover tints the act und
   state.hovered = 1;
   document.beginFrame();
   const hovered = document.render(30);
-  // Without act backgrounds, hover shows the act in the background tint.
-  expect(hovered[0].startsWith(actColor(theme, 1)!.fill)).toBe(true);
-  expect(hovered.at(-1)!.includes(actColor(theme, 2)!.fill)).toBe(false);
+  // Without turn backgrounds, hover shows the turn in the background tint.
+  expect(hovered[0].startsWith(turnColor(theme, 1)!.fill)).toBe(true);
+  expect(hovered.at(-1)!.includes(turnColor(theme, 2)!.fill)).toBe(false);
   state.hovered = undefined;
   state.marks = { ...state.marks, background: true };
   document.beginFrame();
   const filled = document.render(30);
-  expect(filled[0].startsWith(actColor(theme, 1)!.fill)).toBe(true);
-  expect(filled.at(-1)!.startsWith(actColor(theme, 2)!.fill)).toBe(true);
-  // Over act backgrounds, the hovered act takes the stronger hover tint.
+  expect(filled[0].startsWith(turnColor(theme, 1)!.fill)).toBe(true);
+  expect(filled.at(-1)!.startsWith(turnColor(theme, 2)!.fill)).toBe(true);
+  // Over turn backgrounds, the hovered turn takes the stronger hover tint.
   state.hovered = 2;
   document.beginFrame();
   const both = document.render(30);
-  expect(both[0].startsWith(actColor(theme, 1)!.fill)).toBe(true);
-  expect(both.at(-1)!.startsWith(actColor(theme, 2)!.hover)).toBe(true);
+  expect(both[0].startsWith(turnColor(theme, 1)!.fill)).toBe(true);
+  expect(both.at(-1)!.startsWith(turnColor(theme, 2)!.hover)).toBe(true);
   document.handleMouse(pointer("move", 2, 99, 30));
   expect(state.reported.at(-1)).toBe(0);
 });
@@ -289,13 +289,13 @@ test("locating a block outside a frame reads clock colors without classifying th
   const calls = Array.from({ length: 40 }, (_, call) => new ToolExecutionComponent("call-" + call));
   const { source, index } = history(new UserMessageComponent("FIRST"), ...calls);
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
-  const acts: DocumentActs = {
+  const turns: DocumentTurns = {
     clock: () => true, stripe: () => "off", background: () => false, separator: () => false, mix: () => DEFAULT_MIX,
-    color: act => actColor(theme, act), hovered: () => undefined, hover: () => {},
+    color: turn => turnColor(theme, turn), hovered: () => undefined, hover: () => {},
     goTo: () => "clock", jump: () => {},
   };
   const document = new NativeDocument(source, "activity", timestamps, () => theme, () => 0, () => false, () => {}, true, index,
-    undefined, () => true, () => ({ compact: true, group: false }), undefined, undefined, () => "text", undefined, acts);
+    undefined, () => true, () => ({ compact: true, group: false }), undefined, undefined, () => "text", undefined, turns);
   document.beginFrame();
   document.render(40);
   // The frame's shared verification ends in the next microtask; a click arrives after it.

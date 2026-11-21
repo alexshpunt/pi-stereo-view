@@ -29,7 +29,7 @@ interface CompactToolOptions {
   count?(): number;
   expanded?(): boolean;
   toggle?(): void;
-  /** Act color behind the clock. */
+  /** Turn color behind the clock. */
   clockBackground?(): Color | undefined;
   /** When it returns an action, clicking the clock runs it instead of toggling the row. */
   clockAction?(): (() => void) | undefined;
