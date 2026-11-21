@@ -22,6 +22,9 @@ const palettes = new WeakMap<Theme, { background?: RgbColor; colors: ActColor[] 
 /** Common dark and light terminal backgrounds, for a terminal that does not report its own. */
 const GUESSED_BACKGROUND = { dark: rgbColor(24, 24, 27), light: rgbColor(250, 250, 250) };
 
+/** Share of the hue in each background: a faint shift from the terminal background, never a solid block. */
+const MIX = { clock: 0.1, fill: 0.06, hover: 0.1 };
+
 /**
  * The palette for a theme over the terminal's background. Each color mixes a hue into that background, so it stays a
  * light tint on dark and light terminals alike. Without a reported background, the theme's appearance picks a guess.
@@ -38,9 +41,9 @@ export function actColor(theme: Theme, act: number, background?: RgbColor): ActC
     for (let index = 0; index < HUES; index++) {
       const hue = okhslColor((index * 360) / HUES + 15, 0.85, dark ? 0.62 : 0.55);
       colors.push({
-        clock: mixColors(base, hue, dark ? 0.42 : 0.35, "srgb"),
-        fill: backgroundAnsi(mixColors(base, hue, dark ? 0.1 : 0.12, "srgb"), mode),
-        hover: backgroundAnsi(mixColors(base, hue, dark ? 0.22 : 0.24, "srgb"), mode),
+        clock: mixColors(base, hue, MIX.clock, "srgb"),
+        fill: backgroundAnsi(mixColors(base, hue, MIX.fill, "srgb"), mode),
+        hover: backgroundAnsi(mixColors(base, hue, MIX.hover, "srgb"), mode),
         stripe: backgroundAnsi(hue, mode),
       });
     }
