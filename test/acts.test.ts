@@ -1,5 +1,5 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { Container, rgbColor, stripTerminalSequences, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { backgroundAnsi, Container, rgbColor, stripTerminalSequences, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { actColor, decorateLine, decorateLines, pointerMotionAvailable } from "../src/acts.ts";
 import { NativeContentIndex } from "../src/content.ts";
@@ -106,6 +106,19 @@ test("neighbouring acts get different colors and blocks before the first act get
   const colors = Array.from({ length: 16 }, (_, act) => actColor(theme, act + 1)!.fill);
   expect(new Set(colors).size).toBe(16);
   expect(actColor(theme, 17)).toBe(actColor(theme, 1));
+});
+
+test("act backgrounds stay a faint shift from the terminal background", () => {
+  const terminal = { r: 30, g: 30, b: 46 };
+  const channels = (ansi: string): number[] => ansi.match(/48;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
+  for (let act = 1; act <= 16; act++) {
+    const color = actColor(theme, act, terminal)!;
+    for (const ansi of [color.fill, color.hover, backgroundAnsi(color.clock, "truecolor")]) {
+      const shift = Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
+      // At most a tenth of the way from the background to a full hue.
+      expect(shift, ansi).toBeLessThanOrEqual(26);
+    }
+  }
 });
 
 test("hover is unavailable in terminal multiplexers and without Pi's mouse support", () => {
