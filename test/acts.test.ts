@@ -113,8 +113,8 @@ test("act backgrounds stay a faint shift from the terminal background", () => {
   const channels = (ansi: string): number[] => ansi.match(/48;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
   for (let act = 1; act <= 16; act++) {
     const color = actColor(theme, act, terminal)!;
-    // At most 5% of the way from the background to a full hue for backgrounds, 15% behind the clock.
-    for (const [ansi, limit] of [[color.fill, 13], [color.hover, 13], [backgroundAnsi(color.clock, "truecolor"), 39]] as const) {
+    // At most 5% of the way from the background to a full hue for backgrounds, 10% behind the clock.
+    for (const [ansi, limit] of [[color.fill, 13], [color.hover, 13], [backgroundAnsi(color.clock, "truecolor"), 26]] as const) {
       const shift = Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
       expect(shift, ansi).toBeLessThanOrEqual(limit);
       expect(shift, ansi).toBeGreaterThan(0);
