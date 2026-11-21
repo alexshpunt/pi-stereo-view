@@ -3,7 +3,7 @@ import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, 
 import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
-import { ACT_COLORS, GO_TO, defaults, loadPreferences, savePreferences, type ActColors, type GoTo, type Preferences } from "./preferences.ts";
+import { ACT_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type ActStripe, type GoTo, type Preferences } from "./preferences.ts";
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -56,7 +56,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         };
         if (dismissOutside) viewport.dispatchMouseToOverlay = dismissOutside;
         const hoverAvailable = layout?.hoverAvailable() ?? false;
-        const HOVER_LABEL = "Act hover";
+        const HOVER_LABEL = "Highlight on hover";
         const listTheme = getSettingsListTheme();
         const list = new SettingsList([{
           id: "timestamps", label: "Show timestamps",
@@ -95,12 +95,24 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
         }, {
-          id: "actColors", label: "Act colors",
-          description: "Color each request and the work that answers it alike in both panels: behind the clock, as a stripe on the left, or as a background.",
-          currentValue: preferences.actColors, values: [...ACT_COLORS],
+          id: "actClock", label: "Act clock color",
+          description: "Each request and the work that answers it share a color in both panels. This colors the background of every block's clock.",
+          currentValue: preferences.actClock ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "actStripe", label: "Act stripe",
+          description: "Mark every block of a request and its work on the left: a colored cell (block), a thin colored line, or nothing.",
+          currentValue: preferences.actStripe, values: [...ACT_STRIPES],
+        }, {
+          id: "actBackground", label: "Act background",
+          description: "Tint the plain background of every block of a request and its work. Tool cards and messages keep their own backgrounds.",
+          currentValue: preferences.actBackground ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "actSeparator", label: "Act separator",
+          description: "Draw a colored line in both panels where each new request and its work begin.",
+          currentValue: preferences.actSeparator ? "on" : "off", values: ["on", "off"],
         }, {
           id: "actHover", label: HOVER_LABEL,
-          description: hoverAvailable ? "Highlight the request and work under the pointer in both panels."
+          description: hoverAvailable ? "While the pointer is over any block, highlight its request and all the work that answers it in both panels."
             : "Unavailable: the terminal does not report pointer motion here, such as inside tmux, zellij or screen, or with Pi's mouse support off.",
           currentValue: hoverAvailable ? (preferences.actHover ? "on" : "off") : "unavailable",
           values: hoverAvailable ? ["on", "off"] : ["unavailable"],
@@ -108,13 +120,16 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "goTo", label: "Go to",
           description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
           currentValue: preferences.goTo, values: [...GO_TO],
-        }], 12, {
+        }], 15, {
           ...listTheme,
           // An unavailable setting stays listed so its explanation can be read, but looks disabled.
           label: (text, selected) => !hoverAvailable && text.trim() === HOVER_LABEL ? ui.theme.fg("dim", text) : listTheme.label(text, selected),
           value: (text, selected) => text === "unavailable" ? ui.theme.fg("dim", text) : listTheme.value(text, selected),
         }, (id, value) => {
-          if (id === "actColors") layout?.setActColors(value as ActColors);
+          if (id === "actClock") layout?.setActMark("actClock", value === "on");
+          else if (id === "actStripe") layout?.setActMark("actStripe", value as ActStripe);
+          else if (id === "actBackground") layout?.setActMark("actBackground", value === "on");
+          else if (id === "actSeparator") layout?.setActMark("actSeparator", value === "on");
           else if (id === "actHover") { if (value !== "unavailable") layout?.setActHover(value === "on"); }
           else if (id === "goTo") layout?.setGoTo(value as GoTo);
           else if (id === "timestamps") layout?.setTimestamps(value === "on");

@@ -1,20 +1,22 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { backgroundAnsi, colorToOkhsl, mixColors, okhslColor, rgbColor, type Color, type RgbColor, type TUI } from "@earendil-works/pi-tui";
+import { backgroundAnsi, colorToOkhsl, foregroundAnsi, mixColors, okhslColor, rgbColor, type Color, type RgbColor, type TUI } from "@earendil-works/pi-tui";
 
 /** Hues of the act palette; consecutive acts step by a stride coprime with it, so neighbours differ strongly. */
 const HUES = 16;
 const STRIDE = 7;
 
-/** Colors of one act for each presentation; `undefined` for blocks before the first act. */
+/** Colors of one act for each mark; `undefined` for blocks before the first act. */
 export interface ActColor {
-  /** Background of the block's clock in `clock` mode. */
+  /** Background of the block's clock. */
   clock: Color;
-  /** Background of default cells in `fill` mode. */
+  /** Background of default cells when act backgrounds are on. */
   fill: string;
   /** Background of default cells while the act is under the pointer. */
   hover: string;
-  /** The one-cell stripe on the left in `stripe` mode. */
+  /** Background of the one-cell block stripe on the left. */
   stripe: string;
+  /** Foreground of the line stripe and the separator rule. */
+  line: string;
 }
 
 const palettes = new WeakMap<Theme, { background?: RgbColor; colors: ActColor[] }>();
@@ -45,6 +47,7 @@ export function actColor(theme: Theme, act: number, background?: RgbColor): ActC
         fill: backgroundAnsi(mixColors(base, hue, MIX.fill, "srgb"), mode),
         hover: backgroundAnsi(mixColors(base, hue, MIX.hover, "srgb"), mode),
         stripe: backgroundAnsi(hue, mode),
+        line: foregroundAnsi(hue, mode),
       });
     }
     palette = { background, colors };

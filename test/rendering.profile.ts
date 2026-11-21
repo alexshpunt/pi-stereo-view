@@ -21,7 +21,11 @@ const callsPerTurn = Number(process.env.PROFILE_CALLS ?? 1);
 const argChars = Number(process.env.PROFILE_ARG_CHARS ?? 0);
 const compact = process.env.PROFILE_COMPACT === "1";
 // Act presentation of the candidate; a baseline without act settings ignores them.
-const actColors = process.env.PROFILE_ACT_COLORS ?? "off";
+const actMarks = (process.env.PROFILE_ACT_MARKS ?? "").split(",").filter(Boolean);
+const actSettings = {
+  actClock: actMarks.includes("clock"), actStripe: actMarks.includes("line") ? "line" : actMarks.includes("stripe") ? "block" : "off",
+  actBackground: actMarks.includes("background"), actSeparator: actMarks.includes("separator"),
+};
 const hover = process.env.PROFILE_HOVER === "1";
 const pointer = process.env.PROFILE_POINTER === "1" || hover;
 const argText = (index: number, call: number, length: number): string => {
@@ -63,7 +67,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
       mode: "split", side: "left", chatWidth: Math.floor((width - 1) * 0.35),
       layout: mode === "rows" ? "rows" : "columns", chatHeight: null, zoom: null, showTimestamps: true, compactTools: compact,
-      actColors, actHover: hover, goTo: "clock",
+      ...actSettings, actHover: hover, goTo: "clock",
     }));
     const manager = SessionManager.create(cwd, cwd);
     const at = Date.parse("2026-01-01T10:00:00Z");
@@ -83,7 +87,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     const runtime = { extensions, transcriptCommit, pi: execFileSync(process.env.PI_COMMAND ?? "pi", ["--version"], { encoding: "utf8" }).trim(),
       transcript: { path: transcript, sourceCommit: transcriptCommit, workingTree: transcriptGit("status", "--porcelain") },
       profileStartup: process.env.PROFILE_STARTUP === "1", profileSearch, searchPane,
-      workload: { exchanges: size, callsPerTurn, argChars, compact, actColors, hover, pointer, toolLines, width, height, scrollbar, syntheticOnly: true },
+      workload: { exchanges: size, callsPerTurn, argChars, compact, actMarks, hover, pointer, toolLines, width, height, scrollbar, syntheticOnly: true },
       provider: "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.", mode };
     await mkdir(artifact, { recursive: true });
     await writeFile(path.join(output, "runtime-" + mode + ".json"), JSON.stringify(runtime, null, 2));

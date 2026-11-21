@@ -15,7 +15,7 @@ interface Observation {
   error?: string;
 }
 
-/** Drive act colors, hover and Go to through real terminal mouse input. */
+/** Drive act marks, hover and Go to through real terminal mouse input. */
 export default function actNavigationProbe(pi: ExtensionAPI): void {
   let tui: Host;
   const observation: Observation = { frames: {}, raw: {}, tops: {} };
@@ -103,7 +103,7 @@ export default function actNavigationProbe(pi: ExtensionAPI): void {
       if (header < 0) throw new Error("Missing panel headers");
       observation.divider = visibleWidth(first[header].slice(0, first[header].indexOf("║")));
       if (process.env.ACT_SCENARIO === "settings") {
-        // Act colors from the settings list, with hover unavailable in a multiplexer.
+        // Act clock colors from the settings list, with hover unavailable in a multiplexer.
         const toolbar = first[0];
         await click(visibleWidth(toolbar.slice(0, toolbar.indexOf("[ ≡ ]"))) + 2, 0);
         await capture("settings");

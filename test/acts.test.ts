@@ -5,7 +5,7 @@ import { actColor, decorateLine, decorateLines, pointerMotionAvailable } from ".
 import { NativeContentIndex } from "../src/content.ts";
 import { CompactTool } from "../src/compact-tools.ts";
 import { NativeDocument, type DocumentActs } from "../src/native.ts";
-import type { ActColors, GoTo } from "../src/preferences.ts";
+import type { ActStripe, GoTo } from "../src/preferences.ts";
 import { CompactMessage, TranscriptTimestamps } from "../src/timestamps.ts";
 
 class UserMessageComponent extends Text {
@@ -130,16 +130,22 @@ test("hover is unavailable in terminal multiplexers and without Pi's mouse suppo
   expect(pointerMotionAvailable({ mouseEnabled: false } as never, { TERM: "xterm" })).toBe(false);
 });
 
-function documentWith(pane: "chat" | "activity", colors: ActColors, goTo: GoTo = "clock") {
+interface Marks { clock: boolean; stripe: ActStripe; background: boolean; separator: boolean }
+
+function documentWith(pane: "chat" | "activity", marks: Partial<Marks>, goTo: GoTo = "clock") {
   const first = new UserMessageComponent("FIRST");
   const call = new ToolExecutionComponent("call-1");
   const second = new UserMessageComponent("SECOND");
   const later = new ToolExecutionComponent("call-2");
   const { source, index } = history(first, call, second, later);
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
-  const state = { colors, hovered: undefined as number | undefined, reported: [] as number[], jumps: [] as Component[], goTo };
+  const state = {
+    marks: { clock: false, stripe: "off", background: false, separator: false, ...marks } as Marks,
+    hovered: undefined as number | undefined, reported: [] as number[], jumps: [] as Component[], goTo,
+  };
   const acts: DocumentActs = {
-    colors: () => state.colors, color: act => actColor(theme, act), hovered: () => state.hovered, hover: act => state.reported.push(act),
+    clock: () => state.marks.clock, stripe: () => state.marks.stripe, background: () => state.marks.background, separator: () => state.marks.separator,
+    color: act => actColor(theme, act), hovered: () => state.hovered, hover: act => state.reported.push(act),
     goTo: () => state.goTo, jump: (_from, block) => state.jumps.push(block),
   };
   const document = new NativeDocument(source, pane, timestamps, () => theme, () => 0, () => false, () => {}, true, index,
@@ -147,8 +153,8 @@ function documentWith(pane: "chat" | "activity", colors: ActColors, goTo: GoTo =
   return { document, state, first, call, second, later };
 }
 
-test("stripe mode keeps native rows beside the act stripe and translates the pointer", () => {
-  const { document, state } = documentWith("chat", "stripe");
+test("a block stripe keeps native rows beside it and translates the pointer", () => {
+  const { document, state } = documentWith("chat", { stripe: "block" });
   document.beginFrame();
   const rows = document.render(20);
   const stripes = rows.filter(row => row.startsWith("\x1b[48;2;")).length;
@@ -162,8 +168,35 @@ test("stripe mode keeps native rows beside the act stripe and translates the poi
   expect(state.reported).toEqual([1]);
 });
 
-test("fill tints default cells of each act and hover tints the act under the pointer", () => {
-  const { document, state } = documentWith("activity", "off");
+test("a line stripe draws a thin line in the act's color beside every row", () => {
+  const { document } = documentWith("chat", { stripe: "line" });
+  document.beginFrame();
+  const rows = document.render(20);
+  expect(rows.every(row => stripTerminalSequences(row).startsWith("│"))).toBe(true);
+  expect(rows[0].startsWith(actColor(theme, 1)!.line)).toBe(true);
+  expect(rows.at(-1)!.startsWith(actColor(theme, 2)!.line)).toBe(true);
+});
+
+test("a separator rule marks where each later act starts, combined with other marks", () => {
+  const { document, state } = documentWith("chat", { separator: true });
+  document.beginFrame();
+  const plain = document.render(20).map(stripTerminalSequences);
+  const rules = plain.flatMap((row, index) => row === "─".repeat(20) ? [index] : []);
+  // The first act starts at the top and needs no rule; the second gets one, between blank rows, above its message.
+  expect(rules).toHaveLength(1);
+  expect(plain[rules[0] - 1].trim()).toBe("");
+  expect(plain.slice(rules[0]).join("\n")).toMatch(/^─+\n\s*\n[\s\S]*SECOND/);
+  expect(plain.slice(0, rules[0]).join("\n")).toContain("FIRST");
+  state.marks = { ...state.marks, stripe: "block", background: true };
+  document.beginFrame();
+  const rows = document.render(20);
+  const rule = rows.find(row => stripTerminalSequences(row).endsWith("─".repeat(19)))!;
+  expect(rule.startsWith(actColor(theme, 2)!.stripe)).toBe(true);
+  expect(rule).toContain(actColor(theme, 2)!.line);
+});
+
+test("act backgrounds tint default cells of each act and hover tints the act under the pointer", () => {
+  const { document, state } = documentWith("activity", {});
   document.beginFrame();
   const plain = document.render(30);
   expect(plain.some(row => row.includes("\x1b[48;2;"))).toBe(false);
@@ -175,7 +208,7 @@ test("fill tints default cells of each act and hover tints the act under the poi
   expect(hovered[0].startsWith(actColor(theme, 1)!.hover)).toBe(true);
   expect(hovered.at(-1)!.includes(actColor(theme, 2)!.hover)).toBe(false);
   state.hovered = undefined;
-  state.colors = "fill";
+  state.marks = { ...state.marks, background: true };
   document.beginFrame();
   const filled = document.render(30);
   expect(filled[0].startsWith(actColor(theme, 1)!.fill)).toBe(true);
@@ -224,19 +257,20 @@ test("a compact row's clock opens the other panel; the rest of the row still tog
 });
 
 test("locating a block measures the whole panel", () => {
-  const { document, second, later } = documentWith("chat", "off");
+  const { document, second, later } = documentWith("chat", {});
   document.beginFrame();
   const rows = document.render(30).map(stripTerminalSequences);
   expect(rows[document.locate(second)!]).toContain("SECOND");
   expect(document.locate(later)).toBeUndefined();
 });
 
-test("locating a block outside a frame reads act colors without classifying the history per row", async () => {
+test("locating a block outside a frame reads clock colors without classifying the history per row", async () => {
   const calls = Array.from({ length: 40 }, (_, call) => new ToolExecutionComponent("call-" + call));
   const { source, index } = history(new UserMessageComponent("FIRST"), ...calls);
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
   const acts: DocumentActs = {
-    colors: () => "clock", color: act => actColor(theme, act), hovered: () => undefined, hover: () => {},
+    clock: () => true, stripe: () => "off", background: () => false, separator: () => false,
+    color: act => actColor(theme, act), hovered: () => undefined, hover: () => {},
     goTo: () => "clock", jump: () => {},
   };
   const document = new NativeDocument(source, "activity", timestamps, () => theme, () => 0, () => false, () => {}, true, index,

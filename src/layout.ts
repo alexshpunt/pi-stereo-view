@@ -378,7 +378,10 @@ export class TranscriptLayout {
     const index = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree);
     this.index = index;
     const acts: DocumentActs = {
-      colors: () => this.preferences.actColors,
+      clock: () => this.preferences.actClock,
+      stripe: () => this.preferences.actStripe,
+      background: () => this.preferences.actBackground,
+      separator: () => this.preferences.actSeparator,
       color: act => actColor(this.theme(), act, this.terminalBackground),
       hovered: () => this.hoverAvailable() && this.preferences.actHover ? this.hoverAct : undefined,
       hover: act => { if (this.moving) this.moving.act = act; },
@@ -871,9 +874,9 @@ export class TranscriptLayout {
     if (persist) this.save();
   }
 
-  /** Color the blocks of each act: behind the clock, as a stripe, as a background, or not at all. */
-  setActColors(colors: Preferences["actColors"]): void {
-    this.preferences.actColors = colors;
+  /** Turn one act mark on or off: clock background, stripe, block background or separator rule. */
+  setActMark<Key extends "actClock" | "actStripe" | "actBackground" | "actSeparator">(key: Key, value: Preferences[Key]): void {
+    this.preferences[key] = value;
     this.changed();
   }
 

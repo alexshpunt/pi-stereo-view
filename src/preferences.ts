@@ -26,22 +26,32 @@ export interface Preferences {
   /** Seconds a finished streamed call stays in full before it collapses. */
   streamDelay: number;
   buttonStyle: "icons" | "text";
-  /** Color every block of an act, a user or custom message and the work that follows it, the same way in both panels. */
-  actColors: ActColors;
+  /*
+   * Act marks: every block of an act, a user or custom message and the work that follows it, gets the same color in
+   * both panels. Each mark is chosen independently.
+   */
+  /** Color the background of each block's clock. */
+  actClock: boolean;
+  /** A one-column colored cell or line on the left of every block. */
+  actStripe: ActStripe;
+  /** Tint the default background of every block. */
+  actBackground: boolean;
+  /** A colored rule above the first block of each act. */
+  actSeparator: boolean;
   /** Highlight the act under the pointer in both panels, where the terminal reports pointer motion. */
   actHover: boolean;
   /** How a block opens the same point of history in the other panel. */
   goTo: GoTo;
 }
 
-export type ActColors = "off" | "clock" | "stripe" | "fill";
+export type ActStripe = "off" | "block" | "line";
 export type GoTo = "clock" | "button" | "both" | "off";
-export const ACT_COLORS: readonly ActColors[] = ["off", "clock", "stripe", "fill"];
+export const ACT_STRIPES: readonly ActStripe[] = ["off", "block", "line"];
 export const GO_TO: readonly GoTo[] = ["clock", "button", "both", "off"];
 
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
-  actColors: "clock", actHover: true, goTo: "clock",
+  actClock: true, actStripe: "block", actBackground: false, actSeparator: false, actHover: true, goTo: "clock",
 };
 
 /** Read display preferences, retaining the first version's saved arrangement. */
@@ -67,7 +77,10 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const streamTools = record.streamTools === undefined ? defaults.streamTools : record.streamTools;
   const streamDelay = record.streamDelay === undefined ? defaults.streamDelay : record.streamDelay;
   const buttonStyle = record.buttonStyle === undefined ? defaults.buttonStyle : record.buttonStyle;
-  const actColors = record.actColors === undefined ? defaults.actColors : record.actColors;
+  const actClock = record.actClock === undefined ? defaults.actClock : record.actClock;
+  const actStripe = record.actStripe === undefined ? defaults.actStripe : record.actStripe;
+  const actBackground = record.actBackground === undefined ? defaults.actBackground : record.actBackground;
+  const actSeparator = record.actSeparator === undefined ? defaults.actSeparator : record.actSeparator;
   const actHover = record.actHover === undefined ? defaults.actHover : record.actHover;
   const goTo = record.goTo === undefined ? defaults.goTo : record.goTo;
   if ((record.side !== "left" && record.side !== "right") ||
@@ -78,13 +91,14 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean" || typeof compactTools !== "boolean" ||
       typeof groupTools !== "boolean" || typeof nestedTree !== "boolean" ||
       typeof streamTools !== "boolean" || typeof streamDelay !== "number" || !Number.isInteger(streamDelay) || streamDelay < 1 || streamDelay > 300 ||
-      (buttonStyle !== "icons" && buttonStyle !== "text") || !ACT_COLORS.includes(actColors as ActColors) ||
+      (buttonStyle !== "icons" && buttonStyle !== "text") || typeof actClock !== "boolean" || !ACT_STRIPES.includes(actStripe as ActStripe) ||
+      typeof actBackground !== "boolean" || typeof actSeparator !== "boolean" ||
       typeof actHover !== "boolean" || !GO_TO.includes(goTo as GoTo)) {
     throw new Error("Invalid pi-stereo-view preferences");
   }
   // Legacy files may contain mode/zoom. Every session starts with both panels visible.
   return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-    actColors: actColors as ActColors, actHover, goTo: goTo as GoTo };
+    actClock, actStripe: actStripe as ActStripe, actBackground, actSeparator, actHover, goTo: goTo as GoTo };
 }
 
 /** Atomically save only the display settings, never session messages. */
@@ -93,9 +107,9 @@ export async function savePreferences(file: string, preferences: Preferences): P
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
     const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-      actColors, actHover, goTo } = preferences;
+      actClock, actStripe, actBackground, actSeparator, actHover, goTo } = preferences;
     const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-      actColors, actHover, goTo };
+      actClock, actStripe, actBackground, actSeparator, actHover, goTo };
     await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
   } finally {

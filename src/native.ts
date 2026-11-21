@@ -12,12 +12,18 @@ import { ToolIndent } from "./tool-indent.ts";
 import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
 import { pushShellInputs, sameValues } from "./render-cache.ts";
 import { decorateLines, type ActColor } from "./acts.ts";
-import type { ActColors, GoTo } from "./preferences.ts";
+import type { ActStripe, GoTo } from "./preferences.ts";
 export type { Pane } from "./content.ts";
 
-/** Act colors, hover and Go to, shared by both panels through the split layout. */
+/** Act marks, hover and Go to, shared by both panels through the split layout. */
 export interface DocumentActs {
-  colors(): ActColors;
+  /** Whether each block's clock gets its act's background. */
+  clock(): boolean;
+  stripe(): ActStripe;
+  /** Whether default cells of every block get their act's background. */
+  background(): boolean;
+  /** Whether a rule marks the first block of each act. */
+  separator(): boolean;
   /** The colors of an act, mixed into the terminal background; none before the first act. */
   color(act: number): ActColor | undefined;
   /** The act under the pointer, while hover highlighting is on and available. */
@@ -75,6 +81,18 @@ const FULL_TOOLS: ToolDisplay = { compact: false, group: false };
 
 /** Time per frame for measuring offscreen entries that are new, changed or stale. */
 const LAZY_BUDGET_MS = 4;
+
+/** A rule in an act's color above the act's first block in a panel, after a blank row. */
+class ActRule implements Component {
+  constructor(private readonly color: () => string | undefined) {}
+  render(width: number): string[] {
+    const color = this.color();
+    const rule = "─".repeat(Math.max(0, width));
+    return ["", color ? color + rule + "\x1b[39m" : rule];
+  }
+  invalidate(): void {}
+}
+
 /** Offscreen entries checked for native changes per frame, in rotation. */
 const SWEEP_ENTRIES = 64;
 
@@ -92,6 +110,8 @@ interface Segment {
   estimate: boolean;
   visibleIn: boolean;
   toolRunIn: boolean;
+  /** The segment starts with its act's separator rule. */
+  ruleIn: boolean;
   visibleOut: boolean;
   toolRunOut: boolean;
   /** Cheap fingerprint of native state, compared while the entry stays offscreen. */
@@ -149,6 +169,8 @@ export class NativeDocument extends Container {
   private searchQuery = "";
   private highlightRevision = 0;
   private highlights = new WeakMap<Component, SearchHighlight>();
+  /** One separator rule per act; it reads the act's current color when it renders. */
+  private readonly rules = new Map<number, ActRule>();
   private lastWidth = 1;
   /** Width of the last render, including the act stripe. */
   private lastOuter = 1;
@@ -381,11 +403,11 @@ export class NativeDocument extends Container {
     return Container.prototype.handleMouse.call(entry, { ...event, y: row, height: segment.lines.length });
   }
   /**
-   * The act color behind a block's clock in `clock` mode. Blocks render inside this document's render, so the acts it
+   * The act color behind a block's clock, when clock marks are on. Blocks render inside this document's render, so the acts it
    * read are current; reading the index per block would verify the whole history per block outside a frame.
    */
   private clockBackground(source: Component): Color | undefined {
-    return this.acts?.colors() === "clock" ? this.acts.color(this.renderActs?.get(source) ?? 0)?.clock : undefined;
+    return this.acts?.clock() ? this.acts.color(this.renderActs?.get(source) ?? 0)?.clock : undefined;
   }
   private goToClock(): boolean {
     const goTo = this.acts?.goTo();
@@ -587,9 +609,11 @@ export class NativeDocument extends Container {
 
   override render(outer: number): string[] {
     if (this.frameActive && this.frameWidth === outer && this.frameLines) return this.frameLines;
-    const actColors = this.acts?.colors() ?? "off";
+    const stripe = this.acts?.stripe() ?? "off";
+    const tint = this.acts?.background() === true;
+    const separator = this.acts?.separator() === true;
     // The act stripe takes the first column; native blocks render beside it.
-    const inset = actColors === "stripe" && outer > 1 ? 1 : 0;
+    const inset = stripe !== "off" && outer > 1 ? 1 : 0;
     const width = outer - inset;
     this.inset = inset;
     this.lastOuter = outer;
@@ -622,7 +646,7 @@ export class NativeDocument extends Container {
     const view = locateMatch || this.measureAll ? undefined : this.viewport?.();
     // The first frame and search measure every entry; later frames reuse offscreen rows.
     const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
-    const presentation = [theme, actColors, display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
+    const presentation = [theme, stripe, tint, separator, this.acts?.clock(), display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
       this.showCopy(), this.buttonStyle(), this.acts?.goTo(), this.timestampGutter(), this.invalidations];
     if (!sameValues(presentation, this.presentation)) {
       this.presentation = presentation;
@@ -644,13 +668,22 @@ export class NativeDocument extends Container {
     const top = virtual && !view.following ? view.top : 0;
     let shift = 0;
     let pending = false;
+    let lastAct = 0;
     const order: Segment[] = [];
-    const renderEntry = (entry: ContentEntry, rowed: boolean, tree: NestedTree | undefined): Segment => {
+    const renderEntry = (entry: ContentEntry, rowed: boolean, tree: NestedTree | undefined, act: number, rule: boolean): Segment => {
       const component = entry.source;
       const routed = entry.component;
       const result: Component[] = [];
       const visibleIn = visibleBlock;
       const toolRunIn = toolRun;
+      if (rule) {
+        let actRule = this.rules.get(act);
+        if (!actRule) this.rules.set(act, actRule = new ActRule(() => this.acts?.color(act)?.line));
+        result.push(actRule);
+        // The block below keeps its own blank row, so the rule stands between two blank rows.
+        toolRun = false;
+        visibleBlock = true;
+      }
       let clock: SearchClock | undefined;
       let nativeBody = true;
       let bodyDepth = 0;
@@ -728,10 +761,9 @@ export class NativeDocument extends Container {
       const heights: number[] = [];
       // Copy rows: native renderers may reuse and later mutate their row arrays.
       const lines: string[] = [];
-      const act = acts?.get(component) ?? 0;
-      const color = act && (inset || actColors === "fill" || hovered === act) ? this.acts?.color(act) : undefined;
-      const background = color && (hovered === act ? color.hover : actColors === "fill" ? color.fill : undefined);
-      const prefix = inset ? (color ? color.stripe + " \x1b[49m" : " ") : "";
+      const color = act && (inset || tint || hovered === act) ? this.acts?.color(act) : undefined;
+      const background = color && (hovered === act ? color.hover : tint ? color.fill : undefined);
+      const prefix = !inset ? "" : !color ? " " : stripe === "line" ? color.line + "│\x1b[39m" : color.stripe + " \x1b[49m";
       for (const child of result) {
         const childLines = decorateLines(child.render(width), background, prefix);
         heights.push(childLines.length);
@@ -742,14 +774,14 @@ export class NativeDocument extends Container {
       let segment = this.segments.get(component);
       if (!segment) {
         segment = { source: component, act, components: result, heights, lines, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
-          visibleOut: visibleBlock, toolRunOut: toolRun, print, start: row, build };
+          ruleIn: rule, visibleOut: visibleBlock, toolRunOut: toolRun, print, start: row, build };
         this.segments.set(component, segment);
         return segment;
       }
       // Keep unchanged arrays, so the document can reuse the rows before the first changed entry.
       if (segment.estimate || !sameValues(segment.lines, lines)) segment.lines = lines;
       if (!sameValues(segment.components, result)) segment.components = result;
-      Object.assign(segment, { heights, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
+      Object.assign(segment, { heights, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn, ruleIn: rule,
         visibleOut: visibleBlock, toolRunOut: toolRun, print });
       return segment;
     };
@@ -759,6 +791,9 @@ export class NativeDocument extends Container {
       const component = entry.source;
       const rowed = display.compact && entry.kind === "tool" && !this.live(entry.owner);
       const tree = trees.get(component);
+      const act = acts?.get(component) ?? 0;
+      // A rule marks where a new act starts in this panel, below other content.
+      const rule = separator && act > 0 && act !== lastAct && visibleBlock;
       let segment = this.segments.get(component);
       const previous = segment?.build === build - 1 ? { start: segment.start, height: segment.lines.length } : undefined;
       let render = !virtual;
@@ -770,7 +805,7 @@ export class NativeDocument extends Container {
         if (hot) render = true;
         else {
           const measured = segment !== undefined && !segment.estimate && segment.width === width && segment.epoch === this.epoch &&
-            segment.visibleIn === visibleBlock && segment.toolRunIn === toolRun;
+            segment.visibleIn === visibleBlock && segment.toolRunIn === toolRun && segment.ruleIn === rule;
           // Offscreen changes are invisible until the entry nears the viewport, where it renders anyway.
           // Check a rotating slice per frame so heights converge without reading every entry each frame.
           const swept = this.dirty.delete(component) ||
@@ -787,12 +822,12 @@ export class NativeDocument extends Container {
       }
       if (render) {
         this.dirty.delete(component);
-        segment = renderEntry(entry, rowed, tree);
+        segment = renderEntry(entry, rowed, tree, act, rule);
       }
       else {
         if (!segment) {
           segment = { source: component, act: 0, components: [], heights: [], lines: blankLines(1), width, epoch: -1, estimate: true, visibleIn: visibleBlock,
-            toolRunIn: toolRun, visibleOut: visibleBlock, toolRunOut: toolRun, print: [], start: row, build };
+            toolRunIn: toolRun, ruleIn: false, visibleOut: visibleBlock, toolRunOut: toolRun, print: [], start: row, build };
           this.segments.set(component, segment);
         } else if (segment.width !== width && !segment.estimate) {
           // Rows at another width would overflow the panel; keep only the height until measured.
@@ -808,7 +843,8 @@ export class NativeDocument extends Container {
       if (virtual && !view.following && previous && previous.start + previous.height <= top) shift += segment.lines.length - previous.height;
       segment.start = row;
       segment.build = build;
-      segment.act = acts?.get(component) ?? 0;
+      segment.act = act;
+      if (segment.lines.length) lastAct = act;
       order.push(segment);
       row += segment.lines.length;
     }

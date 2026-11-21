@@ -35,6 +35,9 @@ function seed(cwd: string): string {
   return manager.getSessionFile()!;
 }
 
+/** Every act mark off, so only the behavior under test colors a row. */
+const NO_MARKS = { actClock: false, actStripe: "off", actBackground: false, actSeparator: false };
+
 async function run(name: string, scenario: "navigation" | "settings", preferences: object, environment: Record<string, string> = {}): Promise<Observation> {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/act-navigation-"));
@@ -79,7 +82,7 @@ const row = (observation: Observation, frame: string, which: "chat" | "activity"
 };
 
 test("hover highlights an act in both panels and Go to opens the same point in the other panel", async () => {
-  const observation = await run("act-navigation", "navigation", { actColors: "off", actHover: true, goTo: "both" });
+  const observation = await run("act-navigation", "navigation", { ...NO_MARKS, actHover: true, goTo: "both" });
   // Hover tints the act's default cells in the other panel; moving within the act changes nothing.
   expect(row(observation, "beforeHover", "chat", "FIRST ANSWER")).not.toContain("\x1b[48;");
   expect(row(observation, "hovered", "chat", "FIRST ANSWER")).toContain("\x1b[48;");
@@ -96,11 +99,13 @@ test("hover highlights an act in both panels and Go to opens the same point in t
   expect(body(observation, "restored", "chat").slice(0, 4).join("\n")).toContain("FIRST ANSWER");
 }, 90_000);
 
-test("act colors come from settings and hover is unavailable inside a terminal multiplexer", async () => {
-  const observation = await run("act-settings", "settings", { actColors: "off", actHover: true, goTo: "clock" }, { TMUX: "/tmp/act-test,1,0" });
+test("act clock colors come from settings and hover is unavailable inside a terminal multiplexer", async () => {
+  const observation = await run("act-settings", "settings", { ...NO_MARKS, actHover: true, goTo: "clock" }, { TMUX: "/tmp/act-test,1,0" });
   const settings = observation.frames.settings.join("\n");
-  expect(settings).toMatch(/Act hover\s+unavailable/);
-  expect(settings).toMatch(/Act colors\s+off/);
+  expect(settings).toMatch(/Highlight on hover\s+unavailable/);
+  expect(settings).toMatch(/Act clock color\s+off/);
+  expect(settings).toMatch(/Act stripe\s+off/);
+  expect(settings).toMatch(/Act separator\s+off/);
   expect(settings).toMatch(/Go to\s+clock/);
   // The same act has the same clock color in both panels.
   const clockColor = (line: string): string | undefined =>
