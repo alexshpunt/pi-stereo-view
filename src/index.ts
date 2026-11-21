@@ -3,7 +3,7 @@ import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, 
 import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
-import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.ts";
+import { ACT_COLORS, GO_TO, defaults, loadPreferences, savePreferences, type ActColors, type GoTo, type Preferences } from "./preferences.ts";
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -55,6 +55,9 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           return result;
         };
         if (dismissOutside) viewport.dispatchMouseToOverlay = dismissOutside;
+        const hoverAvailable = layout?.hoverAvailable() ?? false;
+        const HOVER_LABEL = "Act hover";
+        const listTheme = getSettingsListTheme();
         const list = new SettingsList([{
           id: "timestamps", label: "Show timestamps",
           description: "Hide clock rows without changing messages or recorded tool starts.",
@@ -91,8 +94,30 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "height", label: "Conversation height",
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
-        }], 9, getSettingsListTheme(), (id, value) => {
-          if (id === "timestamps") layout?.setTimestamps(value === "on");
+        }, {
+          id: "actColors", label: "Act colors",
+          description: "Color each request and the work that answers it alike in both panels: behind the clock, as a stripe on the left, or as a background.",
+          currentValue: preferences.actColors, values: [...ACT_COLORS],
+        }, {
+          id: "actHover", label: HOVER_LABEL,
+          description: hoverAvailable ? "Highlight the request and work under the pointer in both panels."
+            : "Unavailable: the terminal does not report pointer motion here, such as inside tmux, zellij or screen, or with Pi's mouse support off.",
+          currentValue: hoverAvailable ? (preferences.actHover ? "on" : "off") : "unavailable",
+          values: hoverAvailable ? ["on", "off"] : ["unavailable"],
+        }, {
+          id: "goTo", label: "Go to",
+          description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
+          currentValue: preferences.goTo, values: [...GO_TO],
+        }], 12, {
+          ...listTheme,
+          // An unavailable setting stays listed so its explanation can be read, but looks disabled.
+          label: (text, selected) => !hoverAvailable && text.trim() === HOVER_LABEL ? ui.theme.fg("dim", text) : listTheme.label(text, selected),
+          value: (text, selected) => text === "unavailable" ? ui.theme.fg("dim", text) : listTheme.value(text, selected),
+        }, (id, value) => {
+          if (id === "actColors") layout?.setActColors(value as ActColors);
+          else if (id === "actHover") { if (value !== "unavailable") layout?.setActHover(value === "on"); }
+          else if (id === "goTo") layout?.setGoTo(value as GoTo);
+          else if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
           else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");
           else if (id === "compactTools") layout?.setCompactTools(value === "on");
@@ -287,7 +312,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const choice = await ctx.ui.select("Copy a block from the active panel", blocks.map(block => block.label));
         blocks.find(block => block.label === choice)?.copy();
       } else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⧉/Copy copies a block. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⧉/Copy copies a block, ⇄/Go to or a click on a block's clock opens the same point in the other panel. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);

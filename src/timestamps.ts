@@ -1,7 +1,7 @@
 import { parseSkillBlock, sessionEntryToContextMessages, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
 import {
   Container, stripTerminalSequences, visibleWidth,
-  type Component, type TuiMouseEvent,
+  type Color, type Component, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 
 import { NativeRenderCache, sameValues } from "./render-cache.ts";
@@ -279,6 +279,15 @@ export class TranscriptTimestamps {
 const TEXT_COPY_CONTROL = "[Copy]";
 // CGJ avoids xterm's single-codepoint rescaling; the space reserves glyph overhang.
 const ICON_COPY_CONTROL = "[ ⧉\u034f ]";
+const TEXT_GO_TO_CONTROL = "[Go to]";
+const ICON_GO_TO_CONTROL = "[ ⇄ ]";
+
+/** Opening the same point of history in the other panel from a block's clock or its button. */
+export interface BlockGoTo {
+  clock(): boolean;
+  button(): boolean;
+  go(): void;
+}
 /** Keep message text full-width, with a clock above and copy action below. */
 export class CompactMessage extends Container {
   private top = 0;
@@ -290,17 +299,23 @@ export class CompactMessage extends Container {
   private copyRow?: number;
   private copyColumn?: number;
   private copyWidth = 0;
-  private copyPressed = false;
+  private goToColumn?: number;
+  private goToWidth = 0;
+  private clockWidth = 0;
+  private pressed?: "copy" | "goTo" | "clock";
   private leadingRows = 0;
   private prepared?: { width: number; content: string[]; lines: string[] };
   private readonly nativeCache: NativeRenderCache;
-  private formatted?: { width: number; time: string; copy: string; gutter: number; theme: Theme; version: number; top: number; lines: string[] };
+  private formatted?: {
+    width: number; time: string; background?: Color; copy: string; goTo: string; gutter: number; theme: Theme; version: number; top: number; lines: string[];
+  };
 
   constructor(private readonly component: Component, private readonly label: () => string,
     private readonly theme: () => Theme, private readonly gutter: () => number,
     private readonly show: () => boolean, private readonly copy?: () => void,
     private readonly showCopy: () => boolean = () => true,
-    private readonly buttonStyle: () => "icons" | "text" = () => "text", changed?: () => void) {
+    private readonly buttonStyle: () => "icons" | "text" = () => "text", changed?: () => void,
+    private readonly clockBackground: () => Color | undefined = () => undefined, private readonly goTo?: BlockGoTo) {
     super();
     this.addChild(component);
     this.nativeCache = new NativeRenderCache(component, changed);
@@ -340,14 +355,21 @@ export class CompactMessage extends Container {
     const theme = this.theme();
     // Only the scrollbar needs a side gutter; controls have their own rows.
     this.contentWidth = Math.max(1, width - gutter);
-    const time = label && this.show() && visibleWidth(label) + 1 <= this.contentWidth ? " " + label : "";
-    const control = this.buttonStyle() === "icons" ? ICON_COPY_CONTROL : TEXT_COPY_CONTROL;
+    const shownTime = label && this.show() && visibleWidth(label) + 1 <= this.contentWidth;
+    const background = shownTime ? this.clockBackground() : undefined;
+    const time = shownTime ? " " + label : "";
+    const icons = this.buttonStyle() === "icons";
+    const control = icons ? ICON_COPY_CONTROL : TEXT_COPY_CONTROL;
     const controlWidth = visibleWidth(control);
     const copy = label && this.copy && this.showCopy() && this.contentWidth >= controlWidth ? control : "";
+    const goToControl = icons ? ICON_GO_TO_CONTROL : TEXT_GO_TO_CONTROL;
+    const goToWidth = visibleWidth(goToControl);
+    const goTo = label && this.goTo?.button() && this.contentWidth >= goToWidth + (copy ? controlWidth + 1 : 0) ? goToControl : "";
     const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
     const cached = this.formatted;
-    if (cached?.width === width && cached.time === time && cached.copy === copy && cached.gutter === gutter && cached.theme === theme &&
+    if (cached?.width === width && cached.time === time && cached.copy === copy && cached.goTo === goTo && cached.background === background &&
+      cached.gutter === gutter && cached.theme === theme &&
       cached.version === this.nativeCache.version) {
       this.top = cached.top;
       return cached.lines;
@@ -359,6 +381,8 @@ export class CompactMessage extends Container {
     this.bodyRows = 0;
     this.copyRow = undefined;
     this.copyColumn = undefined;
+    this.goToColumn = undefined;
+    this.clockWidth = 0;
     let end = content.length;
     // Image protocols need every placement row. Keep their native block intact.
     if (!this.nativeCache.hasImagePlacement) {
@@ -374,38 +398,57 @@ export class CompactMessage extends Container {
       body[body.length - 1] += zones(content.slice(end));
     }
     this.hasClock = Boolean(time);
+    this.clockWidth = time ? visibleWidth(time) : 0;
     this.headerRows = time ? 1 : 0;
     this.bodyRows = body.length;
-    const lines = time ? [theme.fg("dim", time), ...body] : body;
-    if (copy) {
+    const clock = !time ? "" : background ? " " + theme.style(label, { fg: "text", bg: background }) : theme.fg("dim", time);
+    const lines = time ? [clock, ...body] : body;
+    if (copy || goTo) {
       this.copyRow = lines.length;
-      this.copyWidth = controlWidth;
-      this.copyColumn = this.contentWidth - controlWidth;
-      lines.push(" ".repeat(this.copyColumn) + theme.style(copy, { fg: "dim", dim: this.buttonStyle() === "icons" }));
+      const style = { fg: "dim" as const, dim: icons };
+      let row = "";
+      if (goTo) {
+        this.goToWidth = goToWidth;
+        this.goToColumn = this.contentWidth - goToWidth - (copy ? controlWidth + 1 : 0);
+        row = " ".repeat(this.goToColumn) + theme.style(goTo, style) + (copy ? " " : "");
+      }
+      if (copy) {
+        this.copyWidth = controlWidth;
+        this.copyColumn = this.contentWidth - controlWidth;
+        row = (row || " ".repeat(this.copyColumn)) + theme.style(copy, style);
+      }
+      lines.push(row);
     }
-    this.formatted = { width, time, copy, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
+    this.formatted = { width, time, background, copy, goTo, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
     return lines;
   }
 
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
     const target = { component: this, originX: event.screenX - event.x, originY: event.screenY - event.y,
       width: event.width, height: event.height };
-    const onCopy = this.copyColumn !== undefined && this.copyRow !== undefined &&
-      event.y === this.leadingRows + this.copyRow && event.x >= this.copyColumn &&
-      event.x < this.copyColumn + this.copyWidth && event.button === "left";
-    if (onCopy && event.type === "press") {
-      this.copyPressed = true;
+    const footer = this.copyRow !== undefined && event.y === this.leadingRows + this.copyRow;
+    const within = (column: number | undefined, width: number): boolean =>
+      column !== undefined && event.x >= column && event.x < column + width;
+    const control = event.button !== "left" ? undefined :
+      footer && within(this.copyColumn, this.copyWidth) ? "copy" as const :
+        footer && within(this.goToColumn, this.goToWidth) ? "goTo" as const :
+          this.hasClock && this.goTo?.clock() && event.y === this.leadingRows && event.x < this.clockWidth ? "clock" as const : undefined;
+    if (control && event.type === "press") {
+      this.pressed = control;
       return { handled: true, capture: true, target };
     }
-    if (onCopy && event.type === "click") {
-      this.copyPressed = false;
-      this.copy?.();
+    if (control && event.type === "click" && (this.pressed === undefined || this.pressed === control)) {
+      this.pressed = undefined;
+      if (control === "copy") this.copy?.();
+      else this.goTo?.go();
       return { handled: true, target };
     }
-    if (this.copyPressed) {
-      if (event.type === "release") this.copyPressed = false;
+    if (this.pressed && (event.type === "drag" || event.type === "release" || event.type === "click")) {
+      // Pi sends the release, then a click when the pointer did not move; a click or the next gesture ends this one.
+      if (event.type === "click") this.pressed = undefined;
       return { handled: true, target };
     }
+    if (event.type === "press") this.pressed = undefined;
     const bodyRow = event.y - this.leadingRows - this.headerRows;
     if (bodyRow < 0 || bodyRow >= this.bodyRows || event.x >= this.contentWidth) return undefined;
     return super.handleMouse({

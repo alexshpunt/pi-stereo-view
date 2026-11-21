@@ -1,5 +1,5 @@
 import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Container, Spacer, stripTerminalSequences, Text, type Color, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.ts";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.ts";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.ts";
@@ -11,7 +11,23 @@ import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.ts";
 import { ToolIndent } from "./tool-indent.ts";
 import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
 import { pushShellInputs, sameValues } from "./render-cache.ts";
+import { decorateLines, type ActColor } from "./acts.ts";
+import type { ActColors, GoTo } from "./preferences.ts";
 export type { Pane } from "./content.ts";
+
+/** Act colors, hover and Go to, shared by both panels through the split layout. */
+export interface DocumentActs {
+  colors(): ActColors;
+  /** The colors of an act, mixed into the terminal background; none before the first act. */
+  color(act: number): ActColor | undefined;
+  /** The act under the pointer, while hover highlighting is on and available. */
+  hovered(): number | undefined;
+  /** Report the act under the pointer during a pointer move; 0 for a block before the first act. */
+  hover(act: number): void;
+  goTo(): GoTo;
+  /** Open the same point of history in the other panel. */
+  jump(from: Pane, source: Component): void;
+}
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
 class SearchHighlight implements Component {
@@ -64,6 +80,9 @@ const SWEEP_ENTRIES = 64;
 
 /** One projected entry's rows, the components that produced them, and the inputs they depend on. */
 interface Segment {
+  source: Component;
+  /** The entry's act when the segment was last placed, so pointer moves need not read the index. */
+  act: number;
   components: Component[];
   heights: number[];
   lines: string[];
@@ -131,6 +150,14 @@ export class NativeDocument extends Container {
   private highlightRevision = 0;
   private highlights = new WeakMap<Component, SearchHighlight>();
   private lastWidth = 1;
+  /** Width of the last render, including the act stripe. */
+  private lastOuter = 1;
+  /** Columns the act stripe takes before the content. */
+  private inset = 0;
+  /** Measure every entry on the next render, to locate a block for Go to. */
+  private measureAll = false;
+  /** Every block's act, read once at the start of the current render. */
+  private renderActs?: ReadonlyMap<Component, number>;
   private frameActive = false;
   private frameWidth?: number;
   private frameLines?: string[];
@@ -171,6 +198,7 @@ export class NativeDocument extends Container {
     private readonly beforeExpand: () => void = () => {},
     private readonly buttonStyle: () => "icons" | "text" = () => "text",
     private readonly streaming?: { enabled(): boolean; delay(): number; changed(): void },
+    private readonly acts?: DocumentActs,
   ) {
     super();
     if (streaming) this.streamer = new ToolStreaming(() => streaming.delay(), () => streaming.changed());
@@ -304,7 +332,7 @@ export class NativeDocument extends Container {
   searchRow(hit: SearchHit): number | undefined {
     // Async regex can complete between paints. Measure this document at its last
     // allocated width instead of assuming requestRender already emitted a frame.
-    if (this.searchAnchor === hit && this.frameWidth === undefined) this.render(this.lastWidth);
+    if (this.searchAnchor === hit && this.frameWidth === undefined) this.render(this.lastOuter);
     const block = this.positions.get(hit.entry.source);
     if (!block) return undefined;
     if (block.excerptRow !== undefined) return block.excerptRow;
@@ -327,7 +355,14 @@ export class NativeDocument extends Container {
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
     if (event.type === "wheel" || (event.type === "press" && event.button === "left")) this.interact();
     const built = this.built;
-    if (!built || event.y < 0) return undefined;
+    if (!built || event.y < 0) {
+      if (event.type === "move") this.acts?.hover(0);
+      return undefined;
+    }
+    if (this.inset) {
+      if (event.x < this.inset && event.type !== "move") return undefined;
+      event = { ...event, x: event.x - this.inset, width: Math.max(0, event.width - this.inset) };
+    }
     // Find the entry under the pointer, then route like a container of that entry's components.
     let low = 0;
     let high = built.order.length - 1;
@@ -337,6 +372,7 @@ export class NativeDocument extends Container {
     }
     const segment = built.order[low];
     const row = event.y - (built.rows[low] ?? 0);
+    if (event.type === "move") this.acts?.hover(segment && row < segment.lines.length ? segment.act : 0);
     if (!segment || segment.estimate || row >= segment.lines.length) return undefined;
     const entry = {
       children: segment.components,
@@ -344,6 +380,43 @@ export class NativeDocument extends Container {
     };
     return Container.prototype.handleMouse.call(entry, { ...event, y: row, height: segment.lines.length });
   }
+  /**
+   * The act color behind a block's clock in `clock` mode. Blocks render inside this document's render, so the acts it
+   * read are current; reading the index per block would verify the whole history per block outside a frame.
+   */
+  private clockBackground(source: Component): Color | undefined {
+    return this.acts?.colors() === "clock" ? this.acts.color(this.renderActs?.get(source) ?? 0)?.clock : undefined;
+  }
+  private goToClock(): boolean {
+    const goTo = this.acts?.goTo();
+    return goTo === "clock" || goTo === "both";
+  }
+  /** Clicking a compact row's clock opens its point of history in the other panel. */
+  private clockJump(source: Component): (() => void) | undefined {
+    return this.goToClock() ? () => this.acts?.jump(this.pane, source) : undefined;
+  }
+
+  /**
+   * The first row of a block in this panel, measured from every entry. A block hidden in a closed group or shown
+   * inside its owner's tree resolves to the nearest shown row above it.
+   */
+  locate(source: Component): number | undefined {
+    if (this.disposed) return undefined;
+    this.measureAll = true;
+    this.frameWidth = undefined;
+    try { this.render(this.lastOuter); } finally { this.measureAll = false; }
+    const entries = this.index.entries(this.pane);
+    for (let index = entries.findIndex(entry => entry.source === source); index >= 0; index--) {
+      const segment = this.segments.get(entries[index].source);
+      if (segment?.build !== this.buildId || !segment.lines.length) continue;
+      // Start at the block's first visible row, after its separator.
+      let row = 0;
+      while (row < segment.lines.length - 1 && !stripTerminalSequences(segment.lines[row]).trim()) row++;
+      return segment.start + row;
+    }
+    return undefined;
+  }
+
   private toolOpen(source: Component): boolean {
     return this.openTools.has(source) || this.searchTool === source;
   }
@@ -359,6 +432,8 @@ export class NativeDocument extends Container {
       }, this.theme, {
         clock: () => this.showTimestamps() ? this.timestamps.label(entry.source) : "",
         gutter: this.timestampGutter,
+        clockBackground: () => this.clockBackground(entry.source),
+        clockAction: () => this.clockJump(entry.source),
         expanded: () => this.toolOpen(entry.source),
         toggle: () => {
           if (!this.index.contains(entry.source, this.pane)) return;
@@ -387,6 +462,8 @@ export class NativeDocument extends Container {
         count: () => this.groups.get(source)!.calls.length,
         clock: () => this.showTimestamps() ? this.timestamps.label(source) : "",
         gutter: this.timestampGutter,
+        clockBackground: () => this.clockBackground(source),
+        clockAction: () => this.clockJump(source),
         expanded: () => this.groupOpen(this.groups.get(source)!),
         toggle: () => {
           const current = this.groups.get(source);
@@ -412,6 +489,10 @@ export class NativeDocument extends Container {
         this.copy ? () => this.copyBlock(component) : undefined, this.showCopy, this.buttonStyle, () => {
           // Nested panels render inside their owner's segment.
           this.dirty.add(component).add(entry.owner);
+        }, () => this.clockBackground(component), {
+          clock: () => this.goToClock(),
+          button: () => { const goTo = this.acts?.goTo(); return goTo === "button" || goTo === "both"; },
+          go: () => this.acts?.jump(this.pane, component),
         });
       this.stamped.set(routed, stamped);
     }
@@ -504,8 +585,18 @@ export class NativeDocument extends Container {
     return trees;
   }
 
-  override render(width: number): string[] {
-    if (this.frameActive && this.frameWidth === width && this.frameLines) return this.frameLines;
+  override render(outer: number): string[] {
+    if (this.frameActive && this.frameWidth === outer && this.frameLines) return this.frameLines;
+    const actColors = this.acts?.colors() ?? "off";
+    // The act stripe takes the first column; native blocks render beside it.
+    const inset = actColors === "stripe" && outer > 1 ? 1 : 0;
+    const width = outer - inset;
+    this.inset = inset;
+    this.lastOuter = outer;
+    const theme = this.theme();
+    const hovered = this.acts?.hovered();
+    const acts = this.acts ? this.index.actMap() : undefined;
+    this.renderActs = acts;
     const chat = this.source.children[2] as Container;
     this.timestamps.prepare(chat.children);
     this.lastWidth = width;
@@ -528,11 +619,11 @@ export class NativeDocument extends Container {
     this.searchTool = searched?.owner;
     const entries = this.index.entries(this.pane);
     const trees = this.treesFor(entries);
-    const view = locateMatch ? undefined : this.viewport?.();
+    const view = locateMatch || this.measureAll ? undefined : this.viewport?.();
     // The first frame and search measure every entry; later frames reuse offscreen rows.
     const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
-    const presentation = [this.theme(), display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
-      this.showCopy(), this.buttonStyle(), this.timestampGutter(), this.invalidations];
+    const presentation = [theme, actColors, display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
+      this.showCopy(), this.buttonStyle(), this.acts?.goTo(), this.timestampGutter(), this.invalidations];
     if (!sameValues(presentation, this.presentation)) {
       this.presentation = presentation;
       this.epoch++;
@@ -637,8 +728,12 @@ export class NativeDocument extends Container {
       const heights: number[] = [];
       // Copy rows: native renderers may reuse and later mutate their row arrays.
       const lines: string[] = [];
+      const act = acts?.get(component) ?? 0;
+      const color = act && (inset || actColors === "fill" || hovered === act) ? this.acts?.color(act) : undefined;
+      const background = color && (hovered === act ? color.hover : actColors === "fill" ? color.fill : undefined);
+      const prefix = inset ? (color ? color.stripe + " \x1b[49m" : " ") : "";
       for (const child of result) {
-        const childLines = child.render(width);
+        const childLines = decorateLines(child.render(width), background, prefix);
         heights.push(childLines.length);
         for (const line of childLines) lines.push(line);
       }
@@ -646,7 +741,7 @@ export class NativeDocument extends Container {
       this.fingerprint(entry, rowed, tree, print);
       let segment = this.segments.get(component);
       if (!segment) {
-        segment = { components: result, heights, lines, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
+        segment = { source: component, act, components: result, heights, lines, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
           visibleOut: visibleBlock, toolRunOut: toolRun, print, start: row, build };
         this.segments.set(component, segment);
         return segment;
@@ -696,7 +791,7 @@ export class NativeDocument extends Container {
       }
       else {
         if (!segment) {
-          segment = { components: [], heights: [], lines: blankLines(1), width, epoch: -1, estimate: true, visibleIn: visibleBlock,
+          segment = { source: component, act: 0, components: [], heights: [], lines: blankLines(1), width, epoch: -1, estimate: true, visibleIn: visibleBlock,
             toolRunIn: toolRun, visibleOut: visibleBlock, toolRunOut: toolRun, print: [], start: row, build };
           this.segments.set(component, segment);
         } else if (segment.width !== width && !segment.estimate) {
@@ -713,6 +808,7 @@ export class NativeDocument extends Container {
       if (virtual && !view.following && previous && previous.start + previous.height <= top) shift += segment.lines.length - previous.height;
       segment.start = row;
       segment.build = build;
+      segment.act = acts?.get(component) ?? 0;
       order.push(segment);
       row += segment.lines.length;
     }
@@ -731,7 +827,7 @@ export class NativeDocument extends Container {
       children = [...children, new Spacer(1)];
     }
     this.children = children;
-    this.frameWidth = width;
+    this.frameWidth = outer;
     this.frameLines = lines;
     if (pending) this.scheduleFollowUp();
     return lines;
