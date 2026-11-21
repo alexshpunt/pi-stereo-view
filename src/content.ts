@@ -30,6 +30,8 @@ interface NativeAssistant extends Container {
   lastMessage?: { content: { type: string; text?: string; thinking?: string }[] };
   contentIsStale?: boolean;
   buildContent?(message: NonNullable<NativeAssistant["lastMessage"]>): void;
+  isCompacted?(): boolean;
+  thaw?(): void;
   setHideThinkingBlock(hidden: boolean): void;
 }
 
@@ -82,6 +84,12 @@ function assistant(component: Component): NativeAssistant | undefined {
   if (!Array.isArray(native.contentContainer?.children) || typeof native.hasToolCalls !== "boolean" ||
     (native.lastMessage !== undefined && !Array.isArray(native.lastMessage.content))) {
     throw new Error("Pi's assistant content metadata is not supported");
+  }
+  // Pi-Bolt releases the children of settled messages it drew itself and keeps only their lines.
+  // Restore them through the owner, as Pi-Bolt does before it draws such a message again.
+  if (typeof native.isCompacted === "function" && native.isCompacted()) {
+    if (typeof native.thaw !== "function") throw new Error("Pi's compacted assistant content is not supported");
+    native.thaw();
   }
   // Pi-Bolt builds streamed children lazily. Synchronize the real owner before
   // indexing or cloning it, so a pane cannot rebuild both content kinds itself.
