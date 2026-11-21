@@ -1,20 +1,31 @@
-import { wrapTextWithAnsi, type Component, type SettingItem, type SettingsList, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { matchesKey, wrapTextWithAnsi, type Component, type SettingItem, type SettingsList, type TuiMouseEvent } from "@earendil-works/pi-tui";
 
 /** Rows of Pi's settings list under its items: a blank row and the key hint. */
 const HINT_ROWS = 2;
+/** Pi's key hint, extended with the arrow keys this list adds. */
+const PI_HINT = "Enter/Space to change";
+const ARROW_HINT = "←/→ or Enter/Space to change";
 
 /**
- * Keep a settings list at one height while the selection moves. Pi's list shows the selected item's description
- * between the items and the key hint, so its height follows the description's length; a centered overlay then jumps.
- * Blank rows before the hint make every selection as tall as the one with the longest description.
+ * Keep a settings list at one height while the selection moves, and step values with the arrow keys.
+ *
+ * Pi's list shows the selected item's description between the items and the key hint, so its height follows the
+ * description's length; a centered overlay then jumps. Blank rows before the hint make every selection as tall as
+ * the one with the longest description. Left and Right pick the previous or next value without wrapping around, so
+ * a strength can be tuned in both directions; Enter and Space still cycle.
  */
 export class SteadySettings implements Component {
   private measured?: { width: number; rows: number };
 
-  constructor(private readonly list: SettingsList, private readonly items: readonly SettingItem[], private readonly visible: number) {}
+  constructor(
+    private readonly list: SettingsList,
+    private readonly items: readonly SettingItem[],
+    private readonly visible: number,
+    private readonly change: (id: string, value: string) => void,
+  ) {}
 
   render(width: number): string[] {
-    const lines = this.list.render(width);
+    const lines = this.list.render(width).map(line => line.replace(PI_HINT, ARROW_HINT));
     const rows = this.rows(width);
     // A submenu, or a list taller than measured, renders as it is.
     if (lines.length >= rows) return lines;
@@ -33,7 +44,23 @@ export class SteadySettings implements Component {
     return rows;
   }
 
-  handleInput(data: string): void { this.list.handleInput(data); }
+  handleInput(data: string): void {
+    const step = matchesKey(data, "left") ? -1 : matchesKey(data, "right") ? 1 : 0;
+    if (!step) {
+      this.list.handleInput(data);
+      return;
+    }
+    // Pi's list does not expose its selection; it keeps it in a plain field.
+    const index: unknown = Reflect.get(this.list, "selectedIndex");
+    const item = typeof index === "number" ? this.items[index] : undefined;
+    const values = item?.values;
+    if (!item || !values?.length) return;
+    const next = values[Math.min(values.length - 1, Math.max(0, values.indexOf(item.currentValue) + step))];
+    if (next === item.currentValue) return;
+    this.list.updateValue(item.id, next);
+    this.change(item.id, next);
+  }
+
   handleMouse(event: TuiMouseEvent): ReturnType<NonNullable<Component["handleMouse"]>> { return this.list.handleMouse(event); }
   invalidate(): void { this.measured = undefined; this.list.invalidate(); }
 }

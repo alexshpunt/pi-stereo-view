@@ -140,7 +140,7 @@ Every turn gets its own color in both panels, so the work for one request is eas
 | **Background** | `on`, `off` (default) | The background of every block. |
 | **Separator** | `on`, `off` (default) | A colored line across both panels where each new turn begins. |
 
-Neighbouring turns get different hues. Each color is the turn's hue mixed into your terminal's background; **Clock color strength** (10% by default), **Stripe color strength** (100%, also for separators) and **Background color strength** (5%, also for hover) set how much. Hovering over turn backgrounds uses twice the background strength, so the turn under the pointer still stands out. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
+Neighbouring turns get different hues. Each color is the turn's hue mixed into your terminal's background; **Clock color strength** (10% by default), **Stripe color strength** (100%, also for separators) and **Background color strength** (5%, also for hover) set how much; in settings, `←` and `→` step a strength down or up. Hovering over turn backgrounds uses twice the background strength, so the turn under the pointer still stands out. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
 
 **Highlight on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 

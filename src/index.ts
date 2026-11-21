@@ -141,17 +141,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           currentValue: preferences.goTo, values: [...GO_TO],
         }];
         const VISIBLE_SETTINGS = 19;
-        const list = new SettingsList(items, VISIBLE_SETTINGS, {
-          ...listTheme,
-          label: (text, selected) => {
-            const label = text.trim();
-            if (label === TURNS_HEADER) return ui.theme.bold(ui.theme.fg("accent", text));
-            // An unavailable setting stays listed so its explanation can be read, but looks disabled.
-            if (!hoverAvailable && label === HOVER_LABEL.trim()) return ui.theme.fg("dim", text);
-            return listTheme.label(text, selected);
-          },
-          value: (text, selected) => text === "unavailable" ? ui.theme.fg("dim", text) : listTheme.value(text, selected),
-        }, (id, value) => {
+        const apply = (id: string, value: string): void => {
           if (id === "turnClock") layout?.setTurnMark("turnClock", value === "on");
           else if (id === "turnStripe") layout?.setTurnMark("turnStripe", value as TurnStripe);
           else if (id === "turnBackground") layout?.setTurnMark("turnBackground", value === "on");
@@ -169,13 +159,25 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           else if (id === "streamDelay") layout?.setStreamDelay(Number.parseInt(value, 10));
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
           tui.requestRender();
-        }, () => done());
+        };
+        const list = new SettingsList(items, VISIBLE_SETTINGS, {
+          ...listTheme,
+          label: (text, selected) => {
+            const label = text.trim();
+            if (label === TURNS_HEADER) return ui.theme.bold(ui.theme.fg("accent", text));
+            // An unavailable setting stays listed so its explanation can be read, but looks disabled.
+            if (!hoverAvailable && label === HOVER_LABEL.trim()) return ui.theme.fg("dim", text);
+            return listTheme.label(text, selected);
+          },
+          value: (text, selected) => text === "unavailable" ? ui.theme.fg("dim", text) : listTheme.value(text, selected),
+        }, apply, () => done());
+        const steady = new SteadySettings(list, items, VISIBLE_SETTINGS, apply);
         const content = new Container();
         content.addChild({
           render: () => [ui.theme.fg("accent", ui.theme.bold("pi-stereo-view settings")), ""],
           invalidate() {},
         });
-        content.addChild(new SteadySettings(list, items, VISIBLE_SETTINGS));
+        content.addChild(steady);
         const box = new Box(1, 1, text => ui.theme.bg("customMessageBg", text));
         box.addChild(content);
         return {
@@ -189,7 +191,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
             }
           },
           handleInput: (data: string) => {
-            list.handleInput(data);
+            steady.handleInput(data);
             tui.requestRender();
           },
         };
