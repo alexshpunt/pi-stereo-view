@@ -12,7 +12,7 @@ npm run check:package
 
 The integration tests run real Pi with scripted responses. The package check installs the exact npm archive in a clean runtime without development dependencies and verifies the loaded split, native tool output and full-width dock.
 
-The shipped display defaults are text buttons, Compact Activity tools and Stream latest tools. The test launchers (`test/fixtures/pi-host.sh`, `startup-host.sh`) seed missing display preferences with the earlier full-card, icon-button baseline so unrelated checks stay stable; `PI_TRANSCRIPT_TEST_DEFAULTS=1` skips that, and `test/default-display.integration.test.ts` runs a fresh install that way.
+The shipped display defaults are text buttons, Compact Activity tools, Stream latest tools, clock act colors, act hover and clock Go to. The test launchers (`test/fixtures/pi-host.sh`, `startup-host.sh`) seed missing display preferences with the earlier full-card, icon-button baseline without act colors, hover or Go to so unrelated checks stay stable; `PI_TRANSCRIPT_TEST_DEFAULTS=1` skips that, and `test/default-display.integration.test.ts` runs a fresh install that way.
 
 The test launcher disables automatic network activity with `PI_OFFLINE=1` so update and model-catalog notifications cannot change the expected terminal layout.
 
@@ -75,7 +75,7 @@ PI_COMMAND=$(command -v pi) PROFILE_MODES=stock,columns PROFILE_COMPACT=1 PROFIL
   PROFILE_HISTORY=100 PROFILE_WIDTH=200 PROFILE_HEIGHT=60 PROFILE_TOOL_LINES=40 npm run profile -- test/rendering.profile.ts
 ```
 
-`test/rendering.profile.ts` builds a synthetic history of `PROFILE_HISTORY` turns with `PROFILE_CALLS` calls each and measures CPU per frame for repaint, typing, scrolling, resizing, streamed text, tool output and streamed arguments. `PROFILE_ARG_CHARS` gives calls Codemode-sized arguments and enables the streamed-argument action. `PROFILE_FOCUS=<action>` limits the CPU profile to one action. `scripts/summarize-render-profile.ts <artifact>` prints the hottest functions. Compare 10 and 100 turns to see how frame cost grows with history.
+`test/rendering.profile.ts` builds a synthetic history of `PROFILE_HISTORY` turns with `PROFILE_CALLS` calls each and measures CPU per frame for repaint, typing, scrolling, resizing, streamed text, tool output and streamed arguments. `PROFILE_ARG_CHARS` gives calls Codemode-sized arguments and enables the streamed-argument action. `PROFILE_FOCUS=<action>` limits the CPU profile to one action. `PROFILE_ACT_COLORS` (`off` by default, or `clock`, `stripe`, `fill`) sets the act colors. `PROFILE_POINTER=1` adds `move`, the CPU of dispatching ten pointer moves within one act, which request no frame; `PROFILE_HOVER=1` turns hover on and adds `hover`, a pointer move to another act, which repaints the highlight. A baseline checkout without act settings ignores them and still measures `move`. `scripts/summarize-render-profile.ts <artifact>` prints the hottest functions. Compare 10 and 100 turns to see how frame cost grows with history.
 
 On idle ZinPC, per-action P50 varies by 0.1–0.2 ms between runs at these sizes, so compare ratios over the median of several runs.
 
@@ -110,6 +110,18 @@ Pi paints a component at a column offset through `compositeTuiLine`, which re-pa
 
 Timestamp decoration puts a local clock on the first line of each text block, with a small right gutter. One blank row separates messages and tool calls without removing paragraph breaks or tool formatting. Tools whose custom call and result renderers use `renderShell: "self"` and show no content add no output, spacing or clock, even when their model-facing result contains images. Default and visibly rendered image blocks retain their native placement rows and use a separate clock row. Assistant text and thinking share their original message time. Combined history uses Pi's original renderer without these decorations.
 
+## Acts
+
+`NativeContentIndex.act` numbers acts over the classified history: `UserMessageComponent`, `SkillInvocationMessageComponent` and `CustomMessageComponent` owners start one, unless the current act has no other entry yet. Entries before the first start are act 0 and get no color. The numbering and each block's history position are rebuilt only when the entry array changes. `counterpart` finds the Go to target from those positions: the same native message in the other pane, else the nearest other-pane entry before (from Activity) or after (from Conversation), then the other direction.
+
+`src/acts.ts` builds a 16-hue palette per theme and terminal background; act *n* uses hue `(n − 1) × 7 mod 16`, so neighbours are far apart on the hue circle. Colors are mixed into the background the terminal reports to `TUI.queryTerminalColors`, asked once per layout attach; until it answers, or when it never does, a guess from `theme.appearance` is used. Pi's theme does not expose that background.
+
+Clock colors are an input of the `CompactMessage` and `CompactTool` caches. Fill, hover and stripe decorate each segment child's rows in `NativeDocument.render` through `decorateLines`, which re-applies the act background after every SGR sequence that resets it and leaves native backgrounds, image rows and shell zone markers alone. Results are cached per child row array and reused while its rows are the same strings, so an unchanged block costs a row comparison and a renderer that mutates its array still gets fresh rows. Stripe mode renders native blocks one column narrower and shifts pointer coordinates by that column.
+
+Hover: a pointer move runs through `SplitSurface` between `pointer.start` and `pointer.end`; the document under the pointer reports its act, and a move outside the panels clears it. The layout requests a frame only when the hovered act changes, and only visible segments render again, as every frame does. Availability mirrors Pi's mouse mode: Pi enables all-motion tracking only outside tmux, zellij and screen and while its mouse support is on.
+
+`NativeDocument.locate` renders every entry once at the last width, like a search jump, and returns the first non-blank row of the target's segment or of the nearest shown entry above it, such as a closed group's header.
+
 ## Search implementation
 
 Regex search uses ripgrep's auto engine, including PCRE2 lookarounds and backreferences when available. It runs outside the TUI thread with a 1.5-second deadline for the whole query. Editing or closing search cancels the old request. Invalid expressions, timeout, missing PCRE2 support and excessive output produce errors, never partial matches.
@@ -120,9 +132,9 @@ If a custom tool renderer omits saved matching text, a temporary Search match fr
 
 ## Persisted settings and tool times
 
-`compactTools`, `groupTools` and `nestedTree` are boolean display preferences. Missing `compactTools` and `nestedTree` values default to `true`. A missing `groupTools` takes the saved `compactTools` value, because grouping was part of Compact before it became a separate setting; files saved before that keep their look.
+`compactTools`, `groupTools` and `nestedTree` are boolean display preferences. Missing `compactTools` and `nestedTree` values default to `true`. A missing `groupTools` takes the saved `compactTools` value, because grouping was part of Compact before it became a separate setting; files saved before that keep their look. Missing `actColors`, `actHover` and `goTo` values default to `"clock"`, `true` and `"clock"`; `actColors` accepts `off`, `clock`, `stripe` and `fill`, and `goTo` accepts `clock`, `button`, `both` and `off`.
 
-Layout, panel order, sizes, compact, grouping and nested-tree choices, timestamp visibility and copy-button visibility are saved in `transcript.json` in Pi's agent directory. Zoom and split on/off are session-only state and are excluded from that file. Every session starts split and unzoomed; legacy saved `mode` and `zoom` fields are ignored without discarding the saved arrangement. Saved numeric Conversation heights remain manual until the user selects automatic height. Saved arrangements are not reset when defaults change.
+Layout, panel order, sizes, compact, grouping and nested-tree choices, act colors, act hover, Go to, timestamp visibility and copy-button visibility are saved in `transcript.json` in Pi's agent directory. Zoom and split on/off are session-only state and are excluded from that file. Every session starts split and unzoomed; legacy saved `mode` and `zoom` fields are ignored without discarding the saved arrangement. Saved numeric Conversation heights remain manual until the user selects automatic height. Saved arrangements are not reset when defaults change.
 
 Tool-start times are collected as display-only session metadata; they do not become messages in the model's context. New calls keep their recorded start time through streaming, completion and restart. Historical calls without that metadata use the agent message's time as an approximation, marked with `~`. Blocks with unknown times keep their native content without clock or copy-button rows, regardless of timestamp visibility.
 
