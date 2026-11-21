@@ -198,7 +198,8 @@ Your layout, panel order, sizes, compact Activity choice, timestamp and copy-but
 - Tested with Pi 1.1.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.
 - If the terminal is too small, history temporarily combines without forgetting your split.
-- If your Pi version cannot display the split, normal history stays visible and a warning explains the problem.
+- If your Pi version cannot display the split, or the split hits an error, Pi keeps working with its normal history. A panel above the editor names the problem and offers a prefilled GitHub issue (**Open issue**) or the same report as text (**Copy report**). Nothing is sent until you submit the issue yourself.
+- Also tested with [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt) 1.1.7.
 
 ## License
 
