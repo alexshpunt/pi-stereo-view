@@ -37,8 +37,7 @@ If the Activity surface cannot fit without clipping, the view temporarily return
 
 - Arrange Conversation and Activity in columns or rows, swap or resize the panels, and zoom either one while keeping the input full width.
 - Group consecutive Activity tools and expand individual calls inline while keeping thinking visible.
-- See which work belongs to which request: each request and everything the agent did for it share a color in both panels, and pointing at a block highlights all of it.
-- Click a block's clock to jump to the same moment in the other panel.
+- Optionally see which work belongs to which request: each request and everything the agent did for it share a color in both panels, pointing at a block highlights all of it, and a block's clock jumps to the same moment in the other panel.
 - Copy an individual user message, assistant reply or thinking block with its own copy icon.
 - Copy a complete tool call with its arguments, saved result and linked late output, including collapsed and off-screen text.
 - Search panel history with literal text, Boolean expressions or regular expressions, then jump between matches.
@@ -131,16 +130,18 @@ Calls that are still running or waiting to collapse are never grouped. Thinking,
 
 A turn is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one turn.
 
-Every turn gets its own color in both panels, so the work for one request is easy to tell from the next. The **Turns** group of Stereo View settings marks turns in four independent ways; turn on any combination:
+Turn colors, hover highlighting and Go to are off by default. Set **Turns** to `on` in Stereo View settings to turn them all on; the settings indented under it choose what each does, and keep their values while Turns is off.
+
+Every turn gets its own color in both panels, so the work for one request is easy to tell from the next. Turns are marked in four independent ways; use any combination:
 
 | Setting | Values | What it marks |
 | --- | --- | --- |
 | **Clock color** | `on` (default), `off` | The background of each block's clock. |
 | **Stripe** | `block` (default), `line`, `off` | Every block's left column: a colored cell or a thin colored line. |
-| **Background** | `on`, `off` (default) | The background of every block. |
-| **Separator** | `on`, `off` (default) | A colored line across both panels where each new turn begins. |
+| **Background** | `on` (default), `off` | The background of every block. |
+| **Separator** | `on` (default), `off` | A colored line across both panels where each new turn begins. |
 
-Neighbouring turns get different hues. Each color is the turn's hue mixed into your terminal's background; **Clock color strength** (10% by default), **Stripe color strength** (100%, also for separators) and **Background color strength** (5%, also for hover) set how much; in settings, `←` and `→` step a strength down or up, wrapping around at either end. Hovering over turn backgrounds uses twice the background strength, so the turn under the pointer still stands out. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
+Neighbouring turns get different hues. Each color is the turn's hue mixed into your terminal's background; **Clock color strength** (15% by default), **Stripe color strength** (30%, also for separators), **Background color strength** (8%) and **Hover color strength** (15%) set how much. In settings, `←` and `→` step a strength down or up, wrapping around at either end. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
 
 **Highlight on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 
@@ -150,7 +151,7 @@ Neighbouring turns get different hues. Each color is the turn's hue mixed into y
 - From Conversation, it shows the first Activity block after: for your message, the work it started.
 - A message with a part in both panels, such as a reply with thinking, opens its own other part.
 
-Click a block's clock, including the clock of a compact tool row or group, or the `[ ⇄ ]` / `[Go to]` button beside Copy. The **Go to** setting chooses `clock` (default), `button`, `both` or `off`. A zoomed panel returns to the split first. The other panel becomes the active one, so keyboard scrolling continues there.
+Click a block's clock, including the clock of a compact tool row or group, or the `[ ⇄ ]` / `[Go to]` button beside Copy. The **Go to** setting chooses `clock`, `button`, `both` (default) or `off`. A zoomed panel returns to the split first. The other panel becomes the active one, so keyboard scrolling continues there.
 
 ## Search history
 

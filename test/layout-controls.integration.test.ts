@@ -128,7 +128,7 @@ test.each(["chat", "activity"])("uses mouse buttons and both dividers without re
   }
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({
     side: "right", chatWidth: 44, layout: "rows", chatHeight: 4, showTimestamps: true, showCopyButtons: true, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
-    turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 100, turnBackgroundMix: 5, turnHover: false, goTo: "off",
+    turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 15, turnStripeMix: 30, turnBackgroundMix: 8, turnHoverMix: 15, turnHover: false, goTo: "off",
   });
   await run("expanded-panel-restart-" + zoom, false);
   const restored: string[] = JSON.parse(await readFile(path.join(cwd, "native-snapshot.json"), "utf8"));
@@ -157,7 +157,7 @@ test("starts both panels in the saved arrangement after disabling split in anoth
   }).run("USER MARKER");
   await run("save-combined-buttons");
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
-    turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 100, turnBackgroundMix: 5, turnHover: false, goTo: "off" });
+    turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 15, turnStripeMix: 30, turnBackgroundMix: 8, turnHoverMix: 15, turnHover: false, goTo: "off" });
   await run("restore-combined-buttons");
   const frames: { before: string[]; after: string[] } = JSON.parse(await readFile(path.join(cwd, "button-toggle.json"), "utf8"));
   expect(clean(frames.before)).toContain("[ ▣ ]");
@@ -171,7 +171,7 @@ test("starts both panels in the saved arrangement after disabling split in anoth
   expect(clean(frames.after)).toContain("USER MARKER");
   expect(clean(frames.after)).toContain("ANSWER MARKER");
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
-    turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 100, turnBackgroundMix: 5, turnHover: false, goTo: "off" });
+    turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 15, turnStripeMix: 30, turnBackgroundMix: 8, turnHoverMix: 15, turnHover: false, goTo: "off" });
 });
 
 test("keeps mouse controls active while text and a real tool call stream", async () => {

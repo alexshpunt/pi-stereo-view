@@ -11,7 +11,7 @@ export interface TurnColor {
   clock: Color;
   /** Background of default cells when turn backgrounds are on. */
   fill: string;
-  /** Background of default cells while the turn is under the pointer and turn backgrounds are on. */
+  /** Background of default cells while the turn is under the pointer. */
   hover: string;
   /** Background of the one-cell block stripe on the left. */
   stripe: string;
@@ -24,10 +24,11 @@ export interface TurnMix {
   clock: number;
   stripe: number;
   background: number;
+  hover: number;
 }
 
-/** Default mixes: faint clocks and backgrounds, full-strength stripes and lines. */
-export const DEFAULT_MIX: TurnMix = { clock: 10, stripe: 100, background: 5 };
+/** Default mixes, as the settings default to. */
+export const DEFAULT_MIX: TurnMix = { clock: 15, stripe: 30, background: 8, hover: 15 };
 
 const palettes = new WeakMap<Theme, { background?: RgbColor; mix: TurnMix; colors: TurnColor[] }>();
 
@@ -37,13 +38,13 @@ const GUESSED_BACKGROUND = { dark: rgbColor(24, 24, 27), light: rgbColor(250, 25
 /**
  * The palette for a theme over the terminal's background. Each color mixes a hue into that background by the mark's
  * percentage, so it stays a tint on dark and light terminals alike. Without a reported background, the theme's
- * appearance picks a guess. `hover` doubles the background mix, to stand out over turn backgrounds.
+ * appearance picks a guess.
  */
 export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix: TurnMix = DEFAULT_MIX): TurnColor | undefined {
   if (turn <= 0) return undefined;
   let palette = palettes.get(theme);
   if (!palette || palette.background !== background || palette.mix.clock !== mix.clock || palette.mix.stripe !== mix.stripe ||
-    palette.mix.background !== mix.background) {
+    palette.mix.background !== mix.background || palette.mix.hover !== mix.hover) {
     const appearance = Reflect.get(theme, "appearance") === "light" ? "light" : "dark";
     const base: Color = background ? rgbColor(background.r, background.g, background.b) : GUESSED_BACKGROUND[appearance];
     const dark = colorToOkhsl(base).l < 0.5;
@@ -56,7 +57,7 @@ export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix
       colors.push({
         clock: mixColors(base, hue, share(mix.clock), "srgb"),
         fill: backgroundAnsi(mixColors(base, hue, share(mix.background), "srgb"), mode),
-        hover: backgroundAnsi(mixColors(base, hue, share(mix.background * 2), "srgb"), mode),
+        hover: backgroundAnsi(mixColors(base, hue, share(mix.hover), "srgb"), mode),
         stripe: backgroundAnsi(stripe, mode),
         line: foregroundAnsi(stripe, mode),
       });

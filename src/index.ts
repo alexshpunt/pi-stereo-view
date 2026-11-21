@@ -61,7 +61,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const TURNS_HEADER = "Turns";
         const listTheme = getSettingsListTheme();
         // A saved mix outside the offered steps stays selectable until another is chosen.
-        const mixSetting = (id: "turnClockMix" | "turnStripeMix" | "turnBackgroundMix", label: string, description: string) => ({
+        const mixSetting = (id: "turnClockMix" | "turnStripeMix" | "turnBackgroundMix" | "turnHoverMix", label: string, description: string) => ({
           id, label, description, currentValue: `${preferences[id]}%`,
           values: [...new Set([...TURN_MIXES, preferences[id]])].sort((a, b) => a - b).map(percent => `${percent}%`),
         });
@@ -102,10 +102,10 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
         }, {
-          // Turn settings sit indented under their own header, which has no value to change.
+          // The Turns header switches the whole feature; its settings sit indented under it and keep their values while it is off.
           id: "turns", label: TURNS_HEADER,
-          description: "A turn is one request, yours or an extension's, with all the work that answers it. The settings below color each turn alike in both panels and connect the panels.",
-          currentValue: "", values: [],
+          description: "A turn is one request, yours or an extension's, with all the work that answers it. On colors each turn alike in both panels, highlights it on hover and links the panels with Go to, as the settings below choose.",
+          currentValue: preferences.turns ? "on" : "off", values: ["on", "off"],
         }, {
           id: "turnClock", label: "  Clock color",
           description: "Color the background of every block's clock in its turn's color.",
@@ -123,8 +123,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Tint the plain background of every block of a turn. Tool cards and messages keep their own backgrounds.",
           currentValue: preferences.turnBackground ? "on" : "off", values: ["on", "off"],
         }, {
-          ...mixSetting("turnBackgroundMix", "  Background color strength",
-            "How strongly the turn's color tints block backgrounds and hover highlights. Over turn backgrounds, hover uses twice as much."),
+          ...mixSetting("turnBackgroundMix", "  Background color strength", "How strongly the turn's color tints the background of its blocks."),
         }, {
           id: "turnSeparator", label: "  Separator",
           description: "Draw a line in the turn's color in both panels where each new turn begins.",
@@ -136,17 +135,20 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           currentValue: hoverAvailable ? (preferences.turnHover ? "on" : "off") : "unavailable",
           values: hoverAvailable ? ["on", "off"] : ["unavailable"],
         }, {
+          ...mixSetting("turnHoverMix", "  Hover color strength",
+            "How strongly the turn's color tints the background of every block of the turn under the pointer, in place of its background color."),
+        }, {
           id: "goTo", label: "  Go to",
           description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
           currentValue: preferences.goTo, values: [...GO_TO],
         }];
-        const VISIBLE_SETTINGS = 19;
+        const VISIBLE_SETTINGS = 20;
         const apply = (id: string, value: string): void => {
-          if (id === "turnClock") layout?.setTurnMark("turnClock", value === "on");
+          if (id === "turns" || id === "turnClock" || id === "turnBackground" || id === "turnSeparator") layout?.setTurnMark(id, value === "on");
           else if (id === "turnStripe") layout?.setTurnMark("turnStripe", value as TurnStripe);
-          else if (id === "turnBackground") layout?.setTurnMark("turnBackground", value === "on");
-          else if (id === "turnSeparator") layout?.setTurnMark("turnSeparator", value === "on");
-          else if (id === "turnClockMix" || id === "turnStripeMix" || id === "turnBackgroundMix") layout?.setTurnMark(id, Number.parseInt(value, 10));
+          else if (id === "turnClockMix" || id === "turnStripeMix" || id === "turnBackgroundMix" || id === "turnHoverMix") {
+            layout?.setTurnMark(id, Number.parseInt(value, 10));
+          }
           else if (id === "turnHover") { if (value !== "unavailable") layout?.setTurnHover(value === "on"); }
           else if (id === "goTo") layout?.setGoTo(value as GoTo);
           else if (id === "timestamps") layout?.setTimestamps(value === "on");
@@ -165,7 +167,9 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           label: (text, selected) => {
             const label = text.trim();
             if (label === TURNS_HEADER) return ui.theme.bold(ui.theme.fg("accent", text));
-            // An unavailable setting stays listed so its explanation can be read, but looks disabled.
+            // Turn settings look disabled while turns are off, and so does an unavailable setting; both stay listed
+            // so their explanations can be read. Only turn settings are indented.
+            if (text.startsWith("  ") && !preferences.turns) return ui.theme.fg("dim", text);
             if (!hoverAvailable && label === HOVER_LABEL.trim()) return ui.theme.fg("dim", text);
             return listTheme.label(text, selected);
           },

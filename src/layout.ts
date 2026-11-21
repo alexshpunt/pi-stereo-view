@@ -377,16 +377,18 @@ export class TranscriptLayout {
     const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
     const index = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree);
     this.index = index;
+    // With turns off, every turn setting keeps its value but nothing marks, highlights or jumps.
+    const on = (): boolean => this.preferences.turns;
     const turns: DocumentTurns = {
-      clock: () => this.preferences.turnClock,
-      stripe: () => this.preferences.turnStripe,
-      background: () => this.preferences.turnBackground,
-      separator: () => this.preferences.turnSeparator,
+      clock: () => on() && this.preferences.turnClock,
+      stripe: () => on() ? this.preferences.turnStripe : "off",
+      background: () => on() && this.preferences.turnBackground,
+      separator: () => on() && this.preferences.turnSeparator,
       mix: () => this.turnMix(),
       color: turn => turnColor(this.theme(), turn, this.terminalBackground, this.turnMix()),
-      hovered: () => this.hoverAvailable() && this.preferences.turnHover ? this.hoverAct : undefined,
+      hovered: () => this.hoverEnabled() ? this.hoverAct : undefined,
       hover: turn => { if (this.moving) this.moving.turn = turn; },
-      goTo: () => this.preferences.goTo,
+      goTo: () => on() ? this.preferences.goTo : "off",
       jump: (from, source) => {
         void this.goTo(from, source).catch(error => this.warn("Could not open the other panel: " + String(error)));
       },
@@ -715,12 +717,17 @@ export class TranscriptLayout {
     return pointerMotionAvailable(this.host);
   }
 
+  /** Hover highlighting is on, with turns, and the terminal reports pointer motion. */
+  private hoverEnabled(): boolean {
+    return this.preferences.turns && this.preferences.turnHover && this.hoverAvailable();
+  }
+
   /** Highlight another turn; pointer moves within one turn render nothing. */
   private setHover(turn: number): void {
     const next = turn || undefined;
     if (next === this.hoverAct) return;
     this.hoverAct = next;
-    if (this.preferences.turnHover && this.hoverAvailable()) this.host?.requestRender();
+    if (this.hoverEnabled()) this.host?.requestRender();
   }
 
   /** Scroll the other panel to the same point of history as a block, returning from a zoomed panel first. */
@@ -877,11 +884,11 @@ export class TranscriptLayout {
 
   /** The turn marks' mix strengths, as the palette reads them. */
   private turnMix(): TurnMix {
-    const { turnClockMix: clock, turnStripeMix: stripe, turnBackgroundMix: background } = this.preferences;
-    return { clock, stripe, background };
+    const { turnClockMix: clock, turnStripeMix: stripe, turnBackgroundMix: background, turnHoverMix: hover } = this.preferences;
+    return { clock, stripe, background, hover };
   }
 
-  /** Change one turn mark or its mix: clock background, stripe, block background or separator rule. */
+  /** Turn the whole turn feature on or off, or change one of its marks or strengths. */
   setTurnMark<Key extends TurnMarkSetting>(key: Key, value: Preferences[Key]): void {
     this.preferences[key] = value;
     this.changed();

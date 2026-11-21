@@ -108,13 +108,13 @@ test("neighbouring turns get different colors and blocks before the first turn g
   expect(turnColor(theme, 17)).toBe(turnColor(theme, 1));
 });
 
-test("turn backgrounds stay a faint shift from the terminal background", () => {
+test("default turn backgrounds stay a faint shift from the terminal background", () => {
   const terminal = { r: 30, g: 30, b: 46 };
   const channels = (ansi: string): number[] => ansi.match(/48;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
   for (let turn = 1; turn <= 16; turn++) {
     const color = turnColor(theme, turn, terminal)!;
-    // By default backgrounds take 5% of the way from the background to a full hue, hover over them and clocks 10%.
-    for (const [ansi, limit] of [[color.fill, 13], [color.hover, 26], [backgroundAnsi(color.clock, "truecolor"), 26]] as const) {
+    // By default backgrounds take 8% of the way from the background to a full hue, hover and clocks 15%.
+    for (const [ansi, limit] of [[color.fill, 21], [color.hover, 39], [backgroundAnsi(color.clock, "truecolor"), 39]] as const) {
       const shift = Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
       expect(shift, ansi).toBeLessThanOrEqual(limit);
       expect(shift, ansi).toBeGreaterThan(0);
@@ -126,13 +126,12 @@ test("each mark mixes its own share of the turn hue, and a new mix rebuilds the 
   const terminal = { r: 30, g: 30, b: 46 };
   const channels = (ansi: string): number[] => ansi.match(/[34]8;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
   const shift = (ansi: string): number => Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
-  const full = turnColor(theme, 1, terminal, { clock: 100, stripe: 100, background: 100 })!;
-  const half = turnColor(theme, 1, terminal, { clock: 50, stripe: 50, background: 20 })!;
+  const full = turnColor(theme, 1, terminal, { clock: 100, stripe: 100, background: 100, hover: 100 })!;
+  const half = turnColor(theme, 1, terminal, { clock: 50, stripe: 50, background: 20, hover: 40 })!;
   expect(shift(half.line)).toBeCloseTo(shift(full.line) / 2, -1);
   expect(shift(backgroundAnsi(half.clock, "truecolor"))).toBeCloseTo(shift(full.fill) / 2, -1);
   expect(shift(half.fill)).toBeCloseTo(shift(full.fill) / 5, -1);
-  // Hover doubles the background share, so it shows over turn backgrounds.
-  expect(shift(half.hover)).toBeCloseTo(shift(full.fill) * 2 / 5, -1);
+  expect(shift(half.hover)).toBeCloseTo(shift(full.hover) * 2 / 5, -1);
 });
 
 test("hover is unavailable in terminal multiplexers and without Pi's mouse support", () => {
@@ -219,16 +218,16 @@ test("turn backgrounds tint default cells of each turn and hover tints the turn 
   state.hovered = 1;
   document.beginFrame();
   const hovered = document.render(30);
-  // Without turn backgrounds, hover shows the turn in the background tint.
-  expect(hovered[0].startsWith(turnColor(theme, 1)!.fill)).toBe(true);
-  expect(hovered.at(-1)!.includes(turnColor(theme, 2)!.fill)).toBe(false);
+  // Hover tints the turn under the pointer with its own strength, with or without turn backgrounds.
+  expect(hovered[0].startsWith(turnColor(theme, 1)!.hover)).toBe(true);
+  expect(hovered.at(-1)!.includes(turnColor(theme, 2)!.hover)).toBe(false);
   state.hovered = undefined;
   state.marks = { ...state.marks, background: true };
   document.beginFrame();
   const filled = document.render(30);
   expect(filled[0].startsWith(turnColor(theme, 1)!.fill)).toBe(true);
   expect(filled.at(-1)!.startsWith(turnColor(theme, 2)!.fill)).toBe(true);
-  // Over turn backgrounds, the hovered turn takes the stronger hover tint.
+  // Over turn backgrounds, the hovered turn takes the hover tint in place of its background.
   state.hovered = 2;
   document.beginFrame();
   const both = document.render(30);

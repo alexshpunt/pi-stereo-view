@@ -7,8 +7,8 @@ import { defaults, loadPreferences, savePreferences, type Preferences } from "..
 const arrangement = {
   side: "right", chatWidth: 73, layout: "rows", chatHeight: 17,
   showTimestamps: false, showCopyButtons: false, compactTools: true, groupTools: false, nestedTree: false, streamTools: true, streamDelay: 8, buttonStyle: "icons",
-  turnClock: false, turnStripe: "line", turnBackground: true, turnSeparator: true, turnClockMix: 20, turnStripeMix: 50, turnBackgroundMix: 3,
-  turnHover: false, goTo: "both",
+  turns: true, turnClock: false, turnStripe: "line", turnBackground: true, turnSeparator: true, turnClockMix: 20, turnStripeMix: 50,
+  turnBackgroundMix: 3, turnHoverMix: 40, turnHover: false, goTo: "button",
 } as const;
 
 test.each(["chat", "activity", null] as const)("ignores legacy temporary state with %s zoom without losing the saved arrangement", async zoom => {
@@ -44,21 +44,21 @@ test("retains automatic sizes and accepts settings with no temporary-state keys"
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test("files saved before turn settings get clock colors, a block stripe, hover and clock Go to", async () => {
+test("files saved before turn settings get turns off, with every mark ready for when they are turned on", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
-    const { turnClock: _clock, turnStripe: _stripe, turnBackground: _background, turnSeparator: _separator, turnClockMix: _clockMix,
-      turnStripeMix: _stripeMix, turnBackgroundMix: _backgroundMix, turnHover: _hover, goTo: _goTo, ...older } = arrangement;
+    const { turns: _turns, turnClock: _clock, turnStripe: _stripe, turnBackground: _background, turnSeparator: _separator, turnClockMix: _clockMix,
+      turnStripeMix: _stripeMix, turnBackgroundMix: _backgroundMix, turnHoverMix: _hoverMix, turnHover: _hover, goTo: _goTo, ...older } = arrangement;
     await writeFile(file, JSON.stringify(older));
     expect(await loadPreferences(file)).toMatchObject({
-      turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 100, turnBackgroundMix: 5,
-      turnHover: true, goTo: "clock",
+      turns: false, turnClock: true, turnStripe: "block", turnBackground: true, turnSeparator: true, turnClockMix: 15, turnStripeMix: 30,
+      turnBackgroundMix: 8, turnHoverMix: 15, turnHover: true, goTo: "both",
     });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test.each([{ turnClock: "yes" }, { turnStripe: "rainbow" }, { turnBackground: 1 }, { turnSeparator: "on" }, { turnClockMix: 0 }, { turnStripeMix: 101 }, { turnBackgroundMix: 2.5 }, { turnHover: "yes" }, { goTo: "elsewhere" }])("rejects an invalid turn setting %o", async invalid => {
+test.each([{ turns: "on" }, { turnHoverMix: 200 }, { turnClock: "yes" }, { turnStripe: "rainbow" }, { turnBackground: 1 }, { turnSeparator: "on" }, { turnClockMix: 0 }, { turnStripeMix: 101 }, { turnBackgroundMix: 2.5 }, { turnHover: "yes" }, { goTo: "elsewhere" }])("rejects an invalid turn setting %o", async invalid => {
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {

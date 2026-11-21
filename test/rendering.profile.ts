@@ -21,12 +21,13 @@ const callsPerTurn = Number(process.env.PROFILE_CALLS ?? 1);
 const argChars = Number(process.env.PROFILE_ARG_CHARS ?? 0);
 const compact = process.env.PROFILE_COMPACT === "1";
 // Turn presentation of the candidate; a baseline without turn settings ignores them.
-const turnMarks = (process.env.PROFILE_ACT_MARKS ?? "").split(",").filter(Boolean);
+const turnMarks = (process.env.PROFILE_TURN_MARKS ?? "").split(",").filter(Boolean);
+const hover = process.env.PROFILE_HOVER === "1";
 const turnSettings = {
+  turns: turnMarks.length > 0 || hover,
   turnClock: turnMarks.includes("clock"), turnStripe: turnMarks.includes("line") ? "line" : turnMarks.includes("stripe") ? "block" : "off",
   turnBackground: turnMarks.includes("background"), turnSeparator: turnMarks.includes("separator"),
 };
-const hover = process.env.PROFILE_HOVER === "1";
 const pointer = process.env.PROFILE_POINTER === "1" || hover;
 const argText = (index: number, call: number, length: number): string => {
   let text = "";

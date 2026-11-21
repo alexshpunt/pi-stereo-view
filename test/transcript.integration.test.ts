@@ -139,7 +139,7 @@ test("drags, swaps, restores native combined history, and remembers settings on 
 
   const preferences = JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"));
   expect(preferences).toEqual({ side: "left", chatWidth: 36, layout: "columns", chatHeight: 12, showTimestamps: true, showCopyButtons: true, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
-    turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 100, turnBackgroundMix: 5, turnHover: false, goTo: "off" });
+    turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 15, turnStripeMix: 30, turnBackgroundMix: 8, turnHoverMix: 15, turnHover: false, goTo: "off" });
   expect(frames.map(frame => clean(frame).includes("Conversation")))
     .toEqual([true, true, true, true, true, true, false, true, true, true, true]);
   await run("layout-restart", false);

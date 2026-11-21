@@ -649,7 +649,7 @@ export class NativeDocument extends Container {
     // The first frame and search measure every entry; later frames reuse offscreen rows.
     const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
     const mix = this.turns?.mix();
-    const presentation = [theme, stripe, tint, separator, this.turns?.clock(), mix?.clock, mix?.stripe, mix?.background,
+    const presentation = [theme, stripe, tint, separator, this.turns?.clock(), mix?.clock, mix?.stripe, mix?.background, mix?.hover,
       display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
       this.showCopy(), this.buttonStyle(), this.turns?.goTo(), this.timestampGutter(), this.invalidations];
     if (!sameValues(presentation, this.presentation)) {
@@ -766,8 +766,7 @@ export class NativeDocument extends Container {
       // Copy rows: native renderers may reuse and later mutate their row arrays.
       const lines: string[] = [];
       const color = turn && (inset || tint || hovered === turn) ? this.turns?.color(turn) : undefined;
-      // Hover uses the background tint, stronger when every turn already has one.
-      const background = color && (hovered === turn ? (tint ? color.hover : color.fill) : tint ? color.fill : undefined);
+      const background = color && (hovered === turn ? color.hover : tint ? color.fill : undefined);
       const prefix = !inset ? "" : !color ? " " : stripe === "line" ? color.line + "│\x1b[39m" : color.stripe + " \x1b[49m";
       for (const child of result) {
         const childLines = decorateLines(child.render(width), background, prefix);
