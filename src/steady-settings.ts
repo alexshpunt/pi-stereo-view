@@ -11,8 +11,8 @@ const ARROW_HINT = "←/→ or Enter/Space to change";
  *
  * Pi's list shows the selected item's description between the items and the key hint, so its height follows the
  * description's length; a centered overlay then jumps. Blank rows before the hint make every selection as tall as
- * the one with the longest description. Left and Right pick the previous or next value without wrapping around, so
- * a strength can be tuned in both directions; Enter and Space still cycle.
+ * the one with the longest description. Left and Right pick the previous or next value, wrapping around at either
+ * end like Enter and Space, so a strength can be tuned in both directions.
  */
 export class SteadySettings implements Component {
   private measured?: { width: number; rows: number };
@@ -55,7 +55,7 @@ export class SteadySettings implements Component {
     const item = typeof index === "number" ? this.items[index] : undefined;
     const values = item?.values;
     if (!item || !values?.length) return;
-    const next = values[Math.min(values.length - 1, Math.max(0, values.indexOf(item.currentValue) + step))];
+    const next = values[(values.indexOf(item.currentValue) + step + values.length) % values.length];
     if (next === item.currentValue) return;
     this.list.updateValue(item.id, next);
     this.change(item.id, next);

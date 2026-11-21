@@ -28,7 +28,7 @@ test("the settings list keeps one height and keeps its hint on the last row whil
   for (const frame of frames) expect(frame.slice(0, 3).map(row => row.replace("→ ", "  ").trim().split(/\s+/)[0])).toEqual(["Short", "Long", "None"]);
 });
 
-test("left and right step the selected value without wrapping, and up and down still move the selection", () => {
+test("left and right step the selected value around in both directions, and up and down still move the selection", () => {
   const items: SettingItem[] = [
     { id: "strength", label: "Strength", currentValue: "10%", values: ["5%", "10%", "15%"] },
     { id: "header", label: "Header", currentValue: "", values: [] },
@@ -40,16 +40,17 @@ test("left and right step the selected value without wrapping, and up and down s
   const RIGHT = "\x1b[C";
   steady.handleInput(RIGHT);
   steady.handleInput(RIGHT);
-  expect(items[0].currentValue).toBe("15%");
-  steady.handleInput(LEFT);
-  steady.handleInput(LEFT);
-  steady.handleInput(LEFT);
+  // Past the last value, Right starts over at the first.
   expect(items[0].currentValue).toBe("5%");
-  expect(changes).toEqual(["strength=15%", "strength=10%", "strength=5%"]);
+  steady.handleInput(LEFT);
+  steady.handleInput(LEFT);
+  // Before the first value, Left continues from the last.
+  expect(items[0].currentValue).toBe("10%");
+  expect(changes).toEqual(["strength=15%", "strength=5%", "strength=15%", "strength=10%"]);
   expect(steady.render(40).at(-1)).toContain("←/→ or Enter/Space to change");
   // On an item without values the arrows change nothing; Down still moves the selection.
   steady.handleInput("\x1b[B");
   steady.handleInput(RIGHT);
-  expect(changes).toHaveLength(3);
+  expect(changes).toHaveLength(4);
   expect(steady.render(40)[1]).toContain("→ Header");
 });
