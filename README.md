@@ -140,7 +140,7 @@ An act is one message you sent, or one message an extension gave the agent, toge
 | `fill` | The background of every block. |
 | `off` | Nothing. |
 
-Neighbouring acts get different hues, each only a 2% shift from your terminal's background. Tool cards, your messages and extension messages keep their own backgrounds; colors only fill the plain background around them.
+Neighbouring acts get different hues, each only an 8% shift from your terminal's background. Tool cards, your messages and extension messages keep their own backgrounds; colors only fill the plain background around them.
 
 **Act hover** (on by default) highlights the act under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 

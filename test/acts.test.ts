@@ -104,9 +104,7 @@ test("tinting keeps native backgrounds, restores the act color after every reset
 test("neighbouring acts get different colors and blocks before the first act get none", () => {
   expect(actColor(theme, 0)).toBeUndefined();
   const colors = Array.from({ length: 16 }, (_, act) => actColor(theme, act + 1)!.fill);
-  // A 2% tint leaves a few 8-bit steps per hue, so two of 16 may coincide; consecutive acts never do.
-  for (let act = 1; act < 16; act++) expect(colors[act], "act " + (act + 1)).not.toBe(colors[act - 1]);
-  expect(new Set(colors).size).toBeGreaterThanOrEqual(14);
+  expect(new Set(colors).size).toBe(16);
   expect(actColor(theme, 17)).toBe(actColor(theme, 1));
 });
 
@@ -117,8 +115,8 @@ test("act backgrounds stay a faint shift from the terminal background", () => {
     const color = actColor(theme, act, terminal)!;
     for (const ansi of [color.fill, color.hover, backgroundAnsi(color.clock, "truecolor")]) {
       const shift = Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
-      // At most 2% of the way from the background to a full hue.
-      expect(shift, ansi).toBeLessThanOrEqual(6);
+      // At most 8% of the way from the background to a full hue.
+      expect(shift, ansi).toBeLessThanOrEqual(21);
       expect(shift, ansi).toBeGreaterThan(0);
     }
   }
