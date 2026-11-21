@@ -113,6 +113,17 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     // PROFILE_FOCUS limits the CPU profile to one measured action, for attributing its own cost.
     const focus = process.env.PROFILE_FOCUS || undefined;
     let focusSamples = 0;
+    /** Work that emits no frame, such as pointer moves within one act: the CPU of the synchronous dispatch. */
+    const measureSync = (name: string, action: () => void): void => {
+      const before = { bytes, documents };
+      const cpu = process.cpuUsage();
+      const start = performance.now();
+      action();
+      const usage = process.cpuUsage(cpu);
+      samples.push({ action: name, emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000,
+        documents: documents - before.documents, timestampIndexes: 0, sourceInvalidations: 0, paneRows: 0, panePreviewCharacters: 0,
+        previewScrollRows: 0, visibleScrollbars: 0, bytes: bytes - before.bytes, nativeMs: 0, compactMs: 0, documentMs: 0 });
+    };
     const measure = async (name: string, action: () => void): Promise<void> => {
       if (name === focus && focusSamples++ === 0) await inspector.post("Profiler.start");
       paneRows = 0;
@@ -308,6 +319,31 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         await writeFile(path.join(ctx.cwd, "rendering.cpuprofile"), JSON.stringify(profile));
       }
       phases.finished = await capture();
+      if (split && process.env.PROFILE_POINTER === "1") {
+        // Pointer moves over Activity: within one act they must not render; across acts they repaint the highlight.
+        const acts = (await capture()).map(stripTerminalSequences).flatMap((line, row) => {
+          const match = /SYNTHETIC THINKING (\d+)/.exec(line);
+          return match ? [{ row, column: match.index, act: match[1] }] : [];
+        });
+        const first = acts[0];
+        const second = acts.find(candidate => candidate.act !== first?.act);
+        if (!first || !second) throw new Error("Two acts must be visible in Activity for pointer profiling");
+        const move = (column: number, row: number): void => tui.handleTerminalInput(`\x1b[<35;${column + 1};${row + 1}M`);
+        move(first.column, first.row);
+        await capture();
+        for (let index = 0; index < count; index++) measureSync("move", () => {
+          for (let step = 0; step < 10; step++) move(first.column + step, first.row);
+        });
+        await capture();
+        if (process.env.PROFILE_HOVER === "1") {
+          for (let index = 0; index < count; index++) await measure("hover", () => {
+            const target = index % 2 ? first : second;
+            move(target.column, target.row);
+          });
+        }
+        move(0, 0);
+        await capture();
+      }
       if (split && process.env.PROFILE_SEARCH === "1") {
         if (process.env.PROFILE_SEARCH_PANE === "activity") {
           const lines = (await capture()).map(stripTerminalSequences);

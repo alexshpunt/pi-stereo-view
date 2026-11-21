@@ -8,7 +8,7 @@ if [ -n "${PI_CODING_AGENT_DIR:-}" ] && [ -z "${PI_TRANSCRIPT_TEST_DEFAULTS:-}" 
     const file = path.join(process.env.PI_CODING_AGENT_DIR, "transcript.json");
     let saved = {};
     try { saved = JSON.parse(fs.readFileSync(file, "utf8")); } catch (error) { if (error.code !== "ENOENT") process.exit(0); }
-    const baseline = { side: "left", chatWidth: null, layout: "columns", chatHeight: null, showTimestamps: true, showCopyButtons: true, compactTools: false, streamTools: false, streamDelay: 5, buttonStyle: "icons" };
+    const baseline = { side: "left", chatWidth: null, layout: "columns", chatHeight: null, showTimestamps: true, showCopyButtons: true, compactTools: false, streamTools: false, streamDelay: 5, buttonStyle: "icons", actColors: "off", actHover: false, goTo: "off" };
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ ...baseline, ...saved }));
   '
