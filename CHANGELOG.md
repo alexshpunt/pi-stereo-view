@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.22 - 2026-11-21
+
+### Fixed
+
+- Ctrl+G no longer crashes Pi when opening an external editor from split view. Pi returns to the same layout with the edited draft when the editor closes. Thanks to [@okuuva](https://github.com/okuuva) for the fix ([#120](https://github.com/alexshpunt/pi-stereo-view/pull/120)).
+
 ## 0.1.21 - 2026-11-19
 
 ### Added
