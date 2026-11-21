@@ -2,9 +2,10 @@ import { setImmediate } from "node:timers/promises";
 import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
 import {
   Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, visibleWidth, VStack,
-  type Color, type Component, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
+  type Color, type Component, type RgbColor, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
-import { NativeDocument, type Pane } from "./native.ts";
+import { NativeDocument, type DocumentActs, type Pane } from "./native.ts";
+import { actColor, pointerMotionAvailable } from "./acts.ts";
 import { NativeContentIndex } from "./content.ts";
 import { NestedCalls } from "./nested-calls.ts";
 import type { Preferences } from "./preferences.ts";
@@ -239,6 +240,12 @@ export class TranscriptLayout {
   private automaticHeight = MIN_ROWS;
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
+  private index?: NativeContentIndex;
+  /** The act under the pointer; a pointer move collects the act its document reports. */
+  private hoverAct?: number;
+  private moving?: { act: number };
+  /** The terminal's reported background, which act colors are mixed into. */
+  private terminalBackground?: RgbColor;
 
   constructor(
     readonly preferences: Preferences,
@@ -369,15 +376,27 @@ export class TranscriptLayout {
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
     const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
     const index = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree);
+    this.index = index;
+    const acts: DocumentActs = {
+      colors: () => this.preferences.actColors,
+      color: act => actColor(this.theme(), act, this.terminalBackground),
+      hovered: () => this.hoverAvailable() && this.preferences.actHover ? this.hoverAct : undefined,
+      hover: act => { if (this.moving) this.moving.act = act; },
+      goTo: () => this.preferences.goTo,
+      jump: (from, source) => {
+        void this.goTo(from, source).catch(error => this.warn("Could not open the other panel: " + String(error)));
+      },
+    };
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("activity"), false, index, this.copy, showCopyButtons,
       () => ({ compact: this.preferences.compactTools, group: this.preferences.groupTools }), this.getTools,
       () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); }, () => this.preferences.buttonStyle, {
         enabled: () => this.preferences.streamTools, delay: () => this.preferences.streamDelay * 1000,
         changed: () => this.host?.requestRender(),
-      });
+      }, acts);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle);
+      () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle,
+      undefined, acts);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
@@ -628,6 +647,15 @@ export class TranscriptLayout {
         return pane === "chat" ? this.chat : pane === "activity" ? this.activity : undefined;
       },
       failed: error => this.fail(error),
+      pointer: {
+        start: () => { this.moving = { act: 0 }; },
+        end: () => {
+          const act = this.moving?.act ?? 0;
+          this.moving = undefined;
+          this.setHover(act);
+        },
+        leave: () => this.setHover(0),
+      },
     });
     surface.setModels([columns, rows, activityPane, chatPane]);
     this.surface = surface;
@@ -665,6 +693,51 @@ export class TranscriptLayout {
     this.mounted = mounted;
     host.setLayoutRoot(mounted);
     host.requestRender();
+    this.queryBackground(host);
+  }
+
+  /** Ask the terminal for its background once; act colors use a guess from the theme until it answers. */
+  private queryBackground(host: NativeTui): void {
+    if (this.terminalBackground || typeof host.queryTerminalColors !== "function") return;
+    void host.queryTerminalColors({ timeoutMs: 1000 }).then(colors => {
+      if (!colors.background || this.host !== host) return;
+      this.terminalBackground = colors.background;
+      host.requestRender();
+    }, () => {});
+  }
+
+  /** Pi reports pointer motion for hover only outside terminal multiplexers and with its mouse support on. */
+  hoverAvailable(): boolean {
+    return pointerMotionAvailable(this.host);
+  }
+
+  /** Highlight another act; pointer moves within one act render nothing. */
+  private setHover(act: number): void {
+    const next = act || undefined;
+    if (next === this.hoverAct) return;
+    this.hoverAct = next;
+    if (this.preferences.actHover && this.hoverAvailable()) this.host?.requestRender();
+  }
+
+  /** Scroll the other panel to the same point of history as a block, returning from a zoomed panel first. */
+  async goTo(from: Pane, source: Component): Promise<void> {
+    const target = this.index?.counterpart(source, from);
+    if (!target || !this.searchPane()) return;
+    const pane: Pane = from === "chat" ? "activity" : "chat";
+    if (this.preferences.zoom) {
+      this.preferences.zoom = null;
+      this.changed(false);
+      // The restored panel needs a layout pass for its viewport.
+      await setImmediate();
+    }
+    const document = this.documents?.[pane];
+    const view = pane === "chat" ? this.chat : this.activity;
+    if (!document || !view || !this.searchPane()) return;
+    this.activate(pane);
+    const row = document.locate(target);
+    if (row === undefined) return;
+    view.scrollTo(Math.max(0, row - 1), { disableFollow: true });
+    this.host?.requestRender();
   }
 
   private activate(pane: Pane): void {
@@ -796,6 +869,24 @@ export class TranscriptLayout {
     this.rebuild();
     this.host?.requestRender();
     if (persist) this.save();
+  }
+
+  /** Color the blocks of each act: behind the clock, as a stripe, as a background, or not at all. */
+  setActColors(colors: Preferences["actColors"]): void {
+    this.preferences.actColors = colors;
+    this.changed();
+  }
+
+  /** Highlight the act under the pointer in both panels. */
+  setActHover(hover: boolean): void {
+    this.preferences.actHover = hover;
+    this.changed();
+  }
+
+  /** Open the other panel from a block's clock, its button, both or neither. */
+  setGoTo(goTo: Preferences["goTo"]): void {
+    this.preferences.goTo = goTo;
+    this.changed();
   }
 
   /** Show or hide clock rows without changing their recorded source times. */
@@ -944,6 +1035,9 @@ export class TranscriptLayout {
     this.activity = undefined;
     this.chat = undefined;
     this.documents = undefined;
+    this.index = undefined;
+    this.hoverAct = undefined;
+    this.moving = undefined;
     this.drag = undefined;
     this.rebuild = () => {};
   }

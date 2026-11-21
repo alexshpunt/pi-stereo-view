@@ -279,6 +279,8 @@ export interface SplitSurfaceOptions {
   active(): ScrollView | undefined;
   /** An error while painting or dispatching the panels; it must not reach Pi's render loop, which would end Pi. */
   failed?(error: unknown): void;
+  /** A pointer move starts and ends its dispatch; documents report what lies under it in between. */
+  pointer?: { start(): void; end(): void; leave(): void };
 }
 
 type SelectionApi = Record<"hasActiveSelection" | "copyActiveSelectionToClipboard" | "resetTextSelection", (...args: never[]) => unknown>;
@@ -526,6 +528,7 @@ export class SplitSurface extends Container {
     const seen = this.lastEvent;
     if (seen && seen.type === event.type && seen.screenX === event.screenX && seen.screenY === event.screenY) return;
     if (!this.scrollbarDrag && event.type !== "wheel") this.setHover(undefined);
+    if (event.type === "move") this.options.pointer?.leave();
   }
 
   private scrollToPointer(view: ScrollView, geometry: Geometry, y: number, grab: number): void {
@@ -537,8 +540,14 @@ export class SplitSurface extends Container {
   override handleMouse(event: TuiMouseEvent): Dispatched | undefined {
     this.lastEvent = event;
     let result: (TuiMouseEventResult & Partial<Dispatched>) | undefined;
+    const move = event.type === "move";
     try {
-      result = this.mouse(event) as typeof result;
+      if (move) this.options.pointer?.start();
+      try {
+        result = this.mouse(event) as typeof result;
+      } finally {
+        if (move) this.options.pointer?.end();
+      }
     } catch (error) {
       if (!this.options.failed) throw error;
       this.frame = undefined;

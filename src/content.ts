@@ -131,6 +131,9 @@ interface Classified {
   parent?: { id: string; owner?: NativeContent; parts?: Component[] };
 }
 
+/** Native messages that start an act: what the user or an extension gave the agent. */
+const ACT_STARTS = new Set(["UserMessageComponent", "SkillInvocationMessageComponent", "CustomMessageComponent"]);
+
 const parentOf = (component: NativeContent): unknown => component.entry?.data?.parentToolCallId ?? component.message?.details?.parentToolCallId;
 
 /** The previous entry for the same native block, when every field that renders or searches it is equal. */
@@ -229,6 +232,61 @@ export class NativeContentIndex {
   contains(source: Component, pane?: Pane): boolean {
     this.refresh();
     return this.content.some(entry => entry.source === source && (pane === undefined || panes[entry.kind] === pane));
+  }
+
+  /**
+   * The act of a block: 1 for the first user, skill or custom message and the work that follows it, 2 for the next,
+   * and so on; 0 before the first one. Consecutive messages without work in between share one act.
+   */
+  act(source: Component): number {
+    return this.acts().acts.get(source) ?? 0;
+  }
+
+  /** Every block's act, for reading many blocks in one frame; blocks before the first act map to 0. */
+  actMap(): ReadonlyMap<Component, number> {
+    return this.acts().acts;
+  }
+
+  /**
+   * The block of the other panel at the same point of history: the same native message when it has a part there;
+   * from Activity, the last Conversation block before it; from Conversation, the first Activity block after it.
+   * Without one in that direction, the nearest block in the other direction.
+   */
+  counterpart(source: Component, from: Pane): Component | undefined {
+    const content = this.entries();
+    const { positions } = this.acts();
+    const position = positions.get(source);
+    if (position === undefined) return undefined;
+    const other = (entry: ContentEntry): boolean => panes[entry.kind] !== from;
+    const same = content.find(entry => entry.source === source && other(entry));
+    if (same) return same.source;
+    const step = from === "activity" ? -1 : 1;
+    for (const direction of [step, -step]) {
+      for (let index = position + direction; index >= 0 && index < content.length; index += direction) {
+        if (other(content[index])) return content[index].source;
+      }
+    }
+    return undefined;
+  }
+
+  private actIndex?: { content: ContentEntry[]; acts: Map<Component, number>; positions: Map<Component, number> };
+  /** Acts and history positions, rebuilt only when the classified history changes. */
+  private acts(): NonNullable<NativeContentIndex["actIndex"]> {
+    const content = this.entries();
+    if (this.actIndex?.content === content) return this.actIndex;
+    const acts = new Map<Component, number>();
+    const positions = new Map<Component, number>();
+    let act = 0;
+    let worked = false;
+    for (const [position, entry] of content.entries()) {
+      if (!positions.has(entry.source)) positions.set(entry.source, position);
+      if (entry.owner === entry.source && ACT_STARTS.has(nameOf(entry.source))) {
+        if (act === 0 || worked) { act++; worked = false; }
+      } else if (act) worked = true;
+      if (!acts.has(entry.source)) acts.set(entry.source, act);
+    }
+    this.actIndex = { content, acts, positions };
+    return this.actIndex;
   }
 
   /** Build clipboard text only on demand, from this branch's current semantic block. */
