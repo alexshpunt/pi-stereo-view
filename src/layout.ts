@@ -386,6 +386,8 @@ export class TranscriptLayout {
       return pass.shown;
     };
     const evaluate = ({ width, height }: { width: number; height: number }): boolean => {
+      // Width-only stack rendering during external-editor handoff has no viewport height bound.
+      height = Math.min(height, Math.max(1, host.terminal.rows));
       const previousHeight = historyHeight;
       const candidate = !!projectedDock && (widgetsPresent() || dialogPresent()) && dockUnchanged() && !this.failed &&
         this.preferences.mode === "split" && this.preferences.zoom !== "chat";
