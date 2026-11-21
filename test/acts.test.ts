@@ -115,8 +115,8 @@ test("act backgrounds stay a faint shift from the terminal background", () => {
     const color = actColor(theme, act, terminal)!;
     for (const ansi of [color.fill, color.hover, backgroundAnsi(color.clock, "truecolor")]) {
       const shift = Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
-      // At most 8% of the way from the background to a full hue.
-      expect(shift, ansi).toBeLessThanOrEqual(21);
+      // At most 5% of the way from the background to a full hue.
+      expect(shift, ansi).toBeLessThanOrEqual(13);
       expect(shift, ansi).toBeGreaterThan(0);
     }
   }
