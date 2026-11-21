@@ -12,6 +12,7 @@ import type { TranscriptTimestamps } from "./timestamps.ts";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.ts";
 import { SplitSurface } from "./surface.ts";
 import { sameValues } from "./render-cache.ts";
+import type { Problem } from "./report.ts";
 
 type NativeTui = TUI & {
   layoutRoot?: Container;
@@ -250,7 +251,31 @@ export class TranscriptLayout {
     private readonly getTools: () => readonly ToolInfo[] = () => [],
     private readonly nested = new NestedCalls(),
     private readonly getEditor: () => Component | undefined = () => undefined,
+    /** Show a problem that stops the split, with a way to report it. */
+    private readonly report: (problem: Problem) => void = problem => this.warn("pi-stereo-view " + problem.summary +
+      (problem.error === undefined ? "" : ": " + (problem.error instanceof Error ? problem.error.message : String(problem.error)))),
   ) {}
+
+  /** Refuse a Pi layout the split cannot use; Pi keeps its own history view. */
+  private refuse(reason: string): void {
+    this.report({ summary: "split is unavailable: " + reason });
+  }
+
+  /**
+   * Stop the split after an unexpected error instead of letting it reach Pi's render loop, which would end Pi.
+   * The next layout pass shows Pi's own history and dock.
+   */
+  private fail(error: unknown): void {
+    if (this.failed) return;
+    this.failed = true;
+    this.searchShortcut.dispose();
+    this.disposeDocuments?.();
+    queueMicrotask(() => {
+      this.closeSearch(false);
+      this.report({ summary: "split disabled after an error", error });
+      this.host?.requestRender();
+    });
+  }
 
   private button(label: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
     const button = new MouseRegion(memoized(width => [width, this.theme(), this.preferences.buttonStyle, label(), enabled(), background?.()],
@@ -276,7 +301,7 @@ export class TranscriptLayout {
     }
     const host = tui as unknown as NativeTui;
     if (typeof host.getFocusedComponent !== "function") {
-      this.warn("pi-stereo-view split is unavailable: Pi's focus API is not supported.");
+      this.refuse("Pi's focus API is not supported.");
       return;
     }
     if (host.layoutRoot === this.mounted && this.host) {
@@ -286,7 +311,7 @@ export class TranscriptLayout {
       mounted.preserveForeignChildren(original as VStack);
       this.dispose();
       this.rejectedRoots.add(original);
-      this.warn("pi-stereo-view split is unavailable: Pi's fullscreen layout is not supported.");
+      this.refuse("Pi's fullscreen layout is not supported.");
       return;
     }
     const root = host.layoutRoot;
@@ -294,7 +319,7 @@ export class TranscriptLayout {
     if (root && this.rejectedRoots.has(root)) return;
     if (!root || root.constructor.name !== "VStack" || root.children.length !== 2) {
       if (root) this.rejectedRoots.add(root);
-      this.warn("pi-stereo-view split is unavailable: Pi's fullscreen layout is not supported.");
+      this.refuse("Pi's fullscreen layout is not supported.");
       return;
     }
     const [transcript, dock] = root.children;
@@ -305,7 +330,7 @@ export class TranscriptLayout {
         document?.constructor.name !== "Container" || owner.child !== document || document.children.length !== 3 ||
         !Array.isArray((document.children[2] as Container)?.children)) {
       this.rejectedRoots.add(root);
-      this.warn("pi-stereo-view split is unavailable: Pi's history document is not supported.");
+      this.refuse("Pi's history document is not supported.");
       return;
     }
     // Route only the known native dock shape. Keep the original untouched for fallback.
@@ -443,10 +468,7 @@ export class TranscriptLayout {
         return true;
       } catch (error) {
         projectSurface = false;
-        this.failed = true;
-        this.searchShortcut.dispose();
-        this.disposeDocuments?.();
-        queueMicrotask(() => this.warn("pi-stereo-view split disabled: " + (error as Error).message));
+        this.fail(error);
         return false;
       }
     };
@@ -605,6 +627,7 @@ export class TranscriptLayout {
         const pane = this.searchPane();
         return pane === "chat" ? this.chat : pane === "activity" ? this.activity : undefined;
       },
+      failed: error => this.fail(error),
     });
     surface.setModels([columns, rows, activityPane, chatPane]);
     this.surface = surface;
@@ -612,10 +635,19 @@ export class TranscriptLayout {
       { component: toolbar, basis: "auto", shrink: 0, visible: () => {
         // Root visibility is evaluated once at the start of each native layout pass.
         pass = undefined;
-        this.timestamps.beginFrame();
-        index.beginFrame();
-        activityDocument.beginFrame(true);
-        chatDocument.beginFrame(true);
+        // An error here would reach Pi's render loop and end Pi; stop the split instead.
+        try {
+          this.timestamps.beginFrame();
+          // Combined history draws Pi's own document, so the shared index waits until the split is shown again.
+          // Pi-Bolt can then keep releasing the settled messages it draws itself.
+          if (this.preferences.mode === "split" && !this.failed) {
+            index.beginFrame();
+            activityDocument.beginFrame(true);
+            chatDocument.beginFrame(true);
+          }
+        } catch (error) {
+          this.fail(error);
+        }
         return true;
       } },
       { component: {

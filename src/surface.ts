@@ -277,6 +277,8 @@ export interface SplitSurfaceOptions {
   height(): number;
   /** Panel receiving keyboard scrolling and the follow-end indicator. */
   active(): ScrollView | undefined;
+  /** An error while painting or dispatching the panels; it must not reach Pi's render loop, which would end Pi. */
+  failed?(error: unknown): void;
 }
 
 type SelectionApi = Record<"hasActiveSelection" | "copyActiveSelectionToClipboard" | "resetTextSelection", (...args: never[]) => unknown>;
@@ -322,6 +324,17 @@ export class SplitSurface extends Container {
   }
 
   override render(width: number): string[] {
+    try {
+      return this.layoutFrame(width);
+    } catch (error) {
+      if (!this.options.failed) throw error;
+      this.frame = undefined;
+      this.options.failed(error);
+      return [];
+    }
+  }
+
+  private layoutFrame(width: number): string[] {
     const model = this.options.model();
     this.syncHostSelection();
     if (!model) {
@@ -523,7 +536,15 @@ export class SplitSurface extends Container {
 
   override handleMouse(event: TuiMouseEvent): Dispatched | undefined {
     this.lastEvent = event;
-    const result = this.mouse(event) as (TuiMouseEventResult & Partial<Dispatched>) | undefined;
+    let result: (TuiMouseEventResult & Partial<Dispatched>) | undefined;
+    try {
+      result = this.mouse(event) as typeof result;
+    } catch (error) {
+      if (!this.options.failed) throw error;
+      this.frame = undefined;
+      this.options.failed(error);
+      return undefined;
+    }
     if (!result || result.target) return result as Dispatched | undefined;
     if (!result.handled && !result.capture && !result.focus) return undefined;
     return { ...result, handled: true, target: { component: this, originX: event.screenX - event.x, originY: event.screenY - event.y,
