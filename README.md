@@ -37,6 +37,8 @@ If the Activity surface cannot fit without clipping, the view temporarily return
 
 - Arrange Conversation and Activity in columns or rows, swap or resize the panels, and zoom either one while keeping the input full width.
 - Group consecutive Activity tools and expand individual calls inline while keeping thinking visible.
+- See which work belongs to which request: each request and everything the agent did for it share a color in both panels, and pointing at a block highlights all of it.
+- Click a block's clock to jump to the same moment in the other panel.
 - Copy an individual user message, assistant reply or thinking block with its own copy icon.
 - Copy a complete tool call with its arguments, saved result and linked late output, including collapsed and off-screen text.
 - Search panel history with literal text, Boolean expressions or regular expressions, then jump between matches.
@@ -85,6 +87,7 @@ Click the toolbar and the buttons in each panel's header. Buttons use text label
 | `[ ≡ ]` | `[Settings]` | Open display and Conversation height settings. |
 | `[ ⌕ ]` | `[Find]` | Search this panel. |
 | `[ ⊟ ]` / `[ ⊞ ]` | `[Compact tools]` / `[Full tools]` | Compact Activity tools / restore full tools. |
+| `[ ⇄ ]` | `[Go to]` | Open the same moment in the other panel (when Go to includes the button). |
 
 **Resize:** drag the double line between the panels — `═` in rows, `║` in columns.
 
@@ -123,6 +126,31 @@ Compact rows and groups work in columns, rows and zoomed Activity. Settings save
 **Stream latest tools** (on by default, in Settings) lets you watch the current work while keeping history short. While Compact or Group is on, a new tool call appears as its full card and updates live. When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place: into a compact row with Compact on, and into the adjacent identical calls' group (`read ×3`) with Group on. With both off, every call already shows in full, so streaming changes nothing.
 
 Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both options survive restart; streaming defaults to on.
+
+## Find your way between requests
+
+An act is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one act.
+
+**Act colors** gives every act its own color in both panels, so the work for one request is easy to tell from the next. Choose it in Stereo View settings:
+
+| Act colors | What it colors |
+| --- | --- |
+| `clock` (default) | The background of each block's clock. |
+| `stripe` | A one-column stripe on the left of every block. |
+| `fill` | The background of every block. |
+| `off` | Nothing. |
+
+Neighbouring acts get clearly different colors, mixed lightly into your terminal's background. Tool cards, your messages and extension messages keep their own backgrounds; colors only fill the plain background around them.
+
+**Act hover** (on by default) highlights the act under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
+
+**Go to** opens the same moment of history in the other panel:
+
+- From Activity, it shows the Conversation block just before: for a tool call, the reply that made it.
+- From Conversation, it shows the first Activity block after: for your message, the work it started.
+- A message with a part in both panels, such as a reply with thinking, opens its own other part.
+
+Click a block's clock, including the clock of a compact tool row or group, or the `[ ⇄ ]` / `[Go to]` button beside Copy. The **Go to** setting chooses `clock` (default), `button`, `both` or `off`. A zoomed panel returns to the split first. The other panel becomes the active one, so keyboard scrolling continues there.
 
 ## Search history
 
@@ -193,7 +221,7 @@ Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active p
 
 ## Settings and limits
 
-Your layout, panel order, sizes, compact Activity choice, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
+Your layout, panel order, sizes, compact Activity choice, act colors, hover and Go to choices, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
 
 - Tested with Pi 1.1.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.
