@@ -345,3 +345,45 @@ test("rejects deferred assistant content without a native builder instead of sil
   Object.assign(assistant, { contentIsStale: true });
   expect(() => setup(assistant).index.entries("chat")).toThrow("deferred assistant content is not supported");
 });
+
+test("projects a settled Pi-Bolt reply after Pi-Bolt releases its native children", () => {
+  // Pi-Bolt compacts settled replies it drew: it keeps their lines, drops the children and puts a copy in their place.
+  class AssistantMessageComponent extends Container {
+    contentContainer = new Container();
+    hasToolCalls = false;
+    lastMessage = { content: [{ type: "thinking", thinking: "SETTLED REASONING" }, { type: "text", text: "SETTLED ANSWER" }] };
+    private compacted?: string[];
+    constructor() { super(); this.addChild(this.contentContainer); this.buildContent(); }
+    private buildContent(): void {
+      this.compacted = undefined;
+      this.contentContainer.clear();
+      const region = new MouseRegion();
+      region.addChild(new Text(this.lastMessage.content[0].thinking!, 0, 0));
+      this.contentContainer.addChild(region);
+      this.contentContainer.addChild(new Markdown(this.lastMessage.content[1].text!, 0, 0));
+    }
+    compact(width: number): void {
+      this.compacted = this.render(width);
+      this.contentContainer = new Container();
+      this.clear();
+      this.addChild(this.contentContainer);
+    }
+    isCompacted(): boolean { return this.compacted !== undefined; }
+    // Private in Pi-Bolt; it makes the children again before drawing the message at another width.
+    private thaw(): void { if (this.compacted) this.buildContent(); }
+    override render(width: number): string[] { return this.compacted ?? super.render(width); }
+    setHideThinkingBlock(): void {}
+  }
+  const assistant = new AssistantMessageComponent();
+  const { history, index } = setup(assistant);
+  expect(index.entries("chat").some(entry => entry.source === assistant)).toBe(true);
+  assistant.compact(80);
+  const copy = Object.assign(Object.create(AssistantMessageComponent.prototype), assistant) as AssistantMessageComponent;
+  history.children[0] = copy;
+  const chat = index.entries("chat").find(entry => entry.source === copy)!;
+  const activity = index.entries("activity").find(entry => entry.source === copy)!;
+  expect(visible(chat.component as Container)).toContain("SETTLED ANSWER");
+  expect(visible(chat.component as Container)).not.toContain("SETTLED REASONING");
+  expect(visible(activity.component as Container)).toContain("SETTLED REASONING");
+  expect(visible(activity.component as Container)).not.toContain("SETTLED ANSWER");
+});

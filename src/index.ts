@@ -7,6 +7,7 @@ import { defaults, loadPreferences, savePreferences, type Preferences } from "./
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
+import { ProblemReporter } from "./report.ts";
 
 const DELAYS = [1, 2, 3, 5, 10, 30];
 
@@ -146,6 +147,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     host = tui;
     timestamps = new TranscriptTimestamps(session);
     nested.restore(session.getBranch());
+    const problems = new ProblemReporter(ui, copyToClipboard);
     layout = new TranscriptLayout(preferences, () => ui.theme,
       message => ui.notify(message, "warning"), () => persist(ui), timestamps,
       () => { void openSettings(ui).catch(error => ui.notify(String(error), "error")); }, text => {
@@ -159,7 +161,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         }
         void copyToClipboard(text).then(() => ui.notify("Block sent to clipboard.", "info"),
           error => ui.notify("Could not copy block: " + String(error), "error"));
-      }, () => pi.getAllTools(), nested, () => nativeEditor.get(tui));
+      }, () => pi.getAllTools(), nested, () => nativeEditor.get(tui), problem => problems.show(problem));
     try { ensureLayout(); }
     catch (error) {
       layout.dispose();

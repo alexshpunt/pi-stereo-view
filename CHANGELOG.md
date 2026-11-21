@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.1.23 - 2026-11-21
+
+### Fixed
+
+- Pi-Bolt no longer closes with "Pi's assistant content layout is not supported" after a reply. Pi-Bolt 1.1.6 and later free the parts of finished replies they have drawn; split view now asks Pi-Bolt to restore them before showing the reply. Thanks to [@Unk-now](https://github.com/Unk-now) for the detailed report ([#99](https://github.com/alexshpunt/pi-stereo-view/issues/99)).
+- An error in split view no longer closes Pi. Split view turns off, and Pi shows its own history until the next reload.
+
+### Added
+
+- When split view turns off after an error, or cannot start in a Pi version it does not support, a panel above the editor names the problem. **Open issue** opens a GitHub issue form with the error, its stack and the versions filled in; nothing is sent until you submit it. **Copy report** copies the same text, and **Close** hides the panel.
+
+### Changed
+
+- Combined history no longer reads the split's content index on every frame.
+
 ## 0.1.22 - 2026-11-21
 
 ### Fixed

@@ -141,3 +141,23 @@ test("tracks the active background of a styled prefix", () => {
   expect(activeBackground("\x1b[41mabc\x1b[0m")).toBe("");
   expect(activeBackground("\x1b[38;5;3;48;5;9mx")).toBe("\x1b[48;5;9m");
 });
+
+test("reports a panel error while painting or routing the mouse instead of throwing into Pi's render loop", () => {
+  const failed = vi.fn();
+  let broken = false;
+  const panel: Component = {
+    render: width => { if (broken) throw new Error("PAINT"); return ["ok".padEnd(width)]; },
+    handleMouse: () => { throw new Error("MOUSE"); },
+    invalidate() {},
+  } as Component;
+  const split = new SplitSurface(host(), {
+    model: () => ({ component: panel, fill: true, minSize: 1 }), height: () => 2, active: () => undefined, failed,
+  });
+  surfaces.push(split);
+  split.render(10);
+  expect(split.handleMouse(mouse("press", 1, 0))).toBeUndefined();
+  expect(failed).toHaveBeenLastCalledWith(expect.objectContaining({ message: "MOUSE" }));
+  broken = true;
+  expect(split.render(10)).toEqual([]);
+  expect(failed).toHaveBeenLastCalledWith(expect.objectContaining({ message: "PAINT" }));
+});
