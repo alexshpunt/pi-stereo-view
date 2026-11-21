@@ -140,7 +140,7 @@ Every act gets its own color in both panels, so the work for one request is easy
 | **Act background** | `on`, `off` (default) | The background of every block. |
 | **Act separator** | `on`, `off` (default) | A colored line across both panels where each new act begins. |
 
-Neighbouring acts get different hues. Backgrounds shift only 5% from your terminal's background, clocks 10%. Tool cards, your messages and extension messages keep their own backgrounds; act backgrounds only fill the plain background around them.
+Neighbouring acts get different hues. Each color is the act's hue mixed into your terminal's background; **Act clock mix** (10% by default), **Act stripe mix** (100%, also for separators) and **Act background mix** (5%, also for hover) set how much. Hovering over act backgrounds uses twice the background mix, so the act under the pointer still stands out. Tool cards, your messages and extension messages keep their own backgrounds; act backgrounds only fill the plain background around them.
 
 **Highlight on hover** (on by default) highlights the act under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 

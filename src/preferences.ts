@@ -38,6 +38,10 @@ export interface Preferences {
   actBackground: boolean;
   /** A colored rule above the first block of each act. */
   actSeparator: boolean;
+  /** Percent of the act hue mixed into the terminal background behind clocks, in stripes and lines, and in blocks. */
+  actClockMix: number;
+  actStripeMix: number;
+  actBackgroundMix: number;
   /** Highlight the act under the pointer in both panels, where the terminal reports pointer motion. */
   actHover: boolean;
   /** How a block opens the same point of history in the other panel. */
@@ -45,14 +49,21 @@ export interface Preferences {
 }
 
 export type ActStripe = "off" | "block" | "line";
+/** Settings that change how acts are marked; each applies at once without other effects. */
+export type ActMarkSetting = "actClock" | "actStripe" | "actBackground" | "actSeparator" | "actClockMix" | "actStripeMix" | "actBackgroundMix";
 export type GoTo = "clock" | "button" | "both" | "off";
 export const ACT_STRIPES: readonly ActStripe[] = ["off", "block", "line"];
 export const GO_TO: readonly GoTo[] = ["clock", "button", "both", "off"];
 
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
-  actClock: true, actStripe: "block", actBackground: false, actSeparator: false, actHover: true, goTo: "clock",
+  actClock: true, actStripe: "block", actBackground: false, actSeparator: false, actClockMix: 10, actStripeMix: 100, actBackgroundMix: 5,
+  actHover: true, goTo: "clock",
 };
+
+/** Mix choices offered in settings, in percent; saved files may hold any whole percent from 1 to 100. */
+export const ACT_MIXES: readonly number[] = [2, 5, 8, 10, 15, 20, 30, 50, 75, 100];
+const validMix = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 100;
 
 /** Read display preferences, retaining the first version's saved arrangement. */
 export async function loadPreferences(file: string): Promise<Preferences> {
@@ -81,6 +92,9 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const actStripe = record.actStripe === undefined ? defaults.actStripe : record.actStripe;
   const actBackground = record.actBackground === undefined ? defaults.actBackground : record.actBackground;
   const actSeparator = record.actSeparator === undefined ? defaults.actSeparator : record.actSeparator;
+  const actClockMix = record.actClockMix === undefined ? defaults.actClockMix : record.actClockMix;
+  const actStripeMix = record.actStripeMix === undefined ? defaults.actStripeMix : record.actStripeMix;
+  const actBackgroundMix = record.actBackgroundMix === undefined ? defaults.actBackgroundMix : record.actBackgroundMix;
   const actHover = record.actHover === undefined ? defaults.actHover : record.actHover;
   const goTo = record.goTo === undefined ? defaults.goTo : record.goTo;
   if ((record.side !== "left" && record.side !== "right") ||
@@ -93,12 +107,13 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       typeof streamTools !== "boolean" || typeof streamDelay !== "number" || !Number.isInteger(streamDelay) || streamDelay < 1 || streamDelay > 300 ||
       (buttonStyle !== "icons" && buttonStyle !== "text") || typeof actClock !== "boolean" || !ACT_STRIPES.includes(actStripe as ActStripe) ||
       typeof actBackground !== "boolean" || typeof actSeparator !== "boolean" ||
+      !validMix(actClockMix) || !validMix(actStripeMix) || !validMix(actBackgroundMix) ||
       typeof actHover !== "boolean" || !GO_TO.includes(goTo as GoTo)) {
     throw new Error("Invalid pi-stereo-view preferences");
   }
   // Legacy files may contain mode/zoom. Every session starts with both panels visible.
   return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-    actClock, actStripe: actStripe as ActStripe, actBackground, actSeparator, actHover, goTo: goTo as GoTo };
+    actClock, actStripe: actStripe as ActStripe, actBackground, actSeparator, actClockMix, actStripeMix, actBackgroundMix, actHover, goTo: goTo as GoTo };
 }
 
 /** Atomically save only the display settings, never session messages. */
@@ -107,9 +122,9 @@ export async function savePreferences(file: string, preferences: Preferences): P
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
     const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-      actClock, actStripe, actBackground, actSeparator, actHover, goTo } = preferences;
+      actClock, actStripe, actBackground, actSeparator, actClockMix, actStripeMix, actBackgroundMix, actHover, goTo } = preferences;
     const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-      actClock, actStripe, actBackground, actSeparator, actHover, goTo };
+      actClock, actStripe, actBackground, actSeparator, actClockMix, actStripeMix, actBackgroundMix, actHover, goTo };
     await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
   } finally {

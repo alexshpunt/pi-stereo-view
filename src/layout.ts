@@ -5,10 +5,10 @@ import {
   type Color, type Component, type RgbColor, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type DocumentActs, type Pane } from "./native.ts";
-import { actColor, pointerMotionAvailable } from "./acts.ts";
+import { actColor, pointerMotionAvailable, type ActMix } from "./acts.ts";
 import { NativeContentIndex } from "./content.ts";
 import { NestedCalls } from "./nested-calls.ts";
-import type { Preferences } from "./preferences.ts";
+import type { ActMarkSetting, Preferences } from "./preferences.ts";
 import type { TranscriptTimestamps } from "./timestamps.ts";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.ts";
 import { SplitSurface } from "./surface.ts";
@@ -382,7 +382,8 @@ export class TranscriptLayout {
       stripe: () => this.preferences.actStripe,
       background: () => this.preferences.actBackground,
       separator: () => this.preferences.actSeparator,
-      color: act => actColor(this.theme(), act, this.terminalBackground),
+      mix: () => this.actMix(),
+      color: act => actColor(this.theme(), act, this.terminalBackground, this.actMix()),
       hovered: () => this.hoverAvailable() && this.preferences.actHover ? this.hoverAct : undefined,
       hover: act => { if (this.moving) this.moving.act = act; },
       goTo: () => this.preferences.goTo,
@@ -874,8 +875,14 @@ export class TranscriptLayout {
     if (persist) this.save();
   }
 
-  /** Turn one act mark on or off: clock background, stripe, block background or separator rule. */
-  setActMark<Key extends "actClock" | "actStripe" | "actBackground" | "actSeparator">(key: Key, value: Preferences[Key]): void {
+  /** The act marks' mix strengths, as the palette reads them. */
+  private actMix(): ActMix {
+    const { actClockMix: clock, actStripeMix: stripe, actBackgroundMix: background } = this.preferences;
+    return { clock, stripe, background };
+  }
+
+  /** Change one act mark or its mix: clock background, stripe, block background or separator rule. */
+  setActMark<Key extends ActMarkSetting>(key: Key, value: Preferences[Key]): void {
     this.preferences[key] = value;
     this.changed();
   }

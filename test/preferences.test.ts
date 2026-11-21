@@ -7,7 +7,8 @@ import { defaults, loadPreferences, savePreferences, type Preferences } from "..
 const arrangement = {
   side: "right", chatWidth: 73, layout: "rows", chatHeight: 17,
   showTimestamps: false, showCopyButtons: false, compactTools: true, groupTools: false, nestedTree: false, streamTools: true, streamDelay: 8, buttonStyle: "icons",
-  actClock: false, actStripe: "line", actBackground: true, actSeparator: true, actHover: false, goTo: "both",
+  actClock: false, actStripe: "line", actBackground: true, actSeparator: true, actClockMix: 20, actStripeMix: 50, actBackgroundMix: 3,
+  actHover: false, goTo: "both",
 } as const;
 
 test.each(["chat", "activity", null] as const)("ignores legacy temporary state with %s zoom without losing the saved arrangement", async zoom => {
@@ -47,15 +48,17 @@ test("files saved before act settings get clock colors, a block stripe, hover an
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
-    const { actClock: _clock, actStripe: _stripe, actBackground: _background, actSeparator: _separator, actHover: _hover, goTo: _goTo, ...older } = arrangement;
+    const { actClock: _clock, actStripe: _stripe, actBackground: _background, actSeparator: _separator, actClockMix: _clockMix,
+      actStripeMix: _stripeMix, actBackgroundMix: _backgroundMix, actHover: _hover, goTo: _goTo, ...older } = arrangement;
     await writeFile(file, JSON.stringify(older));
     expect(await loadPreferences(file)).toMatchObject({
-      actClock: true, actStripe: "block", actBackground: false, actSeparator: false, actHover: true, goTo: "clock",
+      actClock: true, actStripe: "block", actBackground: false, actSeparator: false, actClockMix: 10, actStripeMix: 100, actBackgroundMix: 5,
+      actHover: true, goTo: "clock",
     });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test.each([{ actClock: "yes" }, { actStripe: "rainbow" }, { actBackground: 1 }, { actSeparator: "on" }, { actHover: "yes" }, { goTo: "elsewhere" }])("rejects an invalid act setting %o", async invalid => {
+test.each([{ actClock: "yes" }, { actStripe: "rainbow" }, { actBackground: 1 }, { actSeparator: "on" }, { actClockMix: 0 }, { actStripeMix: 101 }, { actBackgroundMix: 2.5 }, { actHover: "yes" }, { goTo: "elsewhere" }])("rejects an invalid act setting %o", async invalid => {
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {

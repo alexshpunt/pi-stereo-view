@@ -11,7 +11,7 @@ export interface ActColor {
   clock: Color;
   /** Background of default cells when act backgrounds are on. */
   fill: string;
-  /** Background of default cells while the act is under the pointer. */
+  /** Background of default cells while the act is under the pointer and act backgrounds are on. */
   hover: string;
   /** Background of the one-cell block stripe on the left. */
   stripe: string;
@@ -19,38 +19,49 @@ export interface ActColor {
   line: string;
 }
 
-const palettes = new WeakMap<Theme, { background?: RgbColor; colors: ActColor[] }>();
+/** Percent of the act hue mixed into the terminal background for each mark. */
+export interface ActMix {
+  clock: number;
+  stripe: number;
+  background: number;
+}
+
+/** Default mixes: faint clocks and backgrounds, full-strength stripes and lines. */
+export const DEFAULT_MIX: ActMix = { clock: 10, stripe: 100, background: 5 };
+
+const palettes = new WeakMap<Theme, { background?: RgbColor; mix: ActMix; colors: ActColor[] }>();
 
 /** Common dark and light terminal backgrounds, for a terminal that does not report its own. */
 const GUESSED_BACKGROUND = { dark: rgbColor(24, 24, 27), light: rgbColor(250, 250, 250) };
 
-/** Share of the hue in each background: a faint shift from the terminal background, never a solid block. */
-const MIX = { clock: 0.1, fill: 0.05, hover: 0.05 };
-
 /**
- * The palette for a theme over the terminal's background. Each color mixes a hue into that background, so it stays a
- * light tint on dark and light terminals alike. Without a reported background, the theme's appearance picks a guess.
+ * The palette for a theme over the terminal's background. Each color mixes a hue into that background by the mark's
+ * percentage, so it stays a tint on dark and light terminals alike. Without a reported background, the theme's
+ * appearance picks a guess. `hover` doubles the background mix, to stand out over act backgrounds.
  */
-export function actColor(theme: Theme, act: number, background?: RgbColor): ActColor | undefined {
+export function actColor(theme: Theme, act: number, background?: RgbColor, mix: ActMix = DEFAULT_MIX): ActColor | undefined {
   if (act <= 0) return undefined;
   let palette = palettes.get(theme);
-  if (!palette || palette.background !== background) {
+  if (!palette || palette.background !== background || palette.mix.clock !== mix.clock || palette.mix.stripe !== mix.stripe ||
+    palette.mix.background !== mix.background) {
     const appearance = Reflect.get(theme, "appearance") === "light" ? "light" : "dark";
     const base: Color = background ? rgbColor(background.r, background.g, background.b) : GUESSED_BACKGROUND[appearance];
     const dark = colorToOkhsl(base).l < 0.5;
     const mode = theme.getColorMode();
+    const share = (percent: number): number => Math.min(100, Math.max(0, percent)) / 100;
     const colors: ActColor[] = [];
     for (let index = 0; index < HUES; index++) {
       const hue = okhslColor((index * 360) / HUES + 15, 0.85, dark ? 0.62 : 0.55);
+      const stripe = mixColors(base, hue, share(mix.stripe), "srgb");
       colors.push({
-        clock: mixColors(base, hue, MIX.clock, "srgb"),
-        fill: backgroundAnsi(mixColors(base, hue, MIX.fill, "srgb"), mode),
-        hover: backgroundAnsi(mixColors(base, hue, MIX.hover, "srgb"), mode),
-        stripe: backgroundAnsi(hue, mode),
-        line: foregroundAnsi(hue, mode),
+        clock: mixColors(base, hue, share(mix.clock), "srgb"),
+        fill: backgroundAnsi(mixColors(base, hue, share(mix.background), "srgb"), mode),
+        hover: backgroundAnsi(mixColors(base, hue, share(mix.background * 2), "srgb"), mode),
+        stripe: backgroundAnsi(stripe, mode),
+        line: foregroundAnsi(stripe, mode),
       });
     }
-    palette = { background, colors };
+    palette = { background, mix: { ...mix }, colors };
     palettes.set(theme, palette);
   }
   return palette.colors[((act - 1) * STRIDE) % HUES];

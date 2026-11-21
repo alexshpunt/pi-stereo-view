@@ -1,7 +1,7 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { backgroundAnsi, Container, rgbColor, stripTerminalSequences, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
-import { actColor, decorateLine, decorateLines, pointerMotionAvailable } from "../src/acts.ts";
+import { actColor, decorateLine, decorateLines, DEFAULT_MIX, pointerMotionAvailable } from "../src/acts.ts";
 import { NativeContentIndex } from "../src/content.ts";
 import { CompactTool } from "../src/compact-tools.ts";
 import { NativeDocument, type DocumentActs } from "../src/native.ts";
@@ -113,13 +113,26 @@ test("act backgrounds stay a faint shift from the terminal background", () => {
   const channels = (ansi: string): number[] => ansi.match(/48;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
   for (let act = 1; act <= 16; act++) {
     const color = actColor(theme, act, terminal)!;
-    // At most 5% of the way from the background to a full hue for backgrounds, 10% behind the clock.
-    for (const [ansi, limit] of [[color.fill, 13], [color.hover, 13], [backgroundAnsi(color.clock, "truecolor"), 26]] as const) {
+    // By default backgrounds take 5% of the way from the background to a full hue, hover over them and clocks 10%.
+    for (const [ansi, limit] of [[color.fill, 13], [color.hover, 26], [backgroundAnsi(color.clock, "truecolor"), 26]] as const) {
       const shift = Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
       expect(shift, ansi).toBeLessThanOrEqual(limit);
       expect(shift, ansi).toBeGreaterThan(0);
     }
   }
+});
+
+test("each mark mixes its own share of the act hue, and a new mix rebuilds the palette", () => {
+  const terminal = { r: 30, g: 30, b: 46 };
+  const channels = (ansi: string): number[] => ansi.match(/[34]8;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
+  const shift = (ansi: string): number => Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
+  const full = actColor(theme, 1, terminal, { clock: 100, stripe: 100, background: 100 })!;
+  const half = actColor(theme, 1, terminal, { clock: 50, stripe: 50, background: 20 })!;
+  expect(shift(half.line)).toBeCloseTo(shift(full.line) / 2, -1);
+  expect(shift(backgroundAnsi(half.clock, "truecolor"))).toBeCloseTo(shift(full.fill) / 2, -1);
+  expect(shift(half.fill)).toBeCloseTo(shift(full.fill) / 5, -1);
+  // Hover doubles the background share, so it shows over act backgrounds.
+  expect(shift(half.hover)).toBeCloseTo(shift(full.fill) * 2 / 5, -1);
 });
 
 test("hover is unavailable in terminal multiplexers and without Pi's mouse support", () => {
@@ -145,6 +158,7 @@ function documentWith(pane: "chat" | "activity", marks: Partial<Marks>, goTo: Go
   };
   const acts: DocumentActs = {
     clock: () => state.marks.clock, stripe: () => state.marks.stripe, background: () => state.marks.background, separator: () => state.marks.separator,
+    mix: () => DEFAULT_MIX,
     color: act => actColor(theme, act), hovered: () => state.hovered, hover: act => state.reported.push(act),
     goTo: () => state.goTo, jump: (_from, block) => state.jumps.push(block),
   };
@@ -205,14 +219,21 @@ test("act backgrounds tint default cells of each act and hover tints the act und
   state.hovered = 1;
   document.beginFrame();
   const hovered = document.render(30);
-  expect(hovered[0].startsWith(actColor(theme, 1)!.hover)).toBe(true);
-  expect(hovered.at(-1)!.includes(actColor(theme, 2)!.hover)).toBe(false);
+  // Without act backgrounds, hover shows the act in the background tint.
+  expect(hovered[0].startsWith(actColor(theme, 1)!.fill)).toBe(true);
+  expect(hovered.at(-1)!.includes(actColor(theme, 2)!.fill)).toBe(false);
   state.hovered = undefined;
   state.marks = { ...state.marks, background: true };
   document.beginFrame();
   const filled = document.render(30);
   expect(filled[0].startsWith(actColor(theme, 1)!.fill)).toBe(true);
   expect(filled.at(-1)!.startsWith(actColor(theme, 2)!.fill)).toBe(true);
+  // Over act backgrounds, the hovered act takes the stronger hover tint.
+  state.hovered = 2;
+  document.beginFrame();
+  const both = document.render(30);
+  expect(both[0].startsWith(actColor(theme, 1)!.fill)).toBe(true);
+  expect(both.at(-1)!.startsWith(actColor(theme, 2)!.hover)).toBe(true);
   document.handleMouse(pointer("move", 2, 99, 30));
   expect(state.reported.at(-1)).toBe(0);
 });
@@ -269,7 +290,7 @@ test("locating a block outside a frame reads clock colors without classifying th
   const { source, index } = history(new UserMessageComponent("FIRST"), ...calls);
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
   const acts: DocumentActs = {
-    clock: () => true, stripe: () => "off", background: () => false, separator: () => false,
+    clock: () => true, stripe: () => "off", background: () => false, separator: () => false, mix: () => DEFAULT_MIX,
     color: act => actColor(theme, act), hovered: () => undefined, hover: () => {},
     goTo: () => "clock", jump: () => {},
   };

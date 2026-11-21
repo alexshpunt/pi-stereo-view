@@ -5,7 +5,7 @@
 ### Added
 
 - Act marks, hover highlighting and Go to make it easy to see what the agent did for each request (#104). An act is a message you or an extension sent plus all the work that followed it.
-  - Each act gets its own color in both panels, shown in any combination of four settings: **Act clock color** (default on), **Act stripe** (`block` by default, or a thin `line`), **Act background** and **Act separator**, a colored line where each act begins. Tool cards and messages keep their own backgrounds.
+  - Each act gets its own color in both panels, shown in any combination of four settings: **Act clock color** (default on), **Act stripe** (`block` by default, or a thin `line`), **Act background** and **Act separator**, a colored line where each act begins. Act clock, stripe and background mix settings set how strongly each shows. Tool cards and messages keep their own backgrounds.
   - **Highlight on hover** highlights the act under the pointer in both panels. It is shown as unavailable inside tmux, zellij and screen, where Pi does not receive pointer movement.
   - **Go to** opens the same moment in the other panel from a block's clock or a `[Go to]` / `[ ⇄ ]` button beside Copy.
   Thanks to [@alejandro5042](https://github.com/alejandro5042) for the idea.

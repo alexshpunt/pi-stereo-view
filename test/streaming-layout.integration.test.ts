@@ -99,7 +99,7 @@ for (const layout of ["columns", "rows"] as const) for (const thinking of [true,
       if (thinking) expect(combined.lines.join("\n")).toContain("REASONING 2 FINISHED");
       expect(frames.at(-1)?.phase).toBe("restored");
       expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
-        actClock: false, actStripe: "off", actBackground: false, actSeparator: false, actHover: false, goTo: "off" });
+        actClock: false, actStripe: "off", actBackground: false, actSeparator: false, actClockMix: 10, actStripeMix: 100, actBackgroundMix: 5, actHover: false, goTo: "off" });
     } finally {
       await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
     }

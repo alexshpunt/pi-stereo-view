@@ -11,7 +11,7 @@ import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.ts";
 import { ToolIndent } from "./tool-indent.ts";
 import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
 import { pushShellInputs, sameValues } from "./render-cache.ts";
-import { decorateLines, type ActColor } from "./acts.ts";
+import { decorateLines, type ActColor, type ActMix } from "./acts.ts";
 import type { ActStripe, GoTo } from "./preferences.ts";
 export type { Pane } from "./content.ts";
 
@@ -24,6 +24,8 @@ export interface DocumentActs {
   background(): boolean;
   /** Whether a rule marks the first block of each act. */
   separator(): boolean;
+  /** How strongly each mark mixes its act's hue into the background. */
+  mix(): ActMix;
   /** The colors of an act, mixed into the terminal background; none before the first act. */
   color(act: number): ActColor | undefined;
   /** The act under the pointer, while hover highlighting is on and available. */
@@ -646,7 +648,9 @@ export class NativeDocument extends Container {
     const view = locateMatch || this.measureAll ? undefined : this.viewport?.();
     // The first frame and search measure every entry; later frames reuse offscreen rows.
     const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
-    const presentation = [theme, stripe, tint, separator, this.acts?.clock(), display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
+    const mix = this.acts?.mix();
+    const presentation = [theme, stripe, tint, separator, this.acts?.clock(), mix?.clock, mix?.stripe, mix?.background,
+      display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
       this.showCopy(), this.buttonStyle(), this.acts?.goTo(), this.timestampGutter(), this.invalidations];
     if (!sameValues(presentation, this.presentation)) {
       this.presentation = presentation;
@@ -762,7 +766,8 @@ export class NativeDocument extends Container {
       // Copy rows: native renderers may reuse and later mutate their row arrays.
       const lines: string[] = [];
       const color = act && (inset || tint || hovered === act) ? this.acts?.color(act) : undefined;
-      const background = color && (hovered === act ? color.hover : tint ? color.fill : undefined);
+      // Hover uses the background tint, stronger when every act already has one.
+      const background = color && (hovered === act ? (tint ? color.hover : color.fill) : tint ? color.fill : undefined);
       const prefix = !inset ? "" : !color ? " " : stripe === "line" ? color.line + "│\x1b[39m" : color.stripe + " \x1b[49m";
       for (const child of result) {
         const childLines = decorateLines(child.render(width), background, prefix);

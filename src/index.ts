@@ -3,7 +3,7 @@ import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, 
 import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
-import { ACT_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type ActStripe, type GoTo, type Preferences } from "./preferences.ts";
+import { ACT_MIXES, ACT_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type ActStripe, type GoTo, type Preferences } from "./preferences.ts";
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -58,6 +58,11 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const hoverAvailable = layout?.hoverAvailable() ?? false;
         const HOVER_LABEL = "Highlight on hover";
         const listTheme = getSettingsListTheme();
+        // A saved mix outside the offered steps stays selectable until another is chosen.
+        const mixSetting = (id: "actClockMix" | "actStripeMix" | "actBackgroundMix", label: string, description: string) => ({
+          id, label, description, currentValue: `${preferences[id]}%`,
+          values: [...new Set([...ACT_MIXES, preferences[id]])].sort((a, b) => a - b).map(percent => `${percent}%`),
+        });
         const list = new SettingsList([{
           id: "timestamps", label: "Show timestamps",
           description: "Hide clock rows without changing messages or recorded tool starts.",
@@ -99,13 +104,20 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Each request and the work that answers it share a color in both panels. This colors the background of every block's clock.",
           currentValue: preferences.actClock ? "on" : "off", values: ["on", "off"],
         }, {
+          ...mixSetting("actClockMix", "Act clock mix", "How strongly the act's color shows behind the clock: the percent of the hue mixed into the terminal background."),
+        }, {
           id: "actStripe", label: "Act stripe",
           description: "Mark every block of a request and its work on the left: a colored cell (block), a thin colored line, or nothing.",
           currentValue: preferences.actStripe, values: [...ACT_STRIPES],
         }, {
+          ...mixSetting("actStripeMix", "Act stripe mix", "How strongly the act's color shows in stripes, lines and separators: 100% is the full hue."),
+        }, {
           id: "actBackground", label: "Act background",
           description: "Tint the plain background of every block of a request and its work. Tool cards and messages keep their own backgrounds.",
           currentValue: preferences.actBackground ? "on" : "off", values: ["on", "off"],
+        }, {
+          ...mixSetting("actBackgroundMix", "Act background mix",
+            "How strongly the act's color tints block backgrounds and hover highlights. Over act backgrounds, hover uses twice as much."),
         }, {
           id: "actSeparator", label: "Act separator",
           description: "Draw a colored line in both panels where each new request and its work begin.",
@@ -120,7 +132,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "goTo", label: "Go to",
           description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
           currentValue: preferences.goTo, values: [...GO_TO],
-        }], 15, {
+        }], 18, {
           ...listTheme,
           // An unavailable setting stays listed so its explanation can be read, but looks disabled.
           label: (text, selected) => !hoverAvailable && text.trim() === HOVER_LABEL ? ui.theme.fg("dim", text) : listTheme.label(text, selected),
@@ -130,6 +142,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           else if (id === "actStripe") layout?.setActMark("actStripe", value as ActStripe);
           else if (id === "actBackground") layout?.setActMark("actBackground", value === "on");
           else if (id === "actSeparator") layout?.setActMark("actSeparator", value === "on");
+          else if (id === "actClockMix" || id === "actStripeMix" || id === "actBackgroundMix") layout?.setActMark(id, Number.parseInt(value, 10));
           else if (id === "actHover") { if (value !== "unavailable") layout?.setActHover(value === "on"); }
           else if (id === "goTo") layout?.setGoTo(value as GoTo);
           else if (id === "timestamps") layout?.setTimestamps(value === "on");
