@@ -20,6 +20,10 @@ const profileSearch = process.env.PROFILE_SEARCH === "1";
 const callsPerTurn = Number(process.env.PROFILE_CALLS ?? 1);
 const argChars = Number(process.env.PROFILE_ARG_CHARS ?? 0);
 const compact = process.env.PROFILE_COMPACT === "1";
+// Act presentation of the candidate; a baseline without act settings ignores them.
+const actColors = process.env.PROFILE_ACT_COLORS ?? "off";
+const hover = process.env.PROFILE_HOVER === "1";
+const pointer = process.env.PROFILE_POINTER === "1" || hover;
 const argText = (index: number, call: number, length: number): string => {
   let text = "";
   for (let row = 0; text.length < length; row++) text += "const value" + row + " = await tools.read({ path: \"synthetic/" + index + "/" + call + "/" + row + ".ts\" });\n";
@@ -59,6 +63,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
       mode: "split", side: "left", chatWidth: Math.floor((width - 1) * 0.35),
       layout: mode === "rows" ? "rows" : "columns", chatHeight: null, zoom: null, showTimestamps: true, compactTools: compact,
+      actColors, actHover: hover, goTo: "clock",
     }));
     const manager = SessionManager.create(cwd, cwd);
     const at = Date.parse("2026-01-01T10:00:00Z");
@@ -78,7 +83,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     const runtime = { extensions, transcriptCommit, pi: execFileSync(process.env.PI_COMMAND ?? "pi", ["--version"], { encoding: "utf8" }).trim(),
       transcript: { path: transcript, sourceCommit: transcriptCommit, workingTree: transcriptGit("status", "--porcelain") },
       profileStartup: process.env.PROFILE_STARTUP === "1", profileSearch, searchPane,
-      workload: { exchanges: size, callsPerTurn, argChars, compact, toolLines, width, height, scrollbar, syntheticOnly: true },
+      workload: { exchanges: size, callsPerTurn, argChars, compact, actColors, hover, pointer, toolLines, width, height, scrollbar, syntheticOnly: true },
       provider: "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.", mode };
     await mkdir(artifact, { recursive: true });
     await writeFile(path.join(output, "runtime-" + mode + ".json"), JSON.stringify(runtime, null, 2));
@@ -87,7 +92,8 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: "", PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines),
-        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_COMPACT: compact ? "1" : "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane, PROFILE_FOCUS: process.env.PROFILE_FOCUS ?? "" },
+        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_COMPACT: compact ? "1" : "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane, PROFILE_FOCUS: process.env.PROFILE_FOCUS ?? "",
+        PROFILE_POINTER: pointer ? "1" : "0", PROFILE_HOVER: hover ? "1" : "0" },
       rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
       extensions,
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],
