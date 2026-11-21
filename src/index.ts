@@ -1,6 +1,7 @@
 import path from "node:path";
 import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type SettingItem, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { SteadySettings } from "./steady-settings.ts";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
 import { TURN_MIXES, TURN_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type TurnStripe, type GoTo, type Preferences } from "./preferences.ts";
@@ -64,7 +65,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id, label, description, currentValue: `${preferences[id]}%`,
           values: [...new Set([...TURN_MIXES, preferences[id]])].sort((a, b) => a - b).map(percent => `${percent}%`),
         });
-        const list = new SettingsList([{
+        const items: SettingItem[] = [{
           id: "timestamps", label: "Show timestamps",
           description: "Hide clock rows without changing messages or recorded tool starts.",
           currentValue: preferences.showTimestamps ? "on" : "off", values: ["on", "off"],
@@ -138,7 +139,9 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "goTo", label: "  Go to",
           description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
           currentValue: preferences.goTo, values: [...GO_TO],
-        }], 19, {
+        }];
+        const VISIBLE_SETTINGS = 19;
+        const list = new SettingsList(items, VISIBLE_SETTINGS, {
           ...listTheme,
           label: (text, selected) => {
             const label = text.trim();
@@ -172,7 +175,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           render: () => [ui.theme.fg("accent", ui.theme.bold("pi-stereo-view settings")), ""],
           invalidate() {},
         });
-        content.addChild(list);
+        content.addChild(new SteadySettings(list, items, VISIBLE_SETTINGS));
         const box = new Box(1, 1, text => ui.theme.bg("customMessageBg", text));
         box.addChild(content);
         return {
