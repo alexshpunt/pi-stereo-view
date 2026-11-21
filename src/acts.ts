@@ -23,7 +23,7 @@ const palettes = new WeakMap<Theme, { background?: RgbColor; colors: ActColor[] 
 const GUESSED_BACKGROUND = { dark: rgbColor(24, 24, 27), light: rgbColor(250, 250, 250) };
 
 /** Share of the hue in each background: a faint shift from the terminal background, never a solid block. */
-const MIX = { clock: 0.05, fill: 0.05, hover: 0.05 };
+const MIX = { clock: 0.15, fill: 0.05, hover: 0.05 };
 
 /**
  * The palette for a theme over the terminal's background. Each color mixes a hue into that background, so it stays a
