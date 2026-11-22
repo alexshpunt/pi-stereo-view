@@ -54,7 +54,7 @@ test.skipIf(!ide)("hides delayed IDE diagnostics until their tools are opened", 
       tools: ["codemode", "write", "replace", "release_linked_diagnostics"],
       conversation: [
         call("first-edit", "write", { path: "direct.note", content: "old-direct" }),
-        call("nested-edit", "codemode", { code: 'await tools.write({path:"nested.note",content:"before"}); await tools.replace({path:"nested.note",start:"before",text:"after"});' }),
+        call("nested-edit", "codemode", { code: 'await tools.write({path:"nested.note",content:"before"}); await tools.replace({path:"nested.note",at:"before",text:"after"});' }),
         call("latest-edit", "write", { path: "direct.note", content: "latest-direct" }),
         call("release", "release_linked_diagnostics", {}),
         assistantMessage([text("Reports arrived")]),
