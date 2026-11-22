@@ -227,6 +227,10 @@ test("a separator rule marks where each later turn starts, combined with other m
   expect(hovered[ruleRow]).toBe(rows[ruleRow]);
   expect(hovered[ruleRow + 1]).toContain(fill);
   expect(hovered[ruleRow + 1].startsWith(layered(2, true, true).stripe)).toBe(true);
+  // Pointing at the separator's rows highlights neither turn; the rows on either side belong to their turns.
+  state.reported.length = 0;
+  for (const row of [ruleRow - 2, ruleRow - 1, ruleRow, ruleRow + 1]) document.handleMouse(pointer("move", 5, row, 20));
+  expect(state.reported).toEqual([1, 0, 0, 2]);
 });
 
 test.each(["block", "line"] as const)("hovering a turn changes only the rows between its separators, with every mark on (%s stripe)", stripe => {

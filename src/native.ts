@@ -396,7 +396,11 @@ export class NativeDocument extends Container {
     }
     const segment = built.order[low];
     const row = event.y - (built.rows[low] ?? 0);
-    if (event.type === "move") this.turns?.hover(segment && row < segment.lines.length ? segment.turn : 0);
+    if (event.type === "move") {
+      // A separator's rows stand between turns, so pointing at them highlights neither.
+      const between = segment?.components[0] instanceof TurnRule && row < segment.heights[0];
+      this.turns?.hover(segment && row < segment.lines.length && !between ? segment.turn : 0);
+    }
     if (!segment || segment.estimate || row >= segment.lines.length) return undefined;
     const entry = {
       children: segment.components,
