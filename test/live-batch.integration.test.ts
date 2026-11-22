@@ -32,7 +32,7 @@ test.skipIf(!ide).each(["success", "rejected"])("expands a nested replace group 
     await writeFile(path.join(cwd, "b.txt"), "before-b\n");
     const session = SessionManager.create(cwd, cwd);
     session.appendMessage({ role: "user", content: "Apply both edits", timestamp: Date.now() });
-    const code = `const results = await Promise.allSettled([tools.replace({path:"a.txt",start:"before-a",text:"${outcome === "rejected" ? "GUARDED" : "AFTER-A"}"}),tools.replace({path:"b.txt",start:"before-b",text:"AFTER-B"})]); for (const result of results) text(result);`;
+    const code = `const results = await Promise.allSettled([tools.replace({path:"a.txt",at:"before-a",text:"${outcome === "rejected" ? "GUARDED" : "AFTER-A"}"}),tools.replace({path:"b.txt",at:"before-b",text:"AFTER-B"})]); for (const result of results) text(result);`;
     for (const phase of ["live", "resume"] as const) {
       const captureFile = path.join(cwd, `${phase}-capture.json`);
       const run = await new PiIntegrationTest({
