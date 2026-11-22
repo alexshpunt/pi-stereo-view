@@ -666,7 +666,8 @@ export class NativeDocument extends Container {
     // The first frame and search measure every entry; later frames reuse offscreen rows.
     const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
     const mix = this.turns?.mix();
-    const presentation = [theme, stripe, tint, separator, this.turns?.clock(), mix?.clock, mix?.stripe, mix?.background, mix?.hover,
+    const hoverColor = mix?.hoverColor && `${mix.hoverColor.r},${mix.hoverColor.g},${mix.hoverColor.b}`;
+    const presentation = [theme, stripe, tint, separator, this.turns?.clock(), mix?.clock, mix?.stripe, mix?.background, mix?.hover, hoverColor,
       display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
       this.showCopy(), this.buttonStyle(), this.turns?.goTo(), this.timestampGutter(), this.invalidations];
     if (!sameValues(presentation, this.presentation)) {

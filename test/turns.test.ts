@@ -143,6 +143,25 @@ test("layers add up, so every mark stays visible over the layers under it", () =
   expect(clock(turnColor(theme, 1, terminal, { clock: 90, stripe: 30, background: 60, hover: 60 }, { background: true, hover: true })!)).toBeCloseTo(100, -0.5);
 });
 
+test("a one-color hover tints every turn alike, and the marks on top keep their turn's hue", () => {
+  const terminal = { r: 30, g: 30, b: 46 };
+  const gray = { r: 128, g: 128, b: 128 };
+  const mix = { ...DEFAULT_MIX, hover: 20, hoverColor: gray };
+  const hovered = (turn: number, background = false) => turnColor(theme, turn, terminal, mix, { background, hover: true })!;
+  // Without a turn background, the hovered block's fill is the same for every turn: 20% of the way to gray.
+  expect(hovered(1).fill).toBe(hovered(2).fill);
+  expect(hovered(1).fill).toBe(backgroundAnsi(rgbColor(50, 50, 62), "truecolor"));
+  // Clocks and stripes add their turn's hue on top, so they still tell turns apart.
+  expect(hovered(1).clock).not.toEqual(hovered(2).clock);
+  expect(hovered(1).stripe).not.toBe(hovered(2).stripe);
+  // Over turn backgrounds, the gray layer adds on top of each turn's own background.
+  expect(hovered(1, true).fill).not.toBe(hovered(1).fill);
+  expect(hovered(1, true).fill).not.toBe(hovered(2, true).fill);
+  // Each turn's hue stays the default: the same colors as without a hover color.
+  expect(turnColor(theme, 1, terminal, mix, { background: true, hover: false })!.fill)
+    .toBe(turnColor(theme, 1, terminal, { ...mix, hoverColor: undefined }, { background: true, hover: false })!.fill);
+});
+
 test("hover is unavailable in terminal multiplexers and without Pi's mouse support", () => {
   expect(pointerMotionAvailable(undefined, { TERM: "xterm-256color" })).toBe(true);
   for (const env of [{ TMUX: "/tmp/tmux" }, { ZELLIJ: "0" }, { STY: "1.pts" }, { TERM: "screen-256color" }, { TERM: "tmux-256color" }]) {

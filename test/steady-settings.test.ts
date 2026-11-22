@@ -1,6 +1,7 @@
 import { SettingsList, type SettingItem } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { SteadySettings } from "../src/steady-settings.ts";
+import { HexInput } from "../src/hex-input.ts";
 
 const plain = (text: string): string => text;
 const theme = { label: plain, value: plain, description: plain, cursor: "→ ", hint: plain };
@@ -53,4 +54,33 @@ test("left and right step the selected value around in both directions, and up a
   steady.handleInput(RIGHT);
   expect(changes).toHaveLength(4);
   expect(steady.render(40)[1]).toContain("→ Header");
+});
+
+test("a hex color submenu takes a typed color, rejects an invalid one and keeps the list's height", () => {
+  const items: SettingItem[] = [
+    { id: "color", label: "Hover color", description: "One line.", currentValue: "turn", values: ["turn", "#808080"],
+      submenu: (current, done) => new HexInput(current, { title: text => text, hint: text => text, error: text => text }, done) },
+  ];
+  const changes: string[] = [];
+  const list = new SettingsList(items, 10, theme, (id, value) => changes.push(id + "=" + value), () => {});
+  const steady = new SteadySettings(list, items, 10, (id, value) => changes.push(id + "=" + value));
+  const height = steady.render(40).length;
+  steady.handleInput("\r");
+  // The input starts with "#"; Left moves its cursor instead of changing the setting.
+  expect(steady.render(40).join("\n")).toContain("Hover color");
+  expect(steady.render(40)).toHaveLength(height);
+  for (const key of "zz") steady.handleInput(key);
+  steady.handleInput("\r");
+  expect(steady.render(40).join("\n")).toContain("Enter a color as #rrggbb");
+  for (let index = 0; index < 2; index++) steady.handleInput("\x7f");
+  for (const key of "3B82F6") steady.handleInput(key);
+  steady.handleInput("\x1b[D");
+  expect(changes).toEqual([]);
+  // A typed color opens with that color in the input, ready to edit.
+  expect(new HexInput("#a855f7", { title: text => text, hint: text => text, error: text => text }, () => {}).render(40)[1]).toContain("#a855f7");
+  steady.handleInput("\r");
+  expect(changes).toEqual(["color=#3b82f6"]);
+  expect(items[0].currentValue).toBe("#3b82f6");
+  expect(HexInput.normalize("ABCDEF")).toBe("#abcdef");
+  expect(HexInput.normalize("#abcde")).toBeUndefined();
 });

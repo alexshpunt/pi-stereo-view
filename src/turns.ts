@@ -1,5 +1,5 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { backgroundAnsi, colorToOkhsl, foregroundAnsi, mixColors, okhslColor, rgbColor, type Color, type RgbColor, type TUI } from "@earendil-works/pi-tui";
+import { backgroundAnsi, colorToOkhsl, colorToRgb, foregroundAnsi, okhslColor, rgbColor, type Color, type RgbColor, type TUI } from "@earendil-works/pi-tui";
 
 /** Hues of the turn palette; consecutive turns step by a stride coprime with it, so neighbours differ strongly. */
 const HUES = 16;
@@ -29,12 +29,14 @@ export interface TurnLayers {
 
 const NO_LAYERS: TurnLayers = { background: false, hover: false };
 
-/** Percent of the turn hue each layer adds on top of the layers below it. */
+/** Percent of its color each layer adds on top of the layers below it. */
 export interface TurnMix {
   clock: number;
   stripe: number;
   background: number;
   hover: number;
+  /** The hover layer's color: the turn's own hue, or one color for every turn. */
+  hoverColor?: RgbColor;
 }
 
 /** Default mixes, as the settings default to. */
@@ -42,20 +44,36 @@ export const DEFAULT_MIX: TurnMix = { clock: 10, stripe: 8, background: 5, hover
 
 const palettes = new WeakMap<Theme, { background?: RgbColor; mix: TurnMix; colors: Map<string, TurnColor[]> }>();
 
+const sameRgb = (a: RgbColor | undefined, b: RgbColor | undefined): boolean =>
+  a === b || (a !== undefined && b !== undefined && a.r === b.r && a.g === b.g && a.b === b.b);
+
 /** Common dark and light terminal backgrounds, for a terminal that does not report its own. */
 const GUESSED_BACKGROUND = { dark: rgbColor(24, 24, 27), light: rgbColor(250, 250, 250) };
 
 /**
- * The palette for a theme over the terminal's background. Layers are additive: a mark's color mixes the hue into the
- * terminal background by the sum of its own share and the shares of the layers under it, capped at the full hue, so
- * every layer stays visible over the ones below. Without a reported background, the theme's appearance picks a guess.
+ * The terminal background moved toward each layer's color by that layer's share. Layers add up: in one color, the
+ * shares sum; together they never pass the full colors, so the result stays between the background and them.
+ */
+function layered(base: RgbColor, parts: readonly { color: RgbColor; share: number }[]): Color {
+  const total = parts.reduce((sum, part) => sum + part.share, 0);
+  const scale = total > 1 ? 1 / total : 1;
+  const channel = (key: "r" | "g" | "b"): number => Math.round(Math.min(255, Math.max(0,
+    base[key] + parts.reduce((sum, part) => sum + part.share * scale * (part.color[key] - base[key]), 0))));
+  return rgbColor(channel("r"), channel("g"), channel("b"));
+}
+
+/**
+ * The palette for a theme over the terminal's background. Layers are additive: a mark's color moves the terminal
+ * background toward each layer under it and then toward its own color, by each layer's share, so every layer stays
+ * visible over the ones below. In one hue the shares simply sum, capped at the full hue. Without a reported
+ * background, the theme's appearance picks a guess.
  */
 export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix: TurnMix = DEFAULT_MIX,
   layers: TurnLayers = NO_LAYERS): TurnColor | undefined {
   if (turn <= 0) return undefined;
   let palette = palettes.get(theme);
   if (!palette || palette.background !== background || palette.mix.clock !== mix.clock || palette.mix.stripe !== mix.stripe ||
-    palette.mix.background !== mix.background || palette.mix.hover !== mix.hover) {
+    palette.mix.background !== mix.background || palette.mix.hover !== mix.hover || !sameRgb(palette.mix.hoverColor, mix.hoverColor)) {
     palette = { background, mix: { ...mix }, colors: new Map() };
     palettes.set(theme, palette);
   }
@@ -64,17 +82,22 @@ export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix
   if (!colors) {
     const appearance = Reflect.get(theme, "appearance") === "light" ? "light" : "dark";
     const base: Color = background ? rgbColor(background.r, background.g, background.b) : GUESSED_BACKGROUND[appearance];
+    const baseRgb = colorToRgb(base);
     const dark = colorToOkhsl(base).l < 0.5;
     const mode = theme.getColorMode();
     const share = (percent: number): number => Math.min(100, Math.max(0, percent)) / 100;
-    const under = (layers.background ? mix.background : 0) + (layers.hover ? mix.hover : 0);
     colors = [];
     for (let index = 0; index < HUES; index++) {
-      const hue = okhslColor((index * 360) / HUES + 15, 0.85, dark ? 0.62 : 0.55);
-      const stripe = mixColors(base, hue, share(under + mix.stripe), "srgb");
+      const hue = colorToRgb(okhslColor((index * 360) / HUES + 15, 0.85, dark ? 0.62 : 0.55));
+      const hover = mix.hoverColor ?? hue;
+      const under = [
+        ...(layers.background ? [{ color: hue, share: share(mix.background) }] : []),
+        ...(layers.hover ? [{ color: hover, share: share(mix.hover) }] : []),
+      ];
+      const stripe = layered(baseRgb, [...under, { color: hue, share: share(mix.stripe) }]);
       colors.push({
-        clock: mixColors(base, hue, share(under + mix.clock), "srgb"),
-        fill: under > 0 ? backgroundAnsi(mixColors(base, hue, share(under), "srgb"), mode) : undefined,
+        clock: layered(baseRgb, [...under, { color: hue, share: share(mix.clock) }]),
+        fill: under.length ? backgroundAnsi(layered(baseRgb, under), mode) : undefined,
         stripe: backgroundAnsi(stripe, mode),
         line: foregroundAnsi(stripe, mode),
       });
@@ -82,6 +105,12 @@ export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix
     palette.colors.set(key, colors);
   }
   return colors[((turn - 1) * STRIDE) % HUES];
+}
+
+/** A `#rrggbb` color, or undefined for anything else. */
+export function parseHex(value: string): RgbColor | undefined {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(value.trim());
+  return match ? { r: parseInt(match[1], 16), g: parseInt(match[2], 16), b: parseInt(match[3], 16) } : undefined;
 }
 
 /** SGR parameters that take arguments: extended foreground, background and underline colors. */

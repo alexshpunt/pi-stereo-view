@@ -1,10 +1,12 @@
 import path from "node:path";
 import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type SettingItem, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { backgroundAnsi, Box, Container, isKeyRelease, matchesKey, rgbColor, SettingsList, Text, type OverlayHandle, type SettingItem, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { SteadySettings } from "./steady-settings.ts";
+import { HexInput } from "./hex-input.ts";
+import { parseHex } from "./turns.ts";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
-import { TURN_MIXES, TURN_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type TurnStripe, type GoTo, type Preferences } from "./preferences.ts";
+import { HOVER_COLORS, TURN_MIXES, TURN_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type TurnStripe, type GoTo, type Preferences } from "./preferences.ts";
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -59,12 +61,15 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const hoverAvailable = layout?.hoverAvailable() ?? false;
         const HOVER_LABEL = "  Highlight on hover";
         const TURNS_HEADER = "Turns";
+        const SETTINGS_BACKGROUND = "customMessageBg";
         const listTheme = getSettingsListTheme();
         // A saved mix outside the offered steps stays selectable until another is chosen.
         const mixSetting = (id: "turnClockMix" | "turnStripeMix" | "turnBackgroundMix" | "turnHoverMix", label: string, description: string) => ({
           id, label, description, currentValue: `${preferences[id]}%`,
           values: [...new Set([...TURN_MIXES, preferences[id]])].sort((a, b) => a - b).map(percent => `${percent}%`),
         });
+        // A typed hover color joins the presets, so the arrows can step to and from it.
+        const hoverColors = (current: string): string[] => ["turn", ...new Set([...HOVER_COLORS, ...(current === "turn" ? [] : [current])])];
         const items: SettingItem[] = [{
           id: "timestamps", label: "Show timestamps",
           description: "Hide clock rows without changing messages or recorded tool starts.",
@@ -135,19 +140,31 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           currentValue: hoverAvailable ? (preferences.turnHover ? "on" : "off") : "unavailable",
           values: hoverAvailable ? ["on", "off"] : ["unavailable"],
         }, {
-          ...mixSetting("turnHoverMix", "  Hover color strength",
-            "How strongly the turn's color tints the background of every block of the turn under the pointer, in place of its background color."),
+          ...mixSetting("turnHoverMix", "  Hover color strength", "How strongly the hover color tints every block of the turn under the pointer."),
+        }, {
+          id: "turnHoverColor", label: "  Hover color",
+          description: "turn highlights each turn in its own color; a #rrggbb color highlights every turn in that one color. ←/→ pick a preset; Enter types any color.",
+          currentValue: preferences.turnHoverColor, values: hoverColors(preferences.turnHoverColor),
+          submenu: (current, done) => new HexInput(current, {
+            title: text => ui.theme.bold(ui.theme.fg("accent", text)),
+            hint: text => ui.theme.fg("dim", text),
+            error: text => ui.theme.fg("error", text),
+          }, done),
         }, {
           id: "goTo", label: "  Go to",
           description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
           currentValue: preferences.goTo, values: [...GO_TO],
         }];
-        const VISIBLE_SETTINGS = 20;
+        const VISIBLE_SETTINGS = 21;
         const apply = (id: string, value: string): void => {
           if (id === "turns" || id === "turnClock" || id === "turnBackground" || id === "turnSeparator") layout?.setTurnMark(id, value === "on");
           else if (id === "turnStripe") layout?.setTurnMark("turnStripe", value as TurnStripe);
           else if (id === "turnClockMix" || id === "turnStripeMix" || id === "turnBackgroundMix" || id === "turnHoverMix") {
             layout?.setTurnMark(id, Number.parseInt(value, 10));
+          } else if (id === "turnHoverColor") {
+            layout?.setTurnMark(id, value);
+            const item = items.find(entry => entry.id === id);
+            if (item) item.values = hoverColors(value);
           }
           else if (id === "turnHover") { if (value !== "unavailable") layout?.setTurnHover(value === "on"); }
           else if (id === "goTo") layout?.setGoTo(value as GoTo);
@@ -173,7 +190,16 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
             if (!hoverAvailable && label === HOVER_LABEL.trim()) return ui.theme.fg("dim", text);
             return listTheme.label(text, selected);
           },
-          value: (text, selected) => text === "unavailable" ? ui.theme.fg("dim", text) : listTheme.value(text, selected),
+          value: (text, selected) => {
+            if (text === "unavailable") return ui.theme.fg("dim", text);
+            // A hover color shows a swatch of itself.
+            const color = parseHex(text);
+            if (!color) return listTheme.value(text, selected);
+            // The swatch's own background ends at the swatch; the panel's background resumes after it, with no reset
+            // that would end the panel's background for the rest of the row.
+            return backgroundAnsi(rgbColor(color.r, color.g, color.b), ui.theme.getColorMode()) + "  " +
+              ui.theme.getBgAnsi(SETTINGS_BACKGROUND) + " " + listTheme.value(text, selected);
+          },
         }, apply, () => done());
         const steady = new SteadySettings(list, items, VISIBLE_SETTINGS, apply);
         const content = new Container();
@@ -182,7 +208,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           invalidate() {},
         });
         content.addChild(steady);
-        const box = new Box(1, 1, text => ui.theme.bg("customMessageBg", text));
+        const box = new Box(1, 1, text => ui.theme.bg(SETTINGS_BACKGROUND, text));
         box.addChild(content);
         return {
           render: (width: number) => box.render(width),

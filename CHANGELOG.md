@@ -6,7 +6,7 @@
 
 - Turn colors, hover highlighting and Go to make it easy to see what the agent did for each request (#104). A turn is a message you or an extension sent plus all the work that followed it. They are off by default: set **Turns** to `on` in Stereo View settings.
   - Each turn gets its own color in both panels, shown in any combination of **Clock color**, **Stripe** (a colored `block` or a thin `line`), **Background** and **Separator**, a colored line where each turn begins. Strength settings for clocks, stripes, backgrounds and hover set how strongly each shows, and `←`/`→` step through settings values. Tool cards and messages keep their own backgrounds.
-  - **Highlight on hover** highlights the turn under the pointer in both panels. It is shown as unavailable inside tmux, zellij and screen, where Pi does not receive pointer movement.
+  - **Highlight on hover** highlights the turn under the pointer in both panels, in the turn's own color or one **Hover color** for every turn. It is shown as unavailable inside tmux, zellij and screen, where Pi does not receive pointer movement.
   - **Go to** opens the same moment in the other panel from a block's clock or a `[Go to]` / `[ ⇄ ]` button beside Copy.
   Thanks to [@alejandro5042](https://github.com/alejandro5042) for the idea.
 

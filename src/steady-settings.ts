@@ -25,9 +25,14 @@ export class SteadySettings implements Component {
   ) {}
 
   render(width: number): string[] {
-    const lines = this.list.render(width).map(line => line.replace(PI_HINT, ARROW_HINT));
     const rows = this.rows(width);
-    // A submenu, or a list taller than measured, renders as it is.
+    // A submenu, such as a color input, keeps the list's height too: blank rows follow it.
+    if (this.submenuOpen()) {
+      const lines = this.list.render(width);
+      return lines.length >= rows ? lines : [...lines, ...Array<string>(rows - lines.length).fill("")];
+    }
+    const lines = this.list.render(width).map(line => line.replace(PI_HINT, ARROW_HINT));
+    // A list taller than measured renders as it is.
     if (lines.length >= rows) return lines;
     const cut = Math.max(0, lines.length - HINT_ROWS);
     return [...lines.slice(0, cut), ...Array<string>(rows - lines.length).fill(""), ...lines.slice(cut)];
@@ -44,9 +49,15 @@ export class SteadySettings implements Component {
     return rows;
   }
 
+  /** Pi's list keeps an open submenu in a plain field. */
+  private submenuOpen(): boolean {
+    return Reflect.get(this.list, "submenuComponent") != null;
+  }
+
   handleInput(data: string): void {
     const step = matchesKey(data, "left") ? -1 : matchesKey(data, "right") ? 1 : 0;
-    if (!step) {
+    // In a submenu, such as a text input, the arrows move its cursor.
+    if (!step || this.submenuOpen()) {
       this.list.handleInput(data);
       return;
     }

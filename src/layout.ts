@@ -5,7 +5,7 @@ import {
   type Color, type Component, type RgbColor, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type DocumentTurns, type Pane } from "./native.ts";
-import { turnColor, pointerMotionAvailable, type TurnMix } from "./turns.ts";
+import { parseHex, turnColor, pointerMotionAvailable, type TurnMix } from "./turns.ts";
 import { NativeContentIndex } from "./content.ts";
 import { NestedCalls } from "./nested-calls.ts";
 import type { TurnMarkSetting, Preferences } from "./preferences.ts";
@@ -896,8 +896,9 @@ export class TranscriptLayout {
 
   /** The turn marks' mix strengths, as the palette reads them. */
   private turnMix(): TurnMix {
-    const { turnClockMix: clock, turnStripeMix: stripe, turnBackgroundMix: background, turnHoverMix: hover } = this.preferences;
-    return { clock, stripe, background, hover };
+    const { turnClockMix: clock, turnStripeMix: stripe, turnBackgroundMix: background, turnHoverMix: hover, turnHoverColor } = this.preferences;
+    // One hover color for every turn, or each turn's own hue.
+    return { clock, stripe, background, hover, hoverColor: parseHex(turnHoverColor) };
   }
 
   /** Turn the whole turn feature on or off, or change one of its marks or strengths. */
