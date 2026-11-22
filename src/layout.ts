@@ -385,7 +385,7 @@ export class TranscriptLayout {
       background: () => on() && this.preferences.turnBackground,
       separator: () => on() && this.preferences.turnSeparator,
       mix: () => this.turnMix(),
-      color: turn => turnColor(this.theme(), turn, this.terminalBackground, this.turnMix()),
+      color: (turn, layers) => turnColor(this.theme(), turn, this.terminalBackground, this.turnMix(), layers),
       hovered: () => this.hoverEnabled() ? this.hoverAct : undefined,
       hover: turn => { if (this.moving) this.moving.turn = turn; },
       goTo: () => on() ? this.preferences.goTo : "off",

@@ -101,37 +101,46 @@ test("tinting keeps native backgrounds, restores the turn color after every rese
   expect(decorateLines(rows, BG)).toEqual([BG + "a", BG + "changed"]);
 });
 
+/** A turn's colors with the given layers under its marks, at the default mix. */
+const layered = (turn: number, background: boolean, hover: boolean, terminal?: { r: number; g: number; b: number }) =>
+  turnColor(theme, turn, terminal, DEFAULT_MIX, { background, hover })!;
+
 test("neighbouring turns get different colors and blocks before the first turn get none", () => {
   expect(turnColor(theme, 0)).toBeUndefined();
-  const colors = Array.from({ length: 16 }, (_, turn) => turnColor(theme, turn + 1)!.fill);
+  const colors = Array.from({ length: 16 }, (_, turn) => layered(turn + 1, true, false).fill);
   expect(new Set(colors).size).toBe(16);
   expect(turnColor(theme, 17)).toBe(turnColor(theme, 1));
+  // Without a background or hover layer, a block keeps the terminal background.
+  expect(turnColor(theme, 1)!.fill).toBeUndefined();
 });
 
-test("default turn backgrounds stay a faint shift from the terminal background", () => {
-  const terminal = { r: 30, g: 30, b: 46 };
-  const channels = (ansi: string): number[] => ansi.match(/48;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
-  for (let turn = 1; turn <= 16; turn++) {
-    const color = turnColor(theme, turn, terminal)!;
-    // By default backgrounds take 8% of the way from the background to a full hue, hover and clocks 15%.
-    for (const [ansi, limit] of [[color.fill, 21], [color.hover, 39], [backgroundAnsi(color.clock, "truecolor"), 39]] as const) {
-      const shift = Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
-      expect(shift, ansi).toBeLessThanOrEqual(limit);
-      expect(shift, ansi).toBeGreaterThan(0);
-    }
-  }
-});
-
-test("each mark mixes its own share of the turn hue, and a new mix rebuilds the palette", () => {
+test("layers add up, so every mark stays visible over the layers under it", () => {
   const terminal = { r: 30, g: 30, b: 46 };
   const channels = (ansi: string): number[] => ansi.match(/[34]8;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
-  const shift = (ansi: string): number => Math.max(...channels(ansi).map((value, index) => Math.abs(value - [30, 30, 46][index])));
+  // How far a color has moved from the terminal background toward the turn's hue, as a share of the full hue.
   const full = turnColor(theme, 1, terminal, { clock: 100, stripe: 100, background: 100, hover: 100 })!;
-  const half = turnColor(theme, 1, terminal, { clock: 50, stripe: 50, background: 20, hover: 40 })!;
-  expect(shift(half.line)).toBeCloseTo(shift(full.line) / 2, -1);
-  expect(shift(backgroundAnsi(half.clock, "truecolor"))).toBeCloseTo(shift(full.fill) / 2, -1);
-  expect(shift(half.fill)).toBeCloseTo(shift(full.fill) / 5, -1);
-  expect(shift(half.hover)).toBeCloseTo(shift(full.hover) * 2 / 5, -1);
+  const reach = (ansi: string): number => {
+    const [r, g, b] = channels(ansi);
+    const [fr, fg, fb] = channels(backgroundAnsi(full.clock, "truecolor"));
+    const axis = [fr - 30, fg - 30, fb - 46];
+    const length = axis.reduce((sum, value) => sum + value * value, 0);
+    return ([r - 30, g - 30, b - 46].reduce((sum, value, index) => sum + value * axis[index], 0) / length) * 100;
+  };
+  const clock = (color: ReturnType<typeof layered>): number => reach(backgroundAnsi(color.clock, "truecolor"));
+  // Defaults: background 8%, hover 15%, clock 15%, stripe 30%.
+  expect(reach(layered(1, true, false, terminal).fill!)).toBeCloseTo(8, -0.5);
+  expect(reach(layered(1, false, true, terminal).fill!)).toBeCloseTo(15, -0.5);
+  expect(reach(layered(1, true, true, terminal).fill!)).toBeCloseTo(23, -0.5);
+  expect(clock(layered(1, false, false, terminal))).toBeCloseTo(15, -0.5);
+  expect(clock(layered(1, true, false, terminal))).toBeCloseTo(23, -0.5);
+  expect(clock(layered(1, true, true, terminal))).toBeCloseTo(38, -0.5);
+  expect(reach(layered(1, true, true, terminal).stripe)).toBeCloseTo(53, -0.5);
+  expect(reach(layered(1, true, true, terminal).line)).toBeCloseTo(53, -0.5);
+  // A clock with the same share as the block under it is still darker than that block, never the same color.
+  const even = turnColor(theme, 1, terminal, { clock: 15, stripe: 15, background: 15, hover: 15 }, { background: true, hover: true })!;
+  expect(backgroundAnsi(even.clock, "truecolor")).not.toBe(even.fill);
+  // Shares past the full hue stop there.
+  expect(clock(turnColor(theme, 1, terminal, { clock: 90, stripe: 30, background: 60, hover: 60 }, { background: true, hover: true })!)).toBeCloseTo(100, -0.5);
 });
 
 test("hover is unavailable in terminal multiplexers and without Pi's mouse support", () => {
@@ -158,7 +167,7 @@ function documentWith(pane: "chat" | "activity", marks: Partial<Marks>, goTo: Go
   const turns: DocumentTurns = {
     clock: () => state.marks.clock, stripe: () => state.marks.stripe, background: () => state.marks.background, separator: () => state.marks.separator,
     mix: () => DEFAULT_MIX,
-    color: turn => turnColor(theme, turn), hovered: () => state.hovered, hover: turn => state.reported.push(turn),
+    color: (turn, layers) => turnColor(theme, turn, undefined, DEFAULT_MIX, layers), hovered: () => state.hovered, hover: turn => state.reported.push(turn),
     goTo: () => state.goTo, jump: (_from, block) => state.jumps.push(block),
   };
   const document = new NativeDocument(source, pane, timestamps, () => theme, () => 0, () => false, () => {}, true, index,
@@ -204,8 +213,9 @@ test("a separator rule marks where each later turn starts, combined with other m
   document.beginFrame();
   const rows = document.render(20);
   const rule = rows.find(row => stripTerminalSequences(row).endsWith("─".repeat(19)))!;
-  expect(rule.startsWith(turnColor(theme, 2)!.stripe)).toBe(true);
-  expect(rule).toContain(turnColor(theme, 2)!.line);
+  // Stripe and rule sit on the turn's background layer.
+  expect(rule.startsWith(layered(2, true, false).stripe)).toBe(true);
+  expect(rule).toContain(layered(2, true, false).line);
 });
 
 test("turn backgrounds tint default cells of each turn and hover tints the turn under the pointer", () => {
@@ -218,23 +228,40 @@ test("turn backgrounds tint default cells of each turn and hover tints the turn 
   state.hovered = 1;
   document.beginFrame();
   const hovered = document.render(30);
-  // Hover tints the turn under the pointer with its own strength, with or without turn backgrounds.
-  expect(hovered[0].startsWith(turnColor(theme, 1)!.hover)).toBe(true);
-  expect(hovered.at(-1)!.includes(turnColor(theme, 2)!.hover)).toBe(false);
+  // Without turn backgrounds, the hovered turn gets the hover layer alone.
+  expect(hovered[0].startsWith(layered(1, false, true).fill!)).toBe(true);
+  expect(hovered.at(-1)!.includes("\x1b[48;2;")).toBe(false);
   state.hovered = undefined;
   state.marks = { ...state.marks, background: true };
   document.beginFrame();
   const filled = document.render(30);
-  expect(filled[0].startsWith(turnColor(theme, 1)!.fill)).toBe(true);
-  expect(filled.at(-1)!.startsWith(turnColor(theme, 2)!.fill)).toBe(true);
-  // Over turn backgrounds, the hovered turn takes the hover tint in place of its background.
+  expect(filled[0].startsWith(layered(1, true, false).fill!)).toBe(true);
+  expect(filled.at(-1)!.startsWith(layered(2, true, false).fill!)).toBe(true);
+  // Over turn backgrounds, hover adds its layer on top of the background layer.
   state.hovered = 2;
   document.beginFrame();
   const both = document.render(30);
-  expect(both[0].startsWith(turnColor(theme, 1)!.fill)).toBe(true);
-  expect(both.at(-1)!.startsWith(turnColor(theme, 2)!.hover)).toBe(true);
+  expect(both[0].startsWith(layered(1, true, false).fill!)).toBe(true);
+  expect(both.at(-1)!.startsWith(layered(2, true, true).fill!)).toBe(true);
   document.handleMouse(pointer("move", 2, 99, 30));
   expect(state.reported.at(-1)).toBe(0);
+});
+
+test("a clock takes its color over the layers of its block: the turn background and hover", () => {
+  const { document, state, first, second } = documentWith("chat", { clock: true, background: true });
+  const asked: { turn: number; background: boolean; hover: boolean }[] = [];
+  const color = Reflect.get(document, "turns") as DocumentTurns;
+  const original = color.color;
+  color.color = (turn, layers) => { if (layers) asked.push({ turn, ...layers }); return original(turn, layers); };
+  state.hovered = 2;
+  document.beginFrame();
+  document.render(30);
+  const clockBackground = Reflect.get(document, "clockBackground") as (source: Component) => unknown;
+  // The clocks of each turn are asked with that turn's layers.
+  asked.length = 0;
+  clockBackground.call(document, first);
+  clockBackground.call(document, second);
+  expect(asked).toEqual([{ turn: 1, background: true, hover: false }, { turn: 2, background: true, hover: true }]);
 });
 
 test("a timed block opens the other panel from its clock or its Go to button", () => {

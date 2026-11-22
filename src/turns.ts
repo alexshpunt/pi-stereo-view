@@ -5,21 +5,31 @@ import { backgroundAnsi, colorToOkhsl, foregroundAnsi, mixColors, okhslColor, rg
 const HUES = 16;
 const STRIDE = 7;
 
-/** Colors of one turn for each mark; `undefined` for blocks before the first turn. */
+/**
+ * Colors of one turn for each mark, layered over what lies beneath it; `undefined` for blocks before the first turn.
+ * Layers stack from the terminal background up: the turn background, then hover, then stripes, lines and clocks.
+ * Each layer adds its share of the turn's hue to the layers below, so a clock stays darker than a hovered block.
+ */
 export interface TurnColor {
-  /** Background of the block's clock. */
+  /** Background of the block's clock, on top of the block's layers. */
   clock: Color;
-  /** Background of default cells when turn backgrounds are on. */
-  fill: string;
-  /** Background of default cells while the turn is under the pointer. */
-  hover: string;
-  /** Background of the one-cell block stripe on the left. */
+  /** Background of default cells: the turn background and hover layers; none when neither applies. */
+  fill?: string;
+  /** Background of the one-cell block stripe on the left, on top of the block's layers. */
   stripe: string;
-  /** Foreground of the line stripe and the separator rule. */
+  /** Foreground of the line stripe and the separator rule, on top of the block's layers. */
   line: string;
 }
 
-/** Percent of the turn hue mixed into the terminal background for each mark. */
+/** Which layers lie under a block's marks: the turn background, and hover while the turn is under the pointer. */
+export interface TurnLayers {
+  background: boolean;
+  hover: boolean;
+}
+
+const NO_LAYERS: TurnLayers = { background: false, hover: false };
+
+/** Percent of the turn hue each layer adds on top of the layers below it. */
 export interface TurnMix {
   clock: number;
   stripe: number;
@@ -30,42 +40,48 @@ export interface TurnMix {
 /** Default mixes, as the settings default to. */
 export const DEFAULT_MIX: TurnMix = { clock: 15, stripe: 30, background: 8, hover: 15 };
 
-const palettes = new WeakMap<Theme, { background?: RgbColor; mix: TurnMix; colors: TurnColor[] }>();
+const palettes = new WeakMap<Theme, { background?: RgbColor; mix: TurnMix; colors: Map<string, TurnColor[]> }>();
 
 /** Common dark and light terminal backgrounds, for a terminal that does not report its own. */
 const GUESSED_BACKGROUND = { dark: rgbColor(24, 24, 27), light: rgbColor(250, 250, 250) };
 
 /**
- * The palette for a theme over the terminal's background. Each color mixes a hue into that background by the mark's
- * percentage, so it stays a tint on dark and light terminals alike. Without a reported background, the theme's
- * appearance picks a guess.
+ * The palette for a theme over the terminal's background. Layers are additive: a mark's color mixes the hue into the
+ * terminal background by the sum of its own share and the shares of the layers under it, capped at the full hue, so
+ * every layer stays visible over the ones below. Without a reported background, the theme's appearance picks a guess.
  */
-export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix: TurnMix = DEFAULT_MIX): TurnColor | undefined {
+export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix: TurnMix = DEFAULT_MIX,
+  layers: TurnLayers = NO_LAYERS): TurnColor | undefined {
   if (turn <= 0) return undefined;
   let palette = palettes.get(theme);
   if (!palette || palette.background !== background || palette.mix.clock !== mix.clock || palette.mix.stripe !== mix.stripe ||
     palette.mix.background !== mix.background || palette.mix.hover !== mix.hover) {
+    palette = { background, mix: { ...mix }, colors: new Map() };
+    palettes.set(theme, palette);
+  }
+  const key = (layers.background ? "b" : "") + (layers.hover ? "h" : "");
+  let colors = palette.colors.get(key);
+  if (!colors) {
     const appearance = Reflect.get(theme, "appearance") === "light" ? "light" : "dark";
     const base: Color = background ? rgbColor(background.r, background.g, background.b) : GUESSED_BACKGROUND[appearance];
     const dark = colorToOkhsl(base).l < 0.5;
     const mode = theme.getColorMode();
     const share = (percent: number): number => Math.min(100, Math.max(0, percent)) / 100;
-    const colors: TurnColor[] = [];
+    const under = (layers.background ? mix.background : 0) + (layers.hover ? mix.hover : 0);
+    colors = [];
     for (let index = 0; index < HUES; index++) {
       const hue = okhslColor((index * 360) / HUES + 15, 0.85, dark ? 0.62 : 0.55);
-      const stripe = mixColors(base, hue, share(mix.stripe), "srgb");
+      const stripe = mixColors(base, hue, share(under + mix.stripe), "srgb");
       colors.push({
-        clock: mixColors(base, hue, share(mix.clock), "srgb"),
-        fill: backgroundAnsi(mixColors(base, hue, share(mix.background), "srgb"), mode),
-        hover: backgroundAnsi(mixColors(base, hue, share(mix.hover), "srgb"), mode),
+        clock: mixColors(base, hue, share(under + mix.clock), "srgb"),
+        fill: under > 0 ? backgroundAnsi(mixColors(base, hue, share(under), "srgb"), mode) : undefined,
         stripe: backgroundAnsi(stripe, mode),
         line: foregroundAnsi(stripe, mode),
       });
     }
-    palette = { background, mix: { ...mix }, colors };
-    palettes.set(theme, palette);
+    palette.colors.set(key, colors);
   }
-  return palette.colors[((turn - 1) * STRIDE) % HUES];
+  return colors[((turn - 1) * STRIDE) % HUES];
 }
 
 /** SGR parameters that take arguments: extended foreground, background and underline colors. */

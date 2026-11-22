@@ -11,7 +11,7 @@ import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.ts";
 import { ToolIndent } from "./tool-indent.ts";
 import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
 import { pushShellInputs, sameValues } from "./render-cache.ts";
-import { decorateLines, type TurnColor, type TurnMix } from "./turns.ts";
+import { decorateLines, type TurnColor, type TurnLayers, type TurnMix } from "./turns.ts";
 import type { TurnStripe, GoTo } from "./preferences.ts";
 export type { Pane } from "./content.ts";
 
@@ -27,7 +27,7 @@ export interface DocumentTurns {
   /** How strongly each mark mixes its turn's hue into the background. */
   mix(): TurnMix;
   /** The colors of a turn, mixed into the terminal background; none before the first turn. */
-  color(turn: number): TurnColor | undefined;
+  color(turn: number, layers?: TurnLayers): TurnColor | undefined;
   /** The turn under the pointer, while hover highlighting is on and available. */
   hovered(): number | undefined;
   /** Report the turn under the pointer during a pointer move; 0 for a block before the first turn. */
@@ -409,7 +409,13 @@ export class NativeDocument extends Container {
    * read are current; reading the index per block would verify the whole history per block outside a frame.
    */
   private clockBackground(source: Component): Color | undefined {
-    return this.turns?.clock() ? this.turns.color(this.renderActs?.get(source) ?? 0)?.clock : undefined;
+    if (!this.turns?.clock()) return undefined;
+    const turn = this.renderActs?.get(source) ?? 0;
+    return this.turns.color(turn, this.layers(turn))?.clock;
+  }
+  /** The layers under a turn's clocks, stripes and rules in this frame: its background, and hover while pointed at. */
+  private layers(turn: number): TurnLayers {
+    return { background: this.turns?.background() === true, hover: turn > 0 && this.turns?.hovered() === turn };
   }
   private goToClock(): boolean {
     const goTo = this.turns?.goTo();
@@ -682,7 +688,7 @@ export class NativeDocument extends Container {
       const toolRunIn = toolRun;
       if (rule) {
         let turnRule = this.rules.get(turn);
-        if (!turnRule) this.rules.set(turn, turnRule = new TurnRule(() => this.turns?.color(turn)?.line));
+        if (!turnRule) this.rules.set(turn, turnRule = new TurnRule(() => this.turns?.color(turn, this.layers(turn))?.line));
         result.push(turnRule);
         // The block below keeps its own blank row, so the rule stands between two blank rows.
         toolRun = false;
@@ -765,9 +771,10 @@ export class NativeDocument extends Container {
       const heights: number[] = [];
       // Copy rows: native renderers may reuse and later mutate their row arrays.
       const lines: string[] = [];
-      const color = turn && (inset || tint || hovered === turn) ? this.turns?.color(turn) : undefined;
-      const background = color && (hovered === turn ? color.hover : tint ? color.fill : undefined);
-      const prefix = !inset ? "" : !color ? " " : stripe === "line" ? color.line + "│\x1b[39m" : color.stripe + " \x1b[49m";
+      const color = turn && (inset || tint || hovered === turn) ? this.turns?.color(turn, { background: tint, hover: hovered === turn }) : undefined;
+      const background = color?.fill;
+      // A line stripe draws on the block's layers; a block stripe is a layer of its own.
+      const prefix = !inset ? "" : !color ? " " : stripe === "line" ? (background ?? "") + color.line + "│\x1b[39m" : color.stripe + " \x1b[49m";
       for (const child of result) {
         const childLines = decorateLines(child.render(width), background, prefix);
         heights.push(childLines.length);
