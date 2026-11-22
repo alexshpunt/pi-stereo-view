@@ -204,10 +204,17 @@ test("a separator rule marks where each later turn starts, combined with other m
   document.beginFrame();
   const plain = document.render(20).map(stripTerminalSequences);
   const rules = plain.flatMap((row, index) => row === "─".repeat(20) ? [index] : []);
-  // The first turn starts at the top and needs no rule; the second gets one, between blank rows, above its message.
+  // The first turn starts at the top and needs no rule; the second gets one in place of the blank row between blocks,
+  // with no blank row on either side of it.
   expect(rules).toHaveLength(1);
-  expect(plain[rules[0] - 1].trim()).toBe("");
-  expect(plain.slice(rules[0]).join("\n")).toMatch(/^─+\n\s*\n[\s\S]*SECOND/);
+  expect(plain[rules[0] - 1].trim()).not.toBe("");
+  expect(plain[rules[0] + 1].trim()).not.toBe("");
+  expect(plain.slice(rules[0]).join("\n")).toMatch(/^─+\n.*SECOND/);
+  // Without the separator, the same blocks are one blank row apart: the rule replaces that row.
+  state.marks = { ...state.marks, separator: false };
+  document.beginFrame();
+  expect(document.render(20).length).toBe(plain.length);
+  state.marks = { ...state.marks, separator: true };
   expect(plain.slice(0, rules[0]).join("\n")).toContain("FIRST");
   state.marks = { ...state.marks, stripe: "block", background: true };
   document.beginFrame();
@@ -217,7 +224,7 @@ test("a separator rule marks where each later turn starts, combined with other m
   // The stripe runs on through the rule in the turn's color, without the layers of the zone below.
   expect(rule.startsWith(layered(2, false, false).stripe)).toBe(true);
   expect(rule).toContain(layered(2, false, false).line);
-  // The rule and the blank row above it stand between turns: neither the background nor hover changes them,
+  // The rule and the row above it stay as they are when the lower turn is hovered: neither its background nor hover reaches them,
   // not even through the stripe, while the row right below the rule already has the turn's layers.
   state.hovered = 2;
   document.beginFrame();
@@ -227,7 +234,7 @@ test("a separator rule marks where each later turn starts, combined with other m
   expect(hovered[ruleRow]).toBe(rows[ruleRow]);
   expect(hovered[ruleRow + 1]).toContain(fill);
   expect(hovered[ruleRow + 1].startsWith(layered(2, true, true).stripe)).toBe(true);
-  // Symmetric around the rule: the blank row above it closes the upper turn as the one below opens the lower turn.
+  // Symmetric around the rule: the row above it closes the upper turn as the one below opens the lower turn.
   state.hovered = 1;
   document.beginFrame();
   const upper = document.render(20);
@@ -235,10 +242,10 @@ test("a separator rule marks where each later turn starts, combined with other m
   expect(upper[ruleRow - 1].startsWith(layered(1, true, true).stripe)).toBe(true);
   expect(upper[ruleRow]).toBe(rows[ruleRow]);
   expect(upper[ruleRow + 1]).toBe(rows[ruleRow + 1]);
-  // Pointing at the blank rows highlights their turns; only the rule itself belongs to neither.
+  // The rows right above and below the rule belong to their turns; only the rule itself belongs to neither.
   state.reported.length = 0;
-  for (const row of [ruleRow - 2, ruleRow - 1, ruleRow, ruleRow + 1]) document.handleMouse(pointer("move", 5, row, 20));
-  expect(state.reported).toEqual([1, 1, 0, 2]);
+  for (const row of [ruleRow - 1, ruleRow, ruleRow + 1]) document.handleMouse(pointer("move", 5, row, 20));
+  expect(state.reported).toEqual([1, 0, 2]);
 });
 
 test.each(["block", "line"] as const)("hovering a turn changes only the rows between its separators, with every mark on (%s stripe)", stripe => {

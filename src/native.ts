@@ -84,13 +84,13 @@ const FULL_TOOLS: ToolDisplay = { compact: false, group: false };
 /** Time per frame for measuring offscreen entries that are new, changed or stale. */
 const LAZY_BUDGET_MS = 4;
 
-/** A rule in a turn's color above the turn's first block in a panel, after a blank row. */
+/** A rule in a turn's color in place of the blank row between the previous turn and the turn's first block in a panel. */
 class TurnRule implements Component {
   constructor(private readonly color: () => string | undefined) {}
   render(width: number): string[] {
     const color = this.color();
     const rule = "─".repeat(Math.max(0, width));
-    return ["", color ? color + rule + "\x1b[39m" : rule];
+    return [color ? color + rule + "\x1b[39m" : rule];
   }
   invalidate(): void {}
 }
@@ -397,9 +397,9 @@ export class NativeDocument extends Container {
     const segment = built.order[low];
     const row = event.y - (built.rows[low] ?? 0);
     if (event.type === "move") {
-      // A separator's blank row closes the turn above it, and its rule stands between turns, highlighting neither.
+      // A separator stands between turns, so pointing at it highlights neither.
       const separator = segment?.components[0] instanceof TurnRule && row < segment.heights[0];
-      const turn = !segment || row >= segment.lines.length ? 0 : !separator ? segment.turn : row === 0 ? segment.ruleIn ?? 0 : 0;
+      const turn = !segment || row >= segment.lines.length || separator ? 0 : segment.turn;
       this.turns?.hover(turn);
     }
     if (!segment || segment.estimate || row >= segment.lines.length) return undefined;
@@ -422,19 +422,11 @@ export class NativeDocument extends Container {
   private layers(turn: number): TurnLayers {
     return { background: this.turns?.background() === true, hover: turn > 0 && this.turns?.hovered() === turn };
   }
-  /**
-   * Decorate a separator's rows symmetrically: the blank row above the rule closes the turn above with that turn's
-   * background, hover and stripe, as the blank row below the rule opens the next turn; the rule itself takes no layer.
-   */
-  private separatorRows(rows: readonly string[], above: number, turn: number,
-    mark: (marks: TurnColor | undefined, fill: string | undefined) => string,
-    { inset, tint, hovered }: { inset: boolean; tint: boolean; hovered: number | undefined }): string[] {
-    const upper = above && (inset || tint || hovered === above)
-      ? this.turns?.color(above, { background: tint, hover: hovered === above }) : undefined;
-    const ruleMarks = this.turns?.color(turn);
-    return rows.map((row, index) => index === 0
-      ? decorateLine(row, upper?.fill, mark(upper, upper?.fill))
-      : decorateLine(row, undefined, mark(ruleMarks, undefined)));
+  /** Decorate a separator's row: it stands between turns, so it takes no background or hover layer of either. */
+  private separatorRows(rows: readonly string[], turn: number,
+    mark: (marks: TurnColor | undefined, fill: string | undefined) => string): string[] {
+    const marks = this.turns?.color(turn);
+    return rows.map(row => decorateLine(row, undefined, mark(marks, undefined)));
   }
   private goToClock(): boolean {
     const goTo = this.turns?.goTo();
@@ -711,9 +703,9 @@ export class NativeDocument extends Container {
         // The rule stands between turns, outside the layers of either: hover and backgrounds leave it unchanged.
         if (!turnRule) this.rules.set(turn, turnRule = new TurnRule(() => this.turns?.color(turn)?.line));
         result.push(turnRule);
-        // The block below keeps its own blank row, so the rule stands between two blank rows.
+        // The rule takes the place of the blank row that separates blocks, so the block below adds none.
         toolRun = false;
-        visibleBlock = true;
+        visibleBlock = false;
       }
       let clock: SearchClock | undefined;
       let nativeBody = true;
@@ -751,7 +743,8 @@ export class NativeDocument extends Container {
         visibleBlock = true;
       } else if (nativeBody && !entry.compact) {
         toolRun = false;
-        result.push(...entry.spacing, routed);
+        // Pi's own spacing separates this block from the one above; a rule already does.
+        result.push(...(rule === undefined ? entry.spacing : []), routed);
       } else if (nativeBody) {
         if (!rowed) toolRun = false;
         const stamped = this.nativeBlock(entry);
@@ -800,7 +793,7 @@ export class NativeDocument extends Container {
       const prefix = mark(color, background);
       for (const child of result) {
         const childLines = child instanceof TurnRule && rule !== undefined
-          ? this.separatorRows(child.render(width), rule, turn, mark, { inset: inset > 0, tint, hovered })
+          ? this.separatorRows(child.render(width), turn, mark)
           : decorateLines(child.render(width), background, prefix);
         heights.push(childLines.length);
         for (const line of childLines) lines.push(line);
