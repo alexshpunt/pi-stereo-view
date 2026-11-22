@@ -130,7 +130,7 @@ Calls that are still running or waiting to collapse are never grouped. Thinking,
 
 A turn is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one turn.
 
-Turn colors, hover highlighting and Go to are off by default. Set **Turns** to `on` in Stereo View settings to turn them all on; the settings indented under it choose what each does, and keep their values while Turns is off.
+Turn colors, hover highlighting and Go to are on by default. Set **Turns** to `off` in Stereo View settings to turn them all off; the settings indented under it choose what each does, and keep their values while Turns is off.
 
 Every turn gets its own color in both panels, so the work for one request is easy to tell from the next. Turns are marked in four independent ways; use any combination:
 
@@ -141,9 +141,9 @@ Every turn gets its own color in both panels, so the work for one request is eas
 | **Background** | `on`, `off` (default) | The background of every block. |
 | **Separator** | `on` (default), `off` | A colored line across both panels where each new turn begins. |
 
-Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Background color strength** (5% by default), **Hover color strength** (5%), **Stripe color strength** (8%, also for separators) and **Clock color strength** (10%). With the defaults, the clock of a hovered block with a turn background is 5 + 5 + 10 = 20% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end.
+Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Background color strength** (8% by default), **Hover color strength** (10%), **Stripe color strength** (20%, also for separators) and **Clock color strength** (10%). With these strengths and hover in the turn's color, the clock of a hovered block with a turn background is 8 + 10 + 10 = 28% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end.
 
-**Hover color** sets the hover layer's color: `turn` (default) highlights each turn in its own color, or one `#rrggbb` color highlights every turn the same way. `←` and `→` pick from presets; `Enter` opens a field to type any color. Clocks, stripes and separators keep their turn's own color on top of a one-color hover. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
+**Hover color** sets the hover layer's color: `turn` highlights each turn in its own color, or one `#rrggbb` color highlights every turn the same way; the default is gray, `#808080`. `←` and `→` pick from presets; `Enter` opens a field to type any color. Clocks, stripes and separators keep their turn's own color on top of a one-color hover. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
 
 **Highlight on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 

@@ -883,6 +883,9 @@ export class NativeDocument extends Container {
       this.segmentsFor = entries;
       for (const [source, segment] of this.segments) if (segment.build !== build) this.segments.delete(source);
       for (const source of this.dirty) if (!this.segments.has(source)) this.dirty.delete(source);
+      // Separators of turns that left the history (a new session, compaction) are not needed any more.
+      const present = new Set(order.map(segment => segment.turn));
+      for (const turn of this.rules.keys()) if (!present.has(turn)) this.rules.delete(turn);
     }
     if (virtual && !view.following) this.scrollShift += shift;
     let lines = built.document;

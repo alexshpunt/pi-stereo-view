@@ -39,8 +39,8 @@ export interface TurnMix {
   hoverColor?: RgbColor;
 }
 
-/** Default mixes, as the settings default to. */
-export const DEFAULT_MIX: TurnMix = { clock: 10, stripe: 8, background: 5, hover: 5 };
+/** Default strengths, as the settings default to; without `hoverColor` the hover layer takes the turn's hue. */
+export const DEFAULT_MIX: TurnMix = { clock: 10, stripe: 20, background: 8, hover: 10 };
 
 const palettes = new WeakMap<Theme, { background?: RgbColor; mix: TurnMix; colors: Map<string, TurnColor[]> }>();
 

@@ -63,9 +63,9 @@ export const GO_TO: readonly GoTo[] = ["clock", "button", "both", "off"];
 
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
-  // Off by default; once turned on, every mark shows at a strength chosen on dark and light terminals.
-  turns: false, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true,
-  turnClockMix: 10, turnStripeMix: 8, turnBackgroundMix: 5, turnHoverMix: 5, turnHoverColor: "turn", turnHover: true, goTo: "both",
+  // Strengths chosen on dark and light terminals; one gray hover reads as "this turn" without competing with turn hues.
+  turns: true, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true,
+  turnClockMix: 10, turnStripeMix: 20, turnBackgroundMix: 8, turnHoverMix: 10, turnHoverColor: "#808080", turnHover: true, goTo: "both",
 };
 
 /** One-color hover choices offered in settings besides each turn's own hue; any `#rrggbb` can be typed in. */

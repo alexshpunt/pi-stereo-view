@@ -44,7 +44,7 @@ test("retains automatic sizes and accepts settings with no temporary-state keys"
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test("files saved before turn settings get turns off, with every mark ready for when they are turned on", async () => {
+test("files saved before turn settings get the default turn marks, on", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
@@ -52,8 +52,8 @@ test("files saved before turn settings get turns off, with every mark ready for 
       turnStripeMix: _stripeMix, turnBackgroundMix: _backgroundMix, turnHoverMix: _hoverMix, turnHoverColor: _hoverColor, turnHover: _hover, goTo: _goTo, ...older } = arrangement;
     await writeFile(file, JSON.stringify(older));
     expect(await loadPreferences(file)).toMatchObject({
-      turns: false, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true, turnClockMix: 10, turnStripeMix: 8,
-      turnBackgroundMix: 5, turnHoverMix: 5, turnHoverColor: "turn", turnHover: true, goTo: "both",
+      turns: true, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true, turnClockMix: 10, turnStripeMix: 20,
+      turnBackgroundMix: 8, turnHoverMix: 10, turnHoverColor: "#808080", turnHover: true, goTo: "both",
     });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

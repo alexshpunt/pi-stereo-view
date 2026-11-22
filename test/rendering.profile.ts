@@ -98,8 +98,9 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: "", PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines),
         PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_COMPACT: compact ? "1" : "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane, PROFILE_FOCUS: process.env.PROFILE_FOCUS ?? "",
-        PROFILE_POINTER: pointer ? "1" : "0", PROFILE_HOVER: hover ? "1" : "0" },
-      rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
+        PROFILE_POINTER: pointer ? "1" : "0", PROFILE_HOVER: hover ? "1" : "0",
+        PROFILE_MEMORY: process.env.PROFILE_MEMORY ?? "0" },
+      rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000 + Number(process.env.PROFILE_MEMORY ?? 0) * 3_000,
       extensions,
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],
     }).run("SYNTHETIC PROFILE SETUP");
@@ -109,6 +110,9 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     const measurements = JSON.parse(await readFile(path.join(cwd, "rendering-measurements.json"), "utf8"));
     await writeFile(path.join(artifact, "measurements.json"), JSON.stringify(measurements, null, 2));
     await writeFile(path.join(artifact, "rendering.cpuprofile"), await readFile(path.join(cwd, "rendering.cpuprofile")));
+    if (Number(process.env.PROFILE_MEMORY ?? 0) > 0) {
+      await writeFile(path.join(artifact, "memory.json"), await readFile(path.join(cwd, "rendering-memory.json")));
+    }
     if (process.env.PROFILE_STARTUP === "1") {
       for (const phase of ["initial", "cold"]) {
         await writeFile(path.join(artifact, phase + ".cpuprofile"), await readFile(path.join(cwd, phase + ".cpuprofile")));

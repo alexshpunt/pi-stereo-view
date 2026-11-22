@@ -127,15 +127,15 @@ test("layers add up, so every mark stays visible over the layers under it", () =
     return ([r - 30, g - 30, b - 46].reduce((sum, value, index) => sum + value * axis[index], 0) / length) * 100;
   };
   const clock = (color: ReturnType<typeof layered>): number => reach(backgroundAnsi(color.clock, "truecolor"));
-  // Defaults: background 5%, hover 5%, clock 10%, stripe 8%.
-  expect(reach(layered(1, true, false, terminal).fill!)).toBeCloseTo(5, -0.5);
-  expect(reach(layered(1, false, true, terminal).fill!)).toBeCloseTo(5, -0.5);
-  expect(reach(layered(1, true, true, terminal).fill!)).toBeCloseTo(10, -0.5);
+  // Defaults: background 8%, hover 10%, clock 10%, stripe 20%.
+  expect(reach(layered(1, true, false, terminal).fill!)).toBeCloseTo(8, -0.5);
+  expect(reach(layered(1, false, true, terminal).fill!)).toBeCloseTo(10, -0.5);
+  expect(reach(layered(1, true, true, terminal).fill!)).toBeCloseTo(18, -0.5);
   expect(clock(layered(1, false, false, terminal))).toBeCloseTo(10, -0.5);
-  expect(clock(layered(1, true, false, terminal))).toBeCloseTo(15, -0.5);
-  expect(clock(layered(1, true, true, terminal))).toBeCloseTo(20, -0.5);
-  expect(reach(layered(1, true, true, terminal).stripe)).toBeCloseTo(18, -0.5);
-  expect(reach(layered(1, true, true, terminal).line)).toBeCloseTo(18, -0.5);
+  expect(clock(layered(1, true, false, terminal))).toBeCloseTo(18, -0.5);
+  expect(clock(layered(1, true, true, terminal))).toBeCloseTo(28, -0.5);
+  expect(reach(layered(1, true, true, terminal).stripe)).toBeCloseTo(38, -0.5);
+  expect(reach(layered(1, true, true, terminal).line)).toBeCloseTo(38, -0.5);
   // A clock with the same share as the block under it is still darker than that block, never the same color.
   const even = turnColor(theme, 1, terminal, { clock: 15, stripe: 15, background: 15, hover: 15 }, { background: true, hover: true })!;
   expect(backgroundAnsi(even.clock, "truecolor")).not.toBe(even.fill);

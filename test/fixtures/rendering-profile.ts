@@ -344,6 +344,37 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         move(0, 0);
         await capture();
       }
+      const memoryCycles = Number(process.env.PROFILE_MEMORY ?? 0);
+      if (split && memoryCycles > 0) {
+        // A long session: hover every visible turn and scroll both panels again and again. Live heap after a full
+        // collection must level off; steady growth per cycle is a leak.
+        const heap = async (): Promise<number> => {
+          for (let pass = 0; pass < 3; pass++) await inspector.post("HeapProfiler.collectGarbage");
+          return process.memoryUsage().heapUsed;
+        };
+        const move = (column: number, row: number): void => tui.handleTerminalInput(`\x1b[<35;${column + 1};${row + 1}M`);
+        const memory: { cycle: number; heapUsed: number }[] = [];
+        const every = Math.max(1, Math.floor(memoryCycles / 10));
+        memory.push({ cycle: 0, heapUsed: await heap() });
+        for (let cycle = 1; cycle <= memoryCycles; cycle++) {
+          // Visit different parts of the history: the start, then a page a few screens above the end.
+          for (const target of views) {
+            if (cycle % 2) target.scrollToStart();
+            else { target.scrollToEnd(); target.scrollBy(-(1 + cycle % 5) * target.viewportHeight); }
+          }
+          const lines = (await capture()).map(stripTerminalSequences);
+          // Hover a row of every turn on screen, then leave.
+          for (const [row, line] of lines.entries()) if (/SYNTHETIC (USER|THINKING) \d+/.test(line)) {
+            move(line.search(/SYNTHETIC/), row);
+            await capture();
+          }
+          move(0, 0);
+          for (const target of views) target.scrollToEnd();
+          await capture();
+          if (cycle % every === 0 || cycle === memoryCycles) memory.push({ cycle, heapUsed: await heap() });
+        }
+        await writeFile(path.join(ctx.cwd, "rendering-memory.json"), JSON.stringify({ memory, turns: process.env.PROFILE_TURN_MARKS ?? "" }, null, 2));
+      }
       if (split && process.env.PROFILE_SEARCH === "1") {
         if (process.env.PROFILE_SEARCH_PANE === "activity") {
           const lines = (await capture()).map(stripTerminalSequences);
