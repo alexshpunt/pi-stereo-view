@@ -688,7 +688,8 @@ export class NativeDocument extends Container {
       const toolRunIn = toolRun;
       if (rule) {
         let turnRule = this.rules.get(turn);
-        if (!turnRule) this.rules.set(turn, turnRule = new TurnRule(() => this.turns?.color(turn, this.layers(turn))?.line));
+        // The rule stands between turns, outside the layers of either: hover and backgrounds leave it unchanged.
+        if (!turnRule) this.rules.set(turn, turnRule = new TurnRule(() => this.turns?.color(turn)?.line));
         result.push(turnRule);
         // The block below keeps its own blank row, so the rule stands between two blank rows.
         toolRun = false;
@@ -774,11 +775,11 @@ export class NativeDocument extends Container {
       const color = turn && (inset || tint || hovered === turn) ? this.turns?.color(turn, { background: tint, hover: hovered === turn }) : undefined;
       const background = color?.fill;
       // A line stripe draws on the block's layers; a block stripe is a layer of its own.
-      const mark = (fill: string | undefined): string =>
-        !inset ? "" : !color ? " " : stripe === "line" ? (fill ?? "") + color.line + "│\x1b[39m" : color.stripe + " \x1b[49m";
-      const prefix = mark(background);
-      // The separator stands between turns: the turn's background and hover start below it.
-      const rulePrefix = mark(undefined);
+      const mark = (marks: TurnColor | undefined, fill: string | undefined): string =>
+        !inset ? "" : !marks ? " " : stripe === "line" ? (fill ?? "") + marks.line + "│\x1b[39m" : marks.stripe + " \x1b[49m";
+      const prefix = mark(color, background);
+      // The separator stands between turns: no background or hover layer reaches its rows, not even through the stripe.
+      const rulePrefix = rule ? mark(turn ? this.turns?.color(turn) : undefined, undefined) : "";
       for (const child of result) {
         const rule = child instanceof TurnRule;
         const childLines = decorateLines(child.render(width), rule ? undefined : background, rule ? rulePrefix : prefix);

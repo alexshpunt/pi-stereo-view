@@ -214,18 +214,41 @@ test("a separator rule marks where each later turn starts, combined with other m
   const rows = document.render(20);
   const ruleRow = rows.findIndex(row => stripTerminalSequences(row).endsWith("─".repeat(19)));
   const rule = rows[ruleRow];
-  // The stripe runs on through the rule in the turn's color.
-  expect(rule.startsWith(layered(2, true, false).stripe)).toBe(true);
-  expect(rule).toContain(layered(2, true, false).line);
-  // The rule and the blank row above it stand between turns: neither the background nor hover tints them,
-  // while the row right below the rule already has the turn's background.
+  // The stripe runs on through the rule in the turn's color, without the layers of the zone below.
+  expect(rule.startsWith(layered(2, false, false).stripe)).toBe(true);
+  expect(rule).toContain(layered(2, false, false).line);
+  // The rule and the blank row above it stand between turns: neither the background nor hover changes them,
+  // not even through the stripe, while the row right below the rule already has the turn's layers.
   state.hovered = 2;
   document.beginFrame();
   const hovered = document.render(20);
   const fill = layered(2, true, true).fill!;
-  expect(hovered[ruleRow - 1]).not.toContain(fill);
-  expect(hovered[ruleRow]).not.toContain(fill);
+  expect(hovered[ruleRow - 1]).toBe(rows[ruleRow - 1]);
+  expect(hovered[ruleRow]).toBe(rows[ruleRow]);
   expect(hovered[ruleRow + 1]).toContain(fill);
+  expect(hovered[ruleRow + 1].startsWith(layered(2, true, true).stripe)).toBe(true);
+});
+
+test.each(["block", "line"] as const)("hovering a turn changes only the rows between its separators, with every mark on (%s stripe)", stripe => {
+  for (const pane of ["chat", "activity"] as const) {
+    const { document, state } = documentWith(pane, { clock: true, stripe, background: true, separator: true });
+    document.beginFrame();
+    const plain = document.render(30);
+    const ruleRow = plain.findIndex(row => stripTerminalSequences(row).includes("─".repeat(20)));
+    expect(ruleRow, pane).toBeGreaterThan(0);
+    // The second turn's zone starts below its rule; the first ends before the blank row above it.
+    state.hovered = 2;
+    document.beginFrame();
+    const second = document.render(30);
+    expect(second.slice(0, ruleRow + 1), pane).toEqual(plain.slice(0, ruleRow + 1));
+    expect(second.slice(ruleRow + 1).every((row, index) => row !== plain[ruleRow + 1 + index]), pane).toBe(true);
+    state.hovered = 1;
+    document.beginFrame();
+    const first = document.render(30);
+    expect(first.slice(ruleRow - 1), pane).toEqual(plain.slice(ruleRow - 1));
+    expect(first.slice(0, ruleRow - 1).every((row, index) => row !== plain[index]), pane).toBe(true);
+    state.hovered = undefined;
+  }
 });
 
 test("turn backgrounds tint default cells of each turn and hover tints the turn under the pointer", () => {
