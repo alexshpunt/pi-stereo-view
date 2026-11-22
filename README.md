@@ -138,10 +138,10 @@ Every turn gets its own color in both panels, so the work for one request is eas
 | --- | --- | --- |
 | **Clock color** | `on` (default), `off` | The background of each block's clock. |
 | **Stripe** | `block` (default), `line`, `off` | Every block's left column: a colored cell or a thin colored line. |
-| **Background** | `on` (default), `off` | The background of every block. |
+| **Background** | `on`, `off` (default) | The background of every block. |
 | **Separator** | `on` (default), `off` | A colored line across both panels where each new turn begins. |
 
-Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Background color strength** (8% by default), **Hover color strength** (15%), **Stripe color strength** (30%, also for separators) and **Clock color strength** (15%). With the defaults, the clock of a hovered block with a turn background is 8 + 15 + 15 = 38% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
+Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Background color strength** (5% by default), **Hover color strength** (5%), **Stripe color strength** (8%, also for separators) and **Clock color strength** (10%). With the defaults, the clock of a hovered block with a turn background is 5 + 5 + 10 = 20% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
 
 **Highlight on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 

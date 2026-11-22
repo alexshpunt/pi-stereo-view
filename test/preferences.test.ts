@@ -52,8 +52,8 @@ test("files saved before turn settings get turns off, with every mark ready for 
       turnStripeMix: _stripeMix, turnBackgroundMix: _backgroundMix, turnHoverMix: _hoverMix, turnHover: _hover, goTo: _goTo, ...older } = arrangement;
     await writeFile(file, JSON.stringify(older));
     expect(await loadPreferences(file)).toMatchObject({
-      turns: false, turnClock: true, turnStripe: "block", turnBackground: true, turnSeparator: true, turnClockMix: 15, turnStripeMix: 30,
-      turnBackgroundMix: 8, turnHoverMix: 15, turnHover: true, goTo: "both",
+      turns: false, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true, turnClockMix: 10, turnStripeMix: 8,
+      turnBackgroundMix: 5, turnHoverMix: 5, turnHover: true, goTo: "both",
     });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

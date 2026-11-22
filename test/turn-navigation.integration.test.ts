@@ -106,8 +106,8 @@ test("turn clock colors come from settings and hover is unavailable inside a ter
   // The overlay floats over the panels, so its rows share lines with history text.
   expect(settings).toMatch(/ {2}Turns {2,}on\s*\n.* {4}Clock color\s+off/);
   expect(settings).toMatch(/ {2}Clock color\s+off/);
-  expect(settings).toMatch(/ {2}Clock color strength\s+15%/);
-  expect(settings).toMatch(/ {2}Hover color strength\s+15%/);
+  expect(settings).toMatch(/ {2}Clock color strength\s+10%/);
+  expect(settings).toMatch(/ {2}Hover color strength\s+5%/);
   expect(settings).toMatch(/ {2}Stripe\s+off/);
   expect(settings).toMatch(/ {2}Separator\s+off/);
   expect(settings).toMatch(/Go to\s+clock/);

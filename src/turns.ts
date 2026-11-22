@@ -38,7 +38,7 @@ export interface TurnMix {
 }
 
 /** Default mixes, as the settings default to. */
-export const DEFAULT_MIX: TurnMix = { clock: 15, stripe: 30, background: 8, hover: 15 };
+export const DEFAULT_MIX: TurnMix = { clock: 10, stripe: 8, background: 5, hover: 5 };
 
 const palettes = new WeakMap<Theme, { background?: RgbColor; mix: TurnMix; colors: Map<string, TurnColor[]> }>();
 

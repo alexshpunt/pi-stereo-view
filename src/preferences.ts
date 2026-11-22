@@ -62,8 +62,8 @@ export const GO_TO: readonly GoTo[] = ["clock", "button", "both", "off"];
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
   // Off by default; once turned on, every mark shows at a strength chosen on dark and light terminals.
-  turns: false, turnClock: true, turnStripe: "block", turnBackground: true, turnSeparator: true,
-  turnClockMix: 15, turnStripeMix: 30, turnBackgroundMix: 8, turnHoverMix: 15, turnHover: true, goTo: "both",
+  turns: false, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true,
+  turnClockMix: 10, turnStripeMix: 8, turnBackgroundMix: 5, turnHoverMix: 5, turnHover: true, goTo: "both",
 };
 
 /** Mix choices offered in settings, in percent; saved files may hold any whole percent from 1 to 100. */
