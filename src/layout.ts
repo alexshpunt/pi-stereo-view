@@ -246,6 +246,8 @@ export class TranscriptLayout {
   private moving?: { turn: number };
   /** The terminal's reported background, which turn colors are mixed into. */
   private terminalBackground?: RgbColor;
+  /** Set by `markTerminalStarted()`; terminal queries wait for it. */
+  private terminalStarted = false;
 
   constructor(
     readonly preferences: Preferences,
@@ -699,7 +701,17 @@ export class TranscriptLayout {
     this.mounted = mounted;
     host.setLayoutRoot(mounted);
     host.requestRender();
-    this.queryBackground(host);
+    if (this.terminalStarted) this.queryBackground(host);
+  }
+
+  /**
+   * Pi's terminal has started, so terminal queries can be sent. An early layout mounts before that start, and a
+   * query sent then answers ahead of Pi's own start queries: Pi takes that answer for its own and misses the
+   * terminal's support for program status (OSC 7501) and keyboard protocols.
+   */
+  markTerminalStarted(): void {
+    this.terminalStarted = true;
+    if (this.host) this.queryBackground(this.host);
   }
 
   /** Ask the terminal for its background once; turn colors use a guess from the theme until it answers. */

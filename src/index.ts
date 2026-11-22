@@ -273,6 +273,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       else createLayout(tui, ctx.ui, ctx.sessionManager);
       finish = done;
       ensureLayout();
+      // Pi starts its terminal before session_start, also after an early layout mount.
+      layout?.markTerminalStarted();
       return new Text("", 0, 0);
     }, {
       overlay: true,
