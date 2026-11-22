@@ -11,7 +11,7 @@ import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.ts";
 import { ToolIndent } from "./tool-indent.ts";
 import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
 import { pushShellInputs, sameValues } from "./render-cache.ts";
-import { decorateLines, type TurnColor, type TurnLayers, type TurnMix } from "./turns.ts";
+import { decorateLine, decorateLines, type TurnColor, type TurnLayers, type TurnMix } from "./turns.ts";
 import type { TurnStripe, GoTo } from "./preferences.ts";
 export type { Pane } from "./content.ts";
 
@@ -112,8 +112,8 @@ interface Segment {
   estimate: boolean;
   visibleIn: boolean;
   toolRunIn: boolean;
-  /** The segment starts with its turn's separator rule. */
-  ruleIn: boolean;
+  /** The turn above the separator rule this segment starts with; undefined without one. */
+  ruleIn?: number;
   visibleOut: boolean;
   toolRunOut: boolean;
   /** Cheap fingerprint of native state, compared while the entry stays offscreen. */
@@ -397,9 +397,10 @@ export class NativeDocument extends Container {
     const segment = built.order[low];
     const row = event.y - (built.rows[low] ?? 0);
     if (event.type === "move") {
-      // A separator's rows stand between turns, so pointing at them highlights neither.
-      const between = segment?.components[0] instanceof TurnRule && row < segment.heights[0];
-      this.turns?.hover(segment && row < segment.lines.length && !between ? segment.turn : 0);
+      // A separator's blank row closes the turn above it, and its rule stands between turns, highlighting neither.
+      const separator = segment?.components[0] instanceof TurnRule && row < segment.heights[0];
+      const turn = !segment || row >= segment.lines.length ? 0 : !separator ? segment.turn : row === 0 ? segment.ruleIn ?? 0 : 0;
+      this.turns?.hover(turn);
     }
     if (!segment || segment.estimate || row >= segment.lines.length) return undefined;
     const entry = {
@@ -420,6 +421,20 @@ export class NativeDocument extends Container {
   /** The layers under a turn's clocks, stripes and rules in this frame: its background, and hover while pointed at. */
   private layers(turn: number): TurnLayers {
     return { background: this.turns?.background() === true, hover: turn > 0 && this.turns?.hovered() === turn };
+  }
+  /**
+   * Decorate a separator's rows symmetrically: the blank row above the rule closes the turn above with that turn's
+   * background, hover and stripe, as the blank row below the rule opens the next turn; the rule itself takes no layer.
+   */
+  private separatorRows(rows: readonly string[], above: number, turn: number,
+    mark: (marks: TurnColor | undefined, fill: string | undefined) => string,
+    { inset, tint, hovered }: { inset: boolean; tint: boolean; hovered: number | undefined }): string[] {
+    const upper = above && (inset || tint || hovered === above)
+      ? this.turns?.color(above, { background: tint, hover: hovered === above }) : undefined;
+    const ruleMarks = this.turns?.color(turn);
+    return rows.map((row, index) => index === 0
+      ? decorateLine(row, upper?.fill, mark(upper, upper?.fill))
+      : decorateLine(row, undefined, mark(ruleMarks, undefined)));
   }
   private goToClock(): boolean {
     const goTo = this.turns?.goTo();
@@ -684,13 +699,14 @@ export class NativeDocument extends Container {
     let pending = false;
     let lastAct = 0;
     const order: Segment[] = [];
-    const renderEntry = (entry: ContentEntry, rowed: boolean, tree: NestedTree | undefined, turn: number, rule: boolean): Segment => {
+    // `rule` is the turn above the separator this entry starts with, when it starts one.
+    const renderEntry = (entry: ContentEntry, rowed: boolean, tree: NestedTree | undefined, turn: number, rule: number | undefined): Segment => {
       const component = entry.source;
       const routed = entry.component;
       const result: Component[] = [];
       const visibleIn = visibleBlock;
       const toolRunIn = toolRun;
-      if (rule) {
+      if (rule !== undefined) {
         let turnRule = this.rules.get(turn);
         // The rule stands between turns, outside the layers of either: hover and backgrounds leave it unchanged.
         if (!turnRule) this.rules.set(turn, turnRule = new TurnRule(() => this.turns?.color(turn)?.line));
@@ -782,11 +798,10 @@ export class NativeDocument extends Container {
       const mark = (marks: TurnColor | undefined, fill: string | undefined): string =>
         !inset ? "" : !marks ? " " : stripe === "line" ? (fill ?? "") + marks.line + "│\x1b[39m" : marks.stripe + " \x1b[49m";
       const prefix = mark(color, background);
-      // The separator stands between turns: no background or hover layer reaches its rows, not even through the stripe.
-      const rulePrefix = rule ? mark(turn ? this.turns?.color(turn) : undefined, undefined) : "";
       for (const child of result) {
-        const rule = child instanceof TurnRule;
-        const childLines = decorateLines(child.render(width), rule ? undefined : background, rule ? rulePrefix : prefix);
+        const childLines = child instanceof TurnRule && rule !== undefined
+          ? this.separatorRows(child.render(width), rule, turn, mark, { inset: inset > 0, tint, hovered })
+          : decorateLines(child.render(width), background, prefix);
         heights.push(childLines.length);
         for (const line of childLines) lines.push(line);
       }
@@ -814,7 +829,7 @@ export class NativeDocument extends Container {
       const tree = trees.get(component);
       const turn = turns?.get(component) ?? 0;
       // A rule marks where a new turn starts in this panel, below other content.
-      const rule = separator && turn > 0 && turn !== lastAct && visibleBlock;
+      const rule = separator && turn > 0 && turn !== lastAct && visibleBlock ? lastAct : undefined;
       let segment = this.segments.get(component);
       const previous = segment?.build === build - 1 ? { start: segment.start, height: segment.lines.length } : undefined;
       let render = !virtual;
@@ -848,7 +863,7 @@ export class NativeDocument extends Container {
       else {
         if (!segment) {
           segment = { source: component, turn: 0, components: [], heights: [], lines: blankLines(1), width, epoch: -1, estimate: true, visibleIn: visibleBlock,
-            toolRunIn: toolRun, ruleIn: false, visibleOut: visibleBlock, toolRunOut: toolRun, print: [], start: row, build };
+            toolRunIn: toolRun, ruleIn: undefined, visibleOut: visibleBlock, toolRunOut: toolRun, print: [], start: row, build };
           this.segments.set(component, segment);
         } else if (segment.width !== width && !segment.estimate) {
           // Rows at another width would overflow the panel; keep only the height until measured.

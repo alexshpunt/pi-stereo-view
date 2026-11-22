@@ -227,10 +227,18 @@ test("a separator rule marks where each later turn starts, combined with other m
   expect(hovered[ruleRow]).toBe(rows[ruleRow]);
   expect(hovered[ruleRow + 1]).toContain(fill);
   expect(hovered[ruleRow + 1].startsWith(layered(2, true, true).stripe)).toBe(true);
-  // Pointing at the separator's rows highlights neither turn; the rows on either side belong to their turns.
+  // Symmetric around the rule: the blank row above it closes the upper turn as the one below opens the lower turn.
+  state.hovered = 1;
+  document.beginFrame();
+  const upper = document.render(20);
+  expect(upper[ruleRow - 1]).toContain(layered(1, true, true).fill!);
+  expect(upper[ruleRow - 1].startsWith(layered(1, true, true).stripe)).toBe(true);
+  expect(upper[ruleRow]).toBe(rows[ruleRow]);
+  expect(upper[ruleRow + 1]).toBe(rows[ruleRow + 1]);
+  // Pointing at the blank rows highlights their turns; only the rule itself belongs to neither.
   state.reported.length = 0;
   for (const row of [ruleRow - 2, ruleRow - 1, ruleRow, ruleRow + 1]) document.handleMouse(pointer("move", 5, row, 20));
-  expect(state.reported).toEqual([1, 0, 0, 2]);
+  expect(state.reported).toEqual([1, 1, 0, 2]);
 });
 
 test.each(["block", "line"] as const)("hovering a turn changes only the rows between its separators, with every mark on (%s stripe)", stripe => {
@@ -240,7 +248,7 @@ test.each(["block", "line"] as const)("hovering a turn changes only the rows bet
     const plain = document.render(30);
     const ruleRow = plain.findIndex(row => stripTerminalSequences(row).includes("─".repeat(20)));
     expect(ruleRow, pane).toBeGreaterThan(0);
-    // The second turn's zone starts below its rule; the first ends before the blank row above it.
+    // The second turn's zone starts right below its rule; the first ends right above it.
     state.hovered = 2;
     document.beginFrame();
     const second = document.render(30);
@@ -249,8 +257,8 @@ test.each(["block", "line"] as const)("hovering a turn changes only the rows bet
     state.hovered = 1;
     document.beginFrame();
     const first = document.render(30);
-    expect(first.slice(ruleRow - 1), pane).toEqual(plain.slice(ruleRow - 1));
-    expect(first.slice(0, ruleRow - 1).every((row, index) => row !== plain[index]), pane).toBe(true);
+    expect(first.slice(ruleRow), pane).toEqual(plain.slice(ruleRow));
+    expect(first.slice(0, ruleRow).every((row, index) => row !== plain[index]), pane).toBe(true);
     state.hovered = undefined;
   }
 });
