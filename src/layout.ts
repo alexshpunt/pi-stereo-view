@@ -2,12 +2,13 @@ import { setImmediate } from "node:timers/promises";
 import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
 import {
   Container, HStack, isViewportTUI, mixColors, MouseRegion, rgbColor, ScrollView, Text, truncateToWidth, visibleWidth, VStack,
-  type Color, type Component, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
+  type Color, type Component, type RgbColor, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
-import { NativeDocument, type Pane } from "./native.ts";
+import { NativeDocument, type DocumentTurns, type Pane } from "./native.ts";
+import { parseHex, turnColor, pointerMotionAvailable, type TurnMix } from "./turns.ts";
 import { NativeContentIndex } from "./content.ts";
 import { NestedCalls } from "./nested-calls.ts";
-import type { Preferences } from "./preferences.ts";
+import type { TurnMarkSetting, Preferences } from "./preferences.ts";
 import type { TranscriptTimestamps } from "./timestamps.ts";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.ts";
 import { SplitSurface } from "./surface.ts";
@@ -239,6 +240,14 @@ export class TranscriptLayout {
   private automaticHeight = MIN_ROWS;
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
+  private index?: NativeContentIndex;
+  /** The turn under the pointer; a pointer move collects the turn its document reports. */
+  private hoverAct?: number;
+  private moving?: { turn: number };
+  /** The terminal's reported background, which turn colors are mixed into. */
+  private terminalBackground?: RgbColor;
+  /** Set by `markTerminalStarted()`; terminal queries wait for it. */
+  private terminalStarted = false;
 
   constructor(
     readonly preferences: Preferences,
@@ -369,15 +378,33 @@ export class TranscriptLayout {
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
     const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
     const index = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree);
+    this.index = index;
+    // With turns off, every turn setting keeps its value but nothing marks, highlights or jumps.
+    const on = (): boolean => this.preferences.turns;
+    const turns: DocumentTurns = {
+      clock: () => on() && this.preferences.turnClock,
+      stripe: () => on() ? this.preferences.turnStripe : "off",
+      background: () => on() && this.preferences.turnBackground,
+      separator: () => on() && this.preferences.turnSeparator,
+      mix: () => this.turnMix(),
+      color: (turn, layers) => turnColor(this.theme(), turn, this.terminalBackground, this.turnMix(), layers),
+      hovered: () => this.hoverEnabled() ? this.hoverAct : undefined,
+      hover: turn => { if (this.moving) this.moving.turn = turn; },
+      goTo: () => on() ? this.preferences.goTo : "off",
+      jump: (from, source) => {
+        void this.goTo(from, source).catch(error => this.warn("Could not open the other panel: " + String(error)));
+      },
+    };
     const activityDocument = new NativeDocument(document, "activity", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("activity"), false, index, this.copy, showCopyButtons,
       () => ({ compact: this.preferences.compactTools, group: this.preferences.groupTools }), this.getTools,
       () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); }, () => this.preferences.buttonStyle, {
         enabled: () => this.preferences.streamTools, delay: () => this.preferences.streamDelay * 1000,
         changed: () => this.host?.requestRender(),
-      });
+      }, turns);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
-      () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle);
+      () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle,
+      undefined, turns);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
@@ -628,6 +655,15 @@ export class TranscriptLayout {
         return pane === "chat" ? this.chat : pane === "activity" ? this.activity : undefined;
       },
       failed: error => this.fail(error),
+      pointer: {
+        start: () => { this.moving = { turn: 0 }; },
+        end: () => {
+          const turn = this.moving?.turn ?? 0;
+          this.moving = undefined;
+          this.setHover(turn);
+        },
+        leave: () => this.setHover(0),
+      },
     });
     surface.setModels([columns, rows, activityPane, chatPane]);
     this.surface = surface;
@@ -665,6 +701,66 @@ export class TranscriptLayout {
     this.mounted = mounted;
     host.setLayoutRoot(mounted);
     host.requestRender();
+    if (this.terminalStarted) this.queryBackground(host);
+  }
+
+  /**
+   * Pi's terminal has started, so terminal queries can be sent. An early layout mounts before that start, and a
+   * query sent then answers ahead of Pi's own start queries: Pi takes that answer for its own and misses the
+   * terminal's support for program status (OSC 7501) and keyboard protocols.
+   */
+  markTerminalStarted(): void {
+    this.terminalStarted = true;
+    if (this.host) this.queryBackground(this.host);
+  }
+
+  /** Ask the terminal for its background once; turn colors use a guess from the theme until it answers. */
+  private queryBackground(host: NativeTui): void {
+    if (this.terminalBackground || typeof host.queryTerminalColors !== "function") return;
+    void host.queryTerminalColors({ timeoutMs: 1000 }).then(colors => {
+      if (!colors.background || this.host !== host) return;
+      this.terminalBackground = colors.background;
+      host.requestRender();
+    }, () => {});
+  }
+
+  /** Pi reports pointer motion for hover only outside terminal multiplexers and with its mouse support on. */
+  hoverAvailable(): boolean {
+    return pointerMotionAvailable(this.host);
+  }
+
+  /** Hover highlighting is on, with turns, and the terminal reports pointer motion. */
+  private hoverEnabled(): boolean {
+    return this.preferences.turns && this.preferences.turnHover && this.hoverAvailable();
+  }
+
+  /** Highlight another turn; pointer moves within one turn render nothing. */
+  private setHover(turn: number): void {
+    const next = turn || undefined;
+    if (next === this.hoverAct) return;
+    this.hoverAct = next;
+    if (this.hoverEnabled()) this.host?.requestRender();
+  }
+
+  /** Scroll the other panel to the same point of history as a block, returning from a zoomed panel first. */
+  async goTo(from: Pane, source: Component): Promise<void> {
+    const target = this.index?.counterpart(source, from);
+    if (!target || !this.searchPane()) return;
+    const pane: Pane = from === "chat" ? "activity" : "chat";
+    if (this.preferences.zoom) {
+      this.preferences.zoom = null;
+      this.changed(false);
+      // The restored panel needs a layout pass for its viewport.
+      await setImmediate();
+    }
+    const document = this.documents?.[pane];
+    const view = pane === "chat" ? this.chat : this.activity;
+    if (!document || !view || !this.searchPane()) return;
+    this.activate(pane);
+    const row = document.locate(target);
+    if (row === undefined) return;
+    view.scrollTo(Math.max(0, row - 1), { disableFollow: true });
+    this.host?.requestRender();
   }
 
   private activate(pane: Pane): void {
@@ -796,6 +892,31 @@ export class TranscriptLayout {
     this.rebuild();
     this.host?.requestRender();
     if (persist) this.save();
+  }
+
+  /** The turn marks' mix strengths, as the palette reads them. */
+  private turnMix(): TurnMix {
+    const { turnClockMix: clock, turnStripeMix: stripe, turnBackgroundMix: background, turnHoverMix: hover, turnHoverColor } = this.preferences;
+    // One hover color for every turn, or each turn's own hue.
+    return { clock, stripe, background, hover, hoverColor: parseHex(turnHoverColor) };
+  }
+
+  /** Turn the whole turn feature on or off, or change one of its marks or strengths. */
+  setTurnMark<Key extends TurnMarkSetting>(key: Key, value: Preferences[Key]): void {
+    this.preferences[key] = value;
+    this.changed();
+  }
+
+  /** Highlight the turn under the pointer in both panels. */
+  setTurnHover(hover: boolean): void {
+    this.preferences.turnHover = hover;
+    this.changed();
+  }
+
+  /** Open the other panel from a block's clock, its button, both or neither. */
+  setGoTo(goTo: Preferences["goTo"]): void {
+    this.preferences.goTo = goTo;
+    this.changed();
   }
 
   /** Show or hide clock rows without changing their recorded source times. */
@@ -944,6 +1065,9 @@ export class TranscriptLayout {
     this.activity = undefined;
     this.chat = undefined;
     this.documents = undefined;
+    this.index = undefined;
+    this.hoverAct = undefined;
+    this.moving = undefined;
     this.drag = undefined;
     this.rebuild = () => {};
   }

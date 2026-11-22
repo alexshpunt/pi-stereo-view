@@ -26,11 +26,55 @@ export interface Preferences {
   /** Seconds a finished streamed call stays in full before it collapses. */
   streamDelay: number;
   buttonStyle: "icons" | "text";
+  /*
+   * Turn marks: every block of a turn, a user or custom message and the work that follows it, gets the same color in
+   * both panels. Each mark is chosen independently and applies only while `turns` is on.
+   */
+  /** Turn colors, hover highlighting and Go to as a whole; the settings below keep their values while it is off. */
+  turns: boolean;
+  /** Color the background of each block's clock. */
+  turnClock: boolean;
+  /** A one-column colored cell or line on the left of every block. */
+  turnStripe: TurnStripe;
+  /** Tint the default background of every block. */
+  turnBackground: boolean;
+  /** A colored rule above the first block of each turn. */
+  turnSeparator: boolean;
+  /** Percent of the turn hue mixed into the terminal background behind clocks, in stripes and lines, in blocks and under the pointer. */
+  turnClockMix: number;
+  turnStripeMix: number;
+  turnBackgroundMix: number;
+  turnHoverMix: number;
+  /** The hover layer's color: `turn` for each turn's own hue, or one `#rrggbb` color for every turn. */
+  turnHoverColor: string;
+  /** Highlight the turn under the pointer in both panels, where the terminal reports pointer motion. */
+  turnHover: boolean;
+  /** How a block opens the same point of history in the other panel. */
+  goTo: GoTo;
 }
+
+export type TurnStripe = "off" | "block" | "line";
+/** Settings that change how turns are marked; each applies at once without other effects. */
+export type TurnMarkSetting = "turns" | "turnClock" | "turnStripe" | "turnBackground" | "turnSeparator" | "turnClockMix" | "turnStripeMix" |
+  "turnBackgroundMix" | "turnHoverMix" | "turnHoverColor";
+export type GoTo = "clock" | "button" | "both" | "off";
+export const TURN_STRIPES: readonly TurnStripe[] = ["off", "block", "line"];
+export const GO_TO: readonly GoTo[] = ["clock", "button", "both", "off"];
 
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
+  // Strengths chosen on dark and light terminals; one gray hover reads as "this turn" without competing with turn hues.
+  turns: true, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true,
+  turnClockMix: 10, turnStripeMix: 20, turnBackgroundMix: 8, turnHoverMix: 10, turnHoverColor: "#808080", turnHover: true, goTo: "both",
 };
+
+/** One-color hover choices offered in settings besides each turn's own hue; any `#rrggbb` can be typed in. */
+export const HOVER_COLORS: readonly string[] = ["#808080", "#3b82f6", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ef4444", "#a855f7"];
+const validHoverColor = (value: unknown): value is string => value === "turn" || (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value));
+
+/** Mix choices offered in settings, in percent; saved files may hold any whole percent from 1 to 100. */
+export const TURN_MIXES: readonly number[] = [2, 5, 8, 10, 15, 20, 30, 50, 75, 100];
+const validMix = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 100;
 
 /** Read display preferences, retaining the first version's saved arrangement. */
 export async function loadPreferences(file: string): Promise<Preferences> {
@@ -55,6 +99,18 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const streamTools = record.streamTools === undefined ? defaults.streamTools : record.streamTools;
   const streamDelay = record.streamDelay === undefined ? defaults.streamDelay : record.streamDelay;
   const buttonStyle = record.buttonStyle === undefined ? defaults.buttonStyle : record.buttonStyle;
+  const turns = record.turns === undefined ? defaults.turns : record.turns;
+  const turnClock = record.turnClock === undefined ? defaults.turnClock : record.turnClock;
+  const turnStripe = record.turnStripe === undefined ? defaults.turnStripe : record.turnStripe;
+  const turnBackground = record.turnBackground === undefined ? defaults.turnBackground : record.turnBackground;
+  const turnSeparator = record.turnSeparator === undefined ? defaults.turnSeparator : record.turnSeparator;
+  const turnClockMix = record.turnClockMix === undefined ? defaults.turnClockMix : record.turnClockMix;
+  const turnStripeMix = record.turnStripeMix === undefined ? defaults.turnStripeMix : record.turnStripeMix;
+  const turnBackgroundMix = record.turnBackgroundMix === undefined ? defaults.turnBackgroundMix : record.turnBackgroundMix;
+  const turnHoverMix = record.turnHoverMix === undefined ? defaults.turnHoverMix : record.turnHoverMix;
+  const turnHoverColor = record.turnHoverColor === undefined ? defaults.turnHoverColor : record.turnHoverColor;
+  const turnHover = record.turnHover === undefined ? defaults.turnHover : record.turnHover;
+  const goTo = record.goTo === undefined ? defaults.goTo : record.goTo;
   if ((record.side !== "left" && record.side !== "right") ||
       (record.chatWidth !== null && (typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
         record.chatWidth < 24 || record.chatWidth > 240)) ||
@@ -63,11 +119,16 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean" || typeof compactTools !== "boolean" ||
       typeof groupTools !== "boolean" || typeof nestedTree !== "boolean" ||
       typeof streamTools !== "boolean" || typeof streamDelay !== "number" || !Number.isInteger(streamDelay) || streamDelay < 1 || streamDelay > 300 ||
-      (buttonStyle !== "icons" && buttonStyle !== "text")) {
+      (buttonStyle !== "icons" && buttonStyle !== "text") || typeof turns !== "boolean" || typeof turnClock !== "boolean" ||
+      !TURN_STRIPES.includes(turnStripe as TurnStripe) || typeof turnBackground !== "boolean" || typeof turnSeparator !== "boolean" ||
+      !validMix(turnClockMix) || !validMix(turnStripeMix) || !validMix(turnBackgroundMix) || !validMix(turnHoverMix) || !validHoverColor(turnHoverColor) ||
+      typeof turnHover !== "boolean" || !GO_TO.includes(goTo as GoTo)) {
     throw new Error("Invalid pi-stereo-view preferences");
   }
   // Legacy files may contain mode/zoom. Every session starts with both panels visible.
-  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle };
+  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
+    turns, turnClock, turnStripe: turnStripe as TurnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix,
+    turnHoverColor: turnHoverColor.toLowerCase(), turnHover, goTo: goTo as GoTo };
 }
 
 /** Atomically save only the display settings, never session messages. */
@@ -75,8 +136,10 @@ export async function savePreferences(file: string, preferences: Preferences): P
   await mkdir(path.dirname(file), { recursive: true });
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
-    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle } = preferences;
-    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle };
+    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
+      turns, turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix, turnHoverColor, turnHover, goTo } = preferences;
+    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
+      turns, turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix, turnHoverColor, turnHover, goTo };
     await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
   } finally {

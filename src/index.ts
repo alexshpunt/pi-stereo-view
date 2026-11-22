@@ -1,9 +1,12 @@
 import path from "node:path";
 import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Box, Container, isKeyRelease, matchesKey, SettingsList, Text, type OverlayHandle, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { backgroundAnsi, Box, Container, isKeyRelease, matchesKey, rgbColor, SettingsList, Text, type OverlayHandle, type SettingItem, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { SteadySettings } from "./steady-settings.ts";
+import { HexInput } from "./hex-input.ts";
+import { parseHex } from "./turns.ts";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
-import { defaults, loadPreferences, savePreferences, type Preferences } from "./preferences.ts";
+import { HOVER_COLORS, TURN_MIXES, TURN_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type TurnStripe, type GoTo, type Preferences } from "./preferences.ts";
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -55,7 +58,19 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           return result;
         };
         if (dismissOutside) viewport.dispatchMouseToOverlay = dismissOutside;
-        const list = new SettingsList([{
+        const hoverAvailable = layout?.hoverAvailable() ?? false;
+        const HOVER_LABEL = "  Highlight on hover";
+        const TURNS_HEADER = "Turns";
+        const SETTINGS_BACKGROUND = "customMessageBg";
+        const listTheme = getSettingsListTheme();
+        // A saved mix outside the offered steps stays selectable until another is chosen.
+        const mixSetting = (id: "turnClockMix" | "turnStripeMix" | "turnBackgroundMix" | "turnHoverMix", label: string, description: string) => ({
+          id, label, description, currentValue: `${preferences[id]}%`,
+          values: [...new Set([...TURN_MIXES, preferences[id]])].sort((a, b) => a - b).map(percent => `${percent}%`),
+        });
+        // A typed hover color joins the presets, so the arrows can step to and from it.
+        const hoverColors = (current: string): string[] => ["turn", ...new Set([...HOVER_COLORS, ...(current === "turn" ? [] : [current])])];
+        const items: SettingItem[] = [{
           id: "timestamps", label: "Show timestamps",
           description: "Hide clock rows without changing messages or recorded tool starts.",
           currentValue: preferences.showTimestamps ? "on" : "off", values: ["on", "off"],
@@ -91,8 +106,69 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "height", label: "Conversation height",
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
-        }], 9, getSettingsListTheme(), (id, value) => {
-          if (id === "timestamps") layout?.setTimestamps(value === "on");
+        }, {
+          // The Turns header switches the whole feature; its settings sit indented under it and keep their values while it is off.
+          id: "turns", label: TURNS_HEADER,
+          description: "A turn is one request, yours or an extension's, with all the work that answers it. On colors each turn alike in both panels, highlights it on hover and links the panels with Go to, as the settings below choose.",
+          currentValue: preferences.turns ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "turnClock", label: "  Clock color",
+          description: "Color the background of every block's clock in its turn's color.",
+          currentValue: preferences.turnClock ? "on" : "off", values: ["on", "off"],
+        }, {
+          ...mixSetting("turnClockMix", "  Clock color strength", "How strongly the turn's color shows behind the clock: the percent of the hue mixed into the terminal background."),
+        }, {
+          id: "turnStripe", label: "  Stripe",
+          description: "Mark every block of a turn on the left: a colored cell (block), a thin colored line, or nothing.",
+          currentValue: preferences.turnStripe, values: [...TURN_STRIPES],
+        }, {
+          ...mixSetting("turnStripeMix", "  Stripe color strength", "How strongly the turn's color shows in stripes, lines and separators: 100% is the full hue."),
+        }, {
+          id: "turnBackground", label: "  Background",
+          description: "Tint the plain background of every block of a turn. Tool cards and messages keep their own backgrounds.",
+          currentValue: preferences.turnBackground ? "on" : "off", values: ["on", "off"],
+        }, {
+          ...mixSetting("turnBackgroundMix", "  Background color strength", "How strongly the turn's color tints the background of its blocks."),
+        }, {
+          id: "turnSeparator", label: "  Separator",
+          description: "Draw a line in the turn's color in both panels where each new turn begins.",
+          currentValue: preferences.turnSeparator ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "turnHover", label: HOVER_LABEL,
+          description: hoverAvailable ? "While the pointer is over any block, highlight its whole turn in both panels."
+            : "Unavailable: the terminal does not report pointer motion here, such as inside tmux, zellij or screen, or with Pi's mouse support off.",
+          currentValue: hoverAvailable ? (preferences.turnHover ? "on" : "off") : "unavailable",
+          values: hoverAvailable ? ["on", "off"] : ["unavailable"],
+        }, {
+          ...mixSetting("turnHoverMix", "  Hover color strength", "How strongly the hover color tints every block of the turn under the pointer."),
+        }, {
+          id: "turnHoverColor", label: "  Hover color",
+          description: "turn highlights each turn in its own color; a #rrggbb color highlights every turn in that one color. ←/→ pick a preset; Enter types any color.",
+          currentValue: preferences.turnHoverColor, values: hoverColors(preferences.turnHoverColor),
+          submenu: (current, done) => new HexInput(current, {
+            title: text => ui.theme.bold(ui.theme.fg("accent", text)),
+            hint: text => ui.theme.fg("dim", text),
+            error: text => ui.theme.fg("error", text),
+          }, done),
+        }, {
+          id: "goTo", label: "  Go to",
+          description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
+          currentValue: preferences.goTo, values: [...GO_TO],
+        }];
+        const VISIBLE_SETTINGS = 21;
+        const apply = (id: string, value: string): void => {
+          if (id === "turns" || id === "turnClock" || id === "turnBackground" || id === "turnSeparator") layout?.setTurnMark(id, value === "on");
+          else if (id === "turnStripe") layout?.setTurnMark("turnStripe", value as TurnStripe);
+          else if (id === "turnClockMix" || id === "turnStripeMix" || id === "turnBackgroundMix" || id === "turnHoverMix") {
+            layout?.setTurnMark(id, Number.parseInt(value, 10));
+          } else if (id === "turnHoverColor") {
+            layout?.setTurnMark(id, value);
+            const item = items.find(entry => entry.id === id);
+            if (item) item.values = hoverColors(value);
+          }
+          else if (id === "turnHover") { if (value !== "unavailable") layout?.setTurnHover(value === "on"); }
+          else if (id === "goTo") layout?.setGoTo(value as GoTo);
+          else if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
           else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");
           else if (id === "compactTools") layout?.setCompactTools(value === "on");
@@ -102,14 +178,37 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           else if (id === "streamDelay") layout?.setStreamDelay(Number.parseInt(value, 10));
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
           tui.requestRender();
-        }, () => done());
+        };
+        const list = new SettingsList(items, VISIBLE_SETTINGS, {
+          ...listTheme,
+          label: (text, selected) => {
+            const label = text.trim();
+            if (label === TURNS_HEADER) return ui.theme.bold(ui.theme.fg("accent", text));
+            // Turn settings look disabled while turns are off, and so does an unavailable setting; both stay listed
+            // so their explanations can be read. Only turn settings are indented.
+            if (text.startsWith("  ") && !preferences.turns) return ui.theme.fg("dim", text);
+            if (!hoverAvailable && label === HOVER_LABEL.trim()) return ui.theme.fg("dim", text);
+            return listTheme.label(text, selected);
+          },
+          value: (text, selected) => {
+            if (text === "unavailable") return ui.theme.fg("dim", text);
+            // A hover color shows a swatch of itself.
+            const color = parseHex(text);
+            if (!color) return listTheme.value(text, selected);
+            // The swatch's own background ends at the swatch; the panel's background resumes after it, with no reset
+            // that would end the panel's background for the rest of the row.
+            return backgroundAnsi(rgbColor(color.r, color.g, color.b), ui.theme.getColorMode()) + "  " +
+              ui.theme.getBgAnsi(SETTINGS_BACKGROUND) + " " + listTheme.value(text, selected);
+          },
+        }, apply, () => done());
+        const steady = new SteadySettings(list, items, VISIBLE_SETTINGS, apply);
         const content = new Container();
         content.addChild({
           render: () => [ui.theme.fg("accent", ui.theme.bold("pi-stereo-view settings")), ""],
           invalidate() {},
         });
-        content.addChild(list);
-        const box = new Box(1, 1, text => ui.theme.bg("customMessageBg", text));
+        content.addChild(steady);
+        const box = new Box(1, 1, text => ui.theme.bg(SETTINGS_BACKGROUND, text));
         box.addChild(content);
         return {
           render: (width: number) => box.render(width),
@@ -122,7 +221,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
             }
           },
           handleInput: (data: string) => {
-            list.handleInput(data);
+            steady.handleInput(data);
             tui.requestRender();
           },
         };
@@ -200,6 +299,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       else createLayout(tui, ctx.ui, ctx.sessionManager);
       finish = done;
       ensureLayout();
+      // Pi starts its terminal before session_start, also after an early layout mount.
+      layout?.markTerminalStarted();
       return new Text("", 0, 0);
     }, {
       overlay: true,
@@ -287,7 +388,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const choice = await ctx.ui.select("Copy a block from the active panel", blocks.map(block => block.label));
         blocks.find(block => block.label === choice)?.copy();
       } else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⧉/Copy copies a block. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⧉/Copy copies a block, ⇄/Go to or a click on a block's clock opens the same point in the other panel. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);

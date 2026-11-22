@@ -1,5 +1,5 @@
 import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Container, Spacer, stripTerminalSequences, Text, type Color, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.ts";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.ts";
 import { CompactMessage, type TranscriptTimestamps } from "./timestamps.ts";
@@ -11,7 +11,31 @@ import { toolGroups, groupSummary, type ToolGroup } from "./tool-groups.ts";
 import { ToolIndent } from "./tool-indent.ts";
 import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
 import { pushShellInputs, sameValues } from "./render-cache.ts";
+import { decorateLine, decorateLines, type TurnColor, type TurnLayers, type TurnMix } from "./turns.ts";
+import type { TurnStripe, GoTo } from "./preferences.ts";
 export type { Pane } from "./content.ts";
+
+/** Turn marks, hover and Go to, shared by both panels through the split layout. */
+export interface DocumentTurns {
+  /** Whether each block's clock gets its turn's background. */
+  clock(): boolean;
+  stripe(): TurnStripe;
+  /** Whether default cells of every block get their turn's background. */
+  background(): boolean;
+  /** Whether a rule marks the first block of each turn. */
+  separator(): boolean;
+  /** How strongly each mark mixes its turn's hue into the background. */
+  mix(): TurnMix;
+  /** The colors of a turn, mixed into the terminal background; none before the first turn. */
+  color(turn: number, layers?: TurnLayers): TurnColor | undefined;
+  /** The turn under the pointer, while hover highlighting is on and available. */
+  hovered(): number | undefined;
+  /** Report the turn under the pointer during a pointer move; 0 for a block before the first turn. */
+  hover(turn: number): void;
+  goTo(): GoTo;
+  /** Open the same point of history in the other panel. */
+  jump(from: Pane, source: Component): void;
+}
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
 class SearchHighlight implements Component {
@@ -59,11 +83,26 @@ const FULL_TOOLS: ToolDisplay = { compact: false, group: false };
 
 /** Time per frame for measuring offscreen entries that are new, changed or stale. */
 const LAZY_BUDGET_MS = 4;
+
+/** A rule in a turn's color in place of the blank row between the previous turn and the turn's first block in a panel. */
+class TurnRule implements Component {
+  constructor(private readonly color: () => string | undefined) {}
+  render(width: number): string[] {
+    const color = this.color();
+    const rule = "─".repeat(Math.max(0, width));
+    return [color ? color + rule + "\x1b[39m" : rule];
+  }
+  invalidate(): void {}
+}
+
 /** Offscreen entries checked for native changes per frame, in rotation. */
 const SWEEP_ENTRIES = 64;
 
 /** One projected entry's rows, the components that produced them, and the inputs they depend on. */
 interface Segment {
+  source: Component;
+  /** The entry's turn when the segment was last placed, so pointer moves need not read the index. */
+  turn: number;
   components: Component[];
   heights: number[];
   lines: string[];
@@ -73,6 +112,8 @@ interface Segment {
   estimate: boolean;
   visibleIn: boolean;
   toolRunIn: boolean;
+  /** The turn above the separator rule this segment starts with; undefined without one. */
+  ruleIn?: number;
   visibleOut: boolean;
   toolRunOut: boolean;
   /** Cheap fingerprint of native state, compared while the entry stays offscreen. */
@@ -130,7 +171,17 @@ export class NativeDocument extends Container {
   private searchQuery = "";
   private highlightRevision = 0;
   private highlights = new WeakMap<Component, SearchHighlight>();
+  /** One separator rule per turn; it reads the turn's current color when it renders. */
+  private readonly rules = new Map<number, TurnRule>();
   private lastWidth = 1;
+  /** Width of the last render, including the turn stripe. */
+  private lastOuter = 1;
+  /** Columns the turn stripe takes before the content. */
+  private inset = 0;
+  /** Measure every entry on the next render, to locate a block for Go to. */
+  private measureAll = false;
+  /** Every block's turn, read once at the start of the current render. */
+  private renderActs?: ReadonlyMap<Component, number>;
   private frameActive = false;
   private frameWidth?: number;
   private frameLines?: string[];
@@ -171,6 +222,7 @@ export class NativeDocument extends Container {
     private readonly beforeExpand: () => void = () => {},
     private readonly buttonStyle: () => "icons" | "text" = () => "text",
     private readonly streaming?: { enabled(): boolean; delay(): number; changed(): void },
+    private readonly turns?: DocumentTurns,
   ) {
     super();
     if (streaming) this.streamer = new ToolStreaming(() => streaming.delay(), () => streaming.changed());
@@ -304,7 +356,7 @@ export class NativeDocument extends Container {
   searchRow(hit: SearchHit): number | undefined {
     // Async regex can complete between paints. Measure this document at its last
     // allocated width instead of assuming requestRender already emitted a frame.
-    if (this.searchAnchor === hit && this.frameWidth === undefined) this.render(this.lastWidth);
+    if (this.searchAnchor === hit && this.frameWidth === undefined) this.render(this.lastOuter);
     const block = this.positions.get(hit.entry.source);
     if (!block) return undefined;
     if (block.excerptRow !== undefined) return block.excerptRow;
@@ -327,7 +379,14 @@ export class NativeDocument extends Container {
   override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
     if (event.type === "wheel" || (event.type === "press" && event.button === "left")) this.interact();
     const built = this.built;
-    if (!built || event.y < 0) return undefined;
+    if (!built || event.y < 0) {
+      if (event.type === "move") this.turns?.hover(0);
+      return undefined;
+    }
+    if (this.inset) {
+      if (event.x < this.inset && event.type !== "move") return undefined;
+      event = { ...event, x: event.x - this.inset, width: Math.max(0, event.width - this.inset) };
+    }
     // Find the entry under the pointer, then route like a container of that entry's components.
     let low = 0;
     let high = built.order.length - 1;
@@ -337,6 +396,12 @@ export class NativeDocument extends Container {
     }
     const segment = built.order[low];
     const row = event.y - (built.rows[low] ?? 0);
+    if (event.type === "move") {
+      // A separator stands between turns, so pointing at it highlights neither.
+      const separator = segment?.components[0] instanceof TurnRule && row < segment.heights[0];
+      const turn = !segment || row >= segment.lines.length || separator ? 0 : segment.turn;
+      this.turns?.hover(turn);
+    }
     if (!segment || segment.estimate || row >= segment.lines.length) return undefined;
     const entry = {
       children: segment.components,
@@ -344,6 +409,55 @@ export class NativeDocument extends Container {
     };
     return Container.prototype.handleMouse.call(entry, { ...event, y: row, height: segment.lines.length });
   }
+  /**
+   * The turn color behind a block's clock, when clock marks are on. Blocks render inside this document's render, so the turns it
+   * read are current; reading the index per block would verify the whole history per block outside a frame.
+   */
+  private clockBackground(source: Component): Color | undefined {
+    if (!this.turns?.clock()) return undefined;
+    const turn = this.renderActs?.get(source) ?? 0;
+    return this.turns.color(turn, this.layers(turn))?.clock;
+  }
+  /** The layers under a turn's clocks, stripes and rules in this frame: its background, and hover while pointed at. */
+  private layers(turn: number): TurnLayers {
+    return { background: this.turns?.background() === true, hover: turn > 0 && this.turns?.hovered() === turn };
+  }
+  /** Decorate a separator's row: it stands between turns, so it takes no background or hover layer of either. */
+  private separatorRows(rows: readonly string[], turn: number,
+    mark: (marks: TurnColor | undefined, fill: string | undefined) => string): string[] {
+    const marks = this.turns?.color(turn);
+    return rows.map(row => decorateLine(row, undefined, mark(marks, undefined)));
+  }
+  private goToClock(): boolean {
+    const goTo = this.turns?.goTo();
+    return goTo === "clock" || goTo === "both";
+  }
+  /** Clicking a compact row's clock opens its point of history in the other panel. */
+  private clockJump(source: Component): (() => void) | undefined {
+    return this.goToClock() ? () => this.turns?.jump(this.pane, source) : undefined;
+  }
+
+  /**
+   * The first row of a block in this panel, measured from every entry. A block hidden in a closed group or shown
+   * inside its owner's tree resolves to the nearest shown row above it.
+   */
+  locate(source: Component): number | undefined {
+    if (this.disposed) return undefined;
+    this.measureAll = true;
+    this.frameWidth = undefined;
+    try { this.render(this.lastOuter); } finally { this.measureAll = false; }
+    const entries = this.index.entries(this.pane);
+    for (let index = entries.findIndex(entry => entry.source === source); index >= 0; index--) {
+      const segment = this.segments.get(entries[index].source);
+      if (segment?.build !== this.buildId || !segment.lines.length) continue;
+      // Start at the block's first visible row, after its separator.
+      let row = 0;
+      while (row < segment.lines.length - 1 && !stripTerminalSequences(segment.lines[row]).trim()) row++;
+      return segment.start + row;
+    }
+    return undefined;
+  }
+
   private toolOpen(source: Component): boolean {
     return this.openTools.has(source) || this.searchTool === source;
   }
@@ -359,6 +473,8 @@ export class NativeDocument extends Container {
       }, this.theme, {
         clock: () => this.showTimestamps() ? this.timestamps.label(entry.source) : "",
         gutter: this.timestampGutter,
+        clockBackground: () => this.clockBackground(entry.source),
+        clockAction: () => this.clockJump(entry.source),
         expanded: () => this.toolOpen(entry.source),
         toggle: () => {
           if (!this.index.contains(entry.source, this.pane)) return;
@@ -387,6 +503,8 @@ export class NativeDocument extends Container {
         count: () => this.groups.get(source)!.calls.length,
         clock: () => this.showTimestamps() ? this.timestamps.label(source) : "",
         gutter: this.timestampGutter,
+        clockBackground: () => this.clockBackground(source),
+        clockAction: () => this.clockJump(source),
         expanded: () => this.groupOpen(this.groups.get(source)!),
         toggle: () => {
           const current = this.groups.get(source);
@@ -412,6 +530,10 @@ export class NativeDocument extends Container {
         this.copy ? () => this.copyBlock(component) : undefined, this.showCopy, this.buttonStyle, () => {
           // Nested panels render inside their owner's segment.
           this.dirty.add(component).add(entry.owner);
+        }, () => this.clockBackground(component), {
+          clock: () => this.goToClock(),
+          button: () => { const goTo = this.turns?.goTo(); return goTo === "button" || goTo === "both"; },
+          go: () => this.turns?.jump(this.pane, component),
         });
       this.stamped.set(routed, stamped);
     }
@@ -504,8 +626,20 @@ export class NativeDocument extends Container {
     return trees;
   }
 
-  override render(width: number): string[] {
-    if (this.frameActive && this.frameWidth === width && this.frameLines) return this.frameLines;
+  override render(outer: number): string[] {
+    if (this.frameActive && this.frameWidth === outer && this.frameLines) return this.frameLines;
+    const stripe = this.turns?.stripe() ?? "off";
+    const tint = this.turns?.background() === true;
+    const separator = this.turns?.separator() === true;
+    // The turn stripe takes the first column; native blocks render beside it.
+    const inset = stripe !== "off" && outer > 1 ? 1 : 0;
+    const width = outer - inset;
+    this.inset = inset;
+    this.lastOuter = outer;
+    const theme = this.theme();
+    const hovered = this.turns?.hovered();
+    const turns = this.turns ? this.index.turnMap() : undefined;
+    this.renderActs = turns;
     const chat = this.source.children[2] as Container;
     this.timestamps.prepare(chat.children);
     this.lastWidth = width;
@@ -528,11 +662,14 @@ export class NativeDocument extends Container {
     this.searchTool = searched?.owner;
     const entries = this.index.entries(this.pane);
     const trees = this.treesFor(entries);
-    const view = locateMatch ? undefined : this.viewport?.();
+    const view = locateMatch || this.measureAll ? undefined : this.viewport?.();
     // The first frame and search measure every entry; later frames reuse offscreen rows.
     const virtual = view !== undefined && view.height > 0 && this.built !== undefined;
-    const presentation = [this.theme(), display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
-      this.showCopy(), this.buttonStyle(), this.timestampGutter(), this.invalidations];
+    const mix = this.turns?.mix();
+    const hoverColor = mix?.hoverColor && `${mix.hoverColor.r},${mix.hoverColor.g},${mix.hoverColor.b}`;
+    const presentation = [theme, stripe, tint, separator, this.turns?.clock(), mix?.clock, mix?.stripe, mix?.background, mix?.hover, hoverColor,
+      display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
+      this.showCopy(), this.buttonStyle(), this.turns?.goTo(), this.timestampGutter(), this.invalidations];
     if (!sameValues(presentation, this.presentation)) {
       this.presentation = presentation;
       this.epoch++;
@@ -553,13 +690,24 @@ export class NativeDocument extends Container {
     const top = virtual && !view.following ? view.top : 0;
     let shift = 0;
     let pending = false;
+    let lastAct = 0;
     const order: Segment[] = [];
-    const renderEntry = (entry: ContentEntry, rowed: boolean, tree: NestedTree | undefined): Segment => {
+    // `rule` is the turn above the separator this entry starts with, when it starts one.
+    const renderEntry = (entry: ContentEntry, rowed: boolean, tree: NestedTree | undefined, turn: number, rule: number | undefined): Segment => {
       const component = entry.source;
       const routed = entry.component;
       const result: Component[] = [];
       const visibleIn = visibleBlock;
       const toolRunIn = toolRun;
+      if (rule !== undefined) {
+        let turnRule = this.rules.get(turn);
+        // The rule stands between turns, outside the layers of either: hover and backgrounds leave it unchanged.
+        if (!turnRule) this.rules.set(turn, turnRule = new TurnRule(() => this.turns?.color(turn)?.line));
+        result.push(turnRule);
+        // The rule takes the place of the blank row that separates blocks, so the block below adds none.
+        toolRun = false;
+        visibleBlock = false;
+      }
       let clock: SearchClock | undefined;
       let nativeBody = true;
       let bodyDepth = 0;
@@ -596,7 +744,8 @@ export class NativeDocument extends Container {
         visibleBlock = true;
       } else if (nativeBody && !entry.compact) {
         toolRun = false;
-        result.push(...entry.spacing, routed);
+        // Pi's own spacing separates this block from the one above; a rule already does.
+        result.push(...(rule === undefined ? entry.spacing : []), routed);
       } else if (nativeBody) {
         if (!rowed) toolRun = false;
         const stamped = this.nativeBlock(entry);
@@ -637,8 +786,16 @@ export class NativeDocument extends Container {
       const heights: number[] = [];
       // Copy rows: native renderers may reuse and later mutate their row arrays.
       const lines: string[] = [];
+      const color = turn && (inset || tint || hovered === turn) ? this.turns?.color(turn, { background: tint, hover: hovered === turn }) : undefined;
+      const background = color?.fill;
+      // A line stripe draws on the block's layers; a block stripe is a layer of its own.
+      const mark = (marks: TurnColor | undefined, fill: string | undefined): string =>
+        !inset ? "" : !marks ? " " : stripe === "line" ? (fill ?? "") + marks.line + "│\x1b[39m" : marks.stripe + " \x1b[49m";
+      const prefix = mark(color, background);
       for (const child of result) {
-        const childLines = child.render(width);
+        const childLines = child instanceof TurnRule && rule !== undefined
+          ? this.separatorRows(child.render(width), turn, mark)
+          : decorateLines(child.render(width), background, prefix);
         heights.push(childLines.length);
         for (const line of childLines) lines.push(line);
       }
@@ -646,15 +803,15 @@ export class NativeDocument extends Container {
       this.fingerprint(entry, rowed, tree, print);
       let segment = this.segments.get(component);
       if (!segment) {
-        segment = { components: result, heights, lines, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
-          visibleOut: visibleBlock, toolRunOut: toolRun, print, start: row, build };
+        segment = { source: component, turn, components: result, heights, lines, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
+          ruleIn: rule, visibleOut: visibleBlock, toolRunOut: toolRun, print, start: row, build };
         this.segments.set(component, segment);
         return segment;
       }
       // Keep unchanged arrays, so the document can reuse the rows before the first changed entry.
       if (segment.estimate || !sameValues(segment.lines, lines)) segment.lines = lines;
       if (!sameValues(segment.components, result)) segment.components = result;
-      Object.assign(segment, { heights, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn,
+      Object.assign(segment, { heights, width, epoch: this.epoch, estimate: false, visibleIn, toolRunIn, ruleIn: rule,
         visibleOut: visibleBlock, toolRunOut: toolRun, print });
       return segment;
     };
@@ -664,6 +821,9 @@ export class NativeDocument extends Container {
       const component = entry.source;
       const rowed = display.compact && entry.kind === "tool" && !this.live(entry.owner);
       const tree = trees.get(component);
+      const turn = turns?.get(component) ?? 0;
+      // A rule marks where a new turn starts in this panel, below other content.
+      const rule = separator && turn > 0 && turn !== lastAct && visibleBlock ? lastAct : undefined;
       let segment = this.segments.get(component);
       const previous = segment?.build === build - 1 ? { start: segment.start, height: segment.lines.length } : undefined;
       let render = !virtual;
@@ -675,7 +835,7 @@ export class NativeDocument extends Container {
         if (hot) render = true;
         else {
           const measured = segment !== undefined && !segment.estimate && segment.width === width && segment.epoch === this.epoch &&
-            segment.visibleIn === visibleBlock && segment.toolRunIn === toolRun;
+            segment.visibleIn === visibleBlock && segment.toolRunIn === toolRun && segment.ruleIn === rule;
           // Offscreen changes are invisible until the entry nears the viewport, where it renders anyway.
           // Check a rotating slice per frame so heights converge without reading every entry each frame.
           const swept = this.dirty.delete(component) ||
@@ -692,12 +852,12 @@ export class NativeDocument extends Container {
       }
       if (render) {
         this.dirty.delete(component);
-        segment = renderEntry(entry, rowed, tree);
+        segment = renderEntry(entry, rowed, tree, turn, rule);
       }
       else {
         if (!segment) {
-          segment = { components: [], heights: [], lines: blankLines(1), width, epoch: -1, estimate: true, visibleIn: visibleBlock,
-            toolRunIn: toolRun, visibleOut: visibleBlock, toolRunOut: toolRun, print: [], start: row, build };
+          segment = { source: component, turn: 0, components: [], heights: [], lines: blankLines(1), width, epoch: -1, estimate: true, visibleIn: visibleBlock,
+            toolRunIn: toolRun, ruleIn: undefined, visibleOut: visibleBlock, toolRunOut: toolRun, print: [], start: row, build };
           this.segments.set(component, segment);
         } else if (segment.width !== width && !segment.estimate) {
           // Rows at another width would overflow the panel; keep only the height until measured.
@@ -713,6 +873,8 @@ export class NativeDocument extends Container {
       if (virtual && !view.following && previous && previous.start + previous.height <= top) shift += segment.lines.length - previous.height;
       segment.start = row;
       segment.build = build;
+      segment.turn = turn;
+      if (segment.lines.length) lastAct = turn;
       order.push(segment);
       row += segment.lines.length;
     }
@@ -721,6 +883,9 @@ export class NativeDocument extends Container {
       this.segmentsFor = entries;
       for (const [source, segment] of this.segments) if (segment.build !== build) this.segments.delete(source);
       for (const source of this.dirty) if (!this.segments.has(source)) this.dirty.delete(source);
+      // Separators of turns that left the history (a new session, compaction) are not needed any more.
+      const present = new Set(order.map(segment => segment.turn));
+      for (const turn of this.rules.keys()) if (!present.has(turn)) this.rules.delete(turn);
     }
     if (virtual && !view.following) this.scrollShift += shift;
     let lines = built.document;
@@ -731,7 +896,7 @@ export class NativeDocument extends Container {
       children = [...children, new Spacer(1)];
     }
     this.children = children;
-    this.frameWidth = width;
+    this.frameWidth = outer;
     this.frameLines = lines;
     if (pending) this.scheduleFollowUp();
     return lines;

@@ -96,6 +96,32 @@ test("launches a resumed session with its saved split in frame one", async () =>
   }
 });
 
+test("sends no terminal query before Pi's own start queries", async () => {
+  const { cwd, agent } = await workspace();
+  try {
+    await writeFile(path.join(agent, "settings.json"), JSON.stringify({ packages: [path.resolve(".")] }));
+    await writeFile(path.join(agent, "transcript.json"), JSON.stringify(preferences()));
+    const result = await new PiIntegrationTest({
+      testName: "first-frame-query-order", artifactsDir: path.resolve("tmp/test-runs"), cwd,
+      piCommand: path.resolve("test/fixtures/startup-host.sh"), isolateUserResources: false,
+      environment: { PI_CODING_AGENT_DIR: agent }, rawMode: false, tuiSize: { cols: 140, rows: 38 },
+      extensions: [], tools: [], conversation: [assistantMessage([text("QUERY ORDER COMPLETE")])],
+    }).run("QUERY ORDER CHECK");
+    assertSplit(firstFrame(result.terminalOutput), "columns");
+    // Pi's start queries end with a device attributes request and take the first answer to it as theirs.
+    // An earlier query from the early layout steals that answer, and Pi then misses program status (OSC 7501).
+    const output = result.terminalOutput;
+    const start = output.indexOf("\x1b[?u");
+    expect(start, "Pi must query the keyboard protocol at start").toBeGreaterThanOrEqual(0);
+    const colors = output.indexOf("\x1b]11;?");
+    expect(colors, "turn colors must ask for the terminal background").toBeGreaterThanOrEqual(0);
+    expect(colors).toBeGreaterThan(start);
+    expect(output.slice(0, start)).not.toContain("\x1b[c");
+  } finally {
+    await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true })));
+  }
+});
+
 test("falls back without dropping a foreign startup layout entry", async () => {
   const { cwd, agent } = await workspace();
   try {

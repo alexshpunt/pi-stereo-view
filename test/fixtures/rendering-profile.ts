@@ -113,6 +113,17 @@ export default function renderingProfile(pi: ExtensionAPI): void {
     // PROFILE_FOCUS limits the CPU profile to one measured action, for attributing its own cost.
     const focus = process.env.PROFILE_FOCUS || undefined;
     let focusSamples = 0;
+    /** Work that emits no frame, such as pointer moves within one turn: the CPU of the synchronous dispatch. */
+    const measureSync = (name: string, action: () => void): void => {
+      const before = { bytes, documents };
+      const cpu = process.cpuUsage();
+      const start = performance.now();
+      action();
+      const usage = process.cpuUsage(cpu);
+      samples.push({ action: name, emittedFrameMs: performance.now() - start, cpuMs: (usage.user + usage.system) / 1000,
+        documents: documents - before.documents, timestampIndexes: 0, sourceInvalidations: 0, paneRows: 0, panePreviewCharacters: 0,
+        previewScrollRows: 0, visibleScrollbars: 0, bytes: bytes - before.bytes, nativeMs: 0, compactMs: 0, documentMs: 0 });
+    };
     const measure = async (name: string, action: () => void): Promise<void> => {
       if (name === focus && focusSamples++ === 0) await inspector.post("Profiler.start");
       paneRows = 0;
@@ -308,6 +319,62 @@ export default function renderingProfile(pi: ExtensionAPI): void {
         await writeFile(path.join(ctx.cwd, "rendering.cpuprofile"), JSON.stringify(profile));
       }
       phases.finished = await capture();
+      if (split && process.env.PROFILE_POINTER === "1") {
+        // Pointer moves over Activity: within one turn they must not render; across turns they repaint the highlight.
+        const turns = (await capture()).map(stripTerminalSequences).flatMap((line, row) => {
+          const match = /SYNTHETIC THINKING (\d+)/.exec(line);
+          return match ? [{ row, column: match.index, turn: match[1] }] : [];
+        });
+        const first = turns[0];
+        const second = turns.find(candidate => candidate.turn !== first?.turn);
+        if (!first || !second) throw new Error("Two turns must be visible in Activity for pointer profiling");
+        const move = (column: number, row: number): void => tui.handleTerminalInput(`\x1b[<35;${column + 1};${row + 1}M`);
+        move(first.column, first.row);
+        await capture();
+        for (let index = 0; index < count; index++) measureSync("move", () => {
+          for (let step = 0; step < 10; step++) move(first.column + step, first.row);
+        });
+        await capture();
+        if (process.env.PROFILE_HOVER === "1") {
+          for (let index = 0; index < count; index++) await measure("hover", () => {
+            const target = index % 2 ? first : second;
+            move(target.column, target.row);
+          });
+        }
+        move(0, 0);
+        await capture();
+      }
+      const memoryCycles = Number(process.env.PROFILE_MEMORY ?? 0);
+      if (split && memoryCycles > 0) {
+        // A long session: hover every visible turn and scroll both panels again and again. Live heap after a full
+        // collection must level off; steady growth per cycle is a leak.
+        const heap = async (): Promise<number> => {
+          for (let pass = 0; pass < 3; pass++) await inspector.post("HeapProfiler.collectGarbage");
+          return process.memoryUsage().heapUsed;
+        };
+        const move = (column: number, row: number): void => tui.handleTerminalInput(`\x1b[<35;${column + 1};${row + 1}M`);
+        const memory: { cycle: number; heapUsed: number }[] = [];
+        const every = Math.max(1, Math.floor(memoryCycles / 10));
+        memory.push({ cycle: 0, heapUsed: await heap() });
+        for (let cycle = 1; cycle <= memoryCycles; cycle++) {
+          // Visit different parts of the history: the start, then a page a few screens above the end.
+          for (const target of views) {
+            if (cycle % 2) target.scrollToStart();
+            else { target.scrollToEnd(); target.scrollBy(-(1 + cycle % 5) * target.viewportHeight); }
+          }
+          const lines = (await capture()).map(stripTerminalSequences);
+          // Hover a row of every turn on screen, then leave.
+          for (const [row, line] of lines.entries()) if (/SYNTHETIC (USER|THINKING) \d+/.test(line)) {
+            move(line.search(/SYNTHETIC/), row);
+            await capture();
+          }
+          move(0, 0);
+          for (const target of views) target.scrollToEnd();
+          await capture();
+          if (cycle % every === 0 || cycle === memoryCycles) memory.push({ cycle, heapUsed: await heap() });
+        }
+        await writeFile(path.join(ctx.cwd, "rendering-memory.json"), JSON.stringify({ memory, turns: process.env.PROFILE_TURN_MARKS ?? "" }, null, 2));
+      }
       if (split && process.env.PROFILE_SEARCH === "1") {
         if (process.env.PROFILE_SEARCH_PANE === "activity") {
           const lines = (await capture()).map(stripTerminalSequences);

@@ -20,6 +20,15 @@ const profileSearch = process.env.PROFILE_SEARCH === "1";
 const callsPerTurn = Number(process.env.PROFILE_CALLS ?? 1);
 const argChars = Number(process.env.PROFILE_ARG_CHARS ?? 0);
 const compact = process.env.PROFILE_COMPACT === "1";
+// Turn presentation of the candidate; a baseline without turn settings ignores them.
+const turnMarks = (process.env.PROFILE_TURN_MARKS ?? "").split(",").filter(Boolean);
+const hover = process.env.PROFILE_HOVER === "1";
+const turnSettings = {
+  turns: turnMarks.length > 0 || hover,
+  turnClock: turnMarks.includes("clock"), turnStripe: turnMarks.includes("line") ? "line" : turnMarks.includes("stripe") ? "block" : "off",
+  turnBackground: turnMarks.includes("background"), turnSeparator: turnMarks.includes("separator"),
+};
+const pointer = process.env.PROFILE_POINTER === "1" || hover;
 const argText = (index: number, call: number, length: number): string => {
   let text = "";
   for (let row = 0; text.length < length; row++) text += "const value" + row + " = await tools.read({ path: \"synthetic/" + index + "/" + call + "/" + row + ".ts\" });\n";
@@ -59,6 +68,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
       mode: "split", side: "left", chatWidth: Math.floor((width - 1) * 0.35),
       layout: mode === "rows" ? "rows" : "columns", chatHeight: null, zoom: null, showTimestamps: true, compactTools: compact,
+      ...turnSettings, turnHover: hover, goTo: "clock",
     }));
     const manager = SessionManager.create(cwd, cwd);
     const at = Date.parse("2026-01-01T10:00:00Z");
@@ -78,7 +88,7 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     const runtime = { extensions, transcriptCommit, pi: execFileSync(process.env.PI_COMMAND ?? "pi", ["--version"], { encoding: "utf8" }).trim(),
       transcript: { path: transcript, sourceCommit: transcriptCommit, workingTree: transcriptGit("status", "--porcelain") },
       profileStartup: process.env.PROFILE_STARTUP === "1", profileSearch, searchPane,
-      workload: { exchanges: size, callsPerTurn, argChars, compact, toolLines, width, height, scrollbar, syntheticOnly: true },
+      workload: { exchanges: size, callsPerTurn, argChars, compact, turnMarks, hover, pointer, toolLines, width, height, scrollbar, syntheticOnly: true },
       provider: "One local scripted setup turn, outside the measured actions. No paid model call or tool execution.", mode };
     await mkdir(artifact, { recursive: true });
     await writeFile(path.join(output, "runtime-" + mode + ".json"), JSON.stringify(runtime, null, 2));
@@ -87,8 +97,10 @@ test.each(modes)("profiles native rendering in %s", async mode => {
       piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
       environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_IDE_PATH: "", PI_TRANSCRIPT_TEST_SESSION: manager.getSessionFile()!,
         PROFILE_MODE: mode, PROFILE_HISTORY: String(size), PROFILE_SAMPLES: process.env.PROFILE_SAMPLES ?? "12", PROFILE_TOOL_LINES: String(toolLines),
-        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_COMPACT: compact ? "1" : "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane, PROFILE_FOCUS: process.env.PROFILE_FOCUS ?? "" },
-      rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000,
+        PROFILE_STARTUP: process.env.PROFILE_STARTUP ?? "0", PROFILE_COMPACT: compact ? "1" : "0", PROFILE_SEARCH: profileSearch ? "1" : "0", PROFILE_SEARCH_PANE: searchPane, PROFILE_FOCUS: process.env.PROFILE_FOCUS ?? "",
+        PROFILE_POINTER: pointer ? "1" : "0", PROFILE_HOVER: hover ? "1" : "0",
+        PROFILE_MEMORY: process.env.PROFILE_MEMORY ?? "0" },
+      rawMode: false, tuiSize: { cols: width, rows: height }, timeoutMs: 180_000 + Number(process.env.PROFILE_MEMORY ?? 0) * 3_000,
       extensions,
       tools: [], conversation: [assistantMessage([text("SYNTHETIC PROFILE READY", { chunks: { kind: "fixed", size: 100 } })])],
     }).run("SYNTHETIC PROFILE SETUP");
@@ -98,6 +110,9 @@ test.each(modes)("profiles native rendering in %s", async mode => {
     const measurements = JSON.parse(await readFile(path.join(cwd, "rendering-measurements.json"), "utf8"));
     await writeFile(path.join(artifact, "measurements.json"), JSON.stringify(measurements, null, 2));
     await writeFile(path.join(artifact, "rendering.cpuprofile"), await readFile(path.join(cwd, "rendering.cpuprofile")));
+    if (Number(process.env.PROFILE_MEMORY ?? 0) > 0) {
+      await writeFile(path.join(artifact, "memory.json"), await readFile(path.join(cwd, "rendering-memory.json")));
+    }
     if (process.env.PROFILE_STARTUP === "1") {
       for (const phase of ["initial", "cold"]) {
         await writeFile(path.join(artifact, phase + ".cpuprofile"), await readFile(path.join(cwd, phase + ".cpuprofile")));

@@ -131,6 +131,9 @@ interface Classified {
   parent?: { id: string; owner?: NativeContent; parts?: Component[] };
 }
 
+/** Native messages that start a turn: what the user or an extension gave the agent. */
+const TURN_STARTS = new Set(["UserMessageComponent", "SkillInvocationMessageComponent", "CustomMessageComponent"]);
+
 const parentOf = (component: NativeContent): unknown => component.entry?.data?.parentToolCallId ?? component.message?.details?.parentToolCallId;
 
 /** The previous entry for the same native block, when every field that renders or searches it is equal. */
@@ -229,6 +232,61 @@ export class NativeContentIndex {
   contains(source: Component, pane?: Pane): boolean {
     this.refresh();
     return this.content.some(entry => entry.source === source && (pane === undefined || panes[entry.kind] === pane));
+  }
+
+  /**
+   * The turn of a block: 1 for the first user, skill or custom message and the work that follows it, 2 for the next,
+   * and so on; 0 before the first one. Consecutive messages without work in between share one turn.
+   */
+  turn(source: Component): number {
+    return this.turns().turns.get(source) ?? 0;
+  }
+
+  /** Every block's turn, for reading many blocks in one frame; blocks before the first turn map to 0. */
+  turnMap(): ReadonlyMap<Component, number> {
+    return this.turns().turns;
+  }
+
+  /**
+   * The block of the other panel at the same point of history: the same native message when it has a part there;
+   * from Activity, the last Conversation block before it; from Conversation, the first Activity block after it.
+   * Without one in that direction, the nearest block in the other direction.
+   */
+  counterpart(source: Component, from: Pane): Component | undefined {
+    const content = this.entries();
+    const { positions } = this.turns();
+    const position = positions.get(source);
+    if (position === undefined) return undefined;
+    const other = (entry: ContentEntry): boolean => panes[entry.kind] !== from;
+    const same = content.find(entry => entry.source === source && other(entry));
+    if (same) return same.source;
+    const step = from === "activity" ? -1 : 1;
+    for (const direction of [step, -step]) {
+      for (let index = position + direction; index >= 0 && index < content.length; index += direction) {
+        if (other(content[index])) return content[index].source;
+      }
+    }
+    return undefined;
+  }
+
+  private turnIndex?: { content: ContentEntry[]; turns: Map<Component, number>; positions: Map<Component, number> };
+  /** Turns and history positions, rebuilt only when the classified history changes. */
+  private turns(): NonNullable<NativeContentIndex["turnIndex"]> {
+    const content = this.entries();
+    if (this.turnIndex?.content === content) return this.turnIndex;
+    const turns = new Map<Component, number>();
+    const positions = new Map<Component, number>();
+    let turn = 0;
+    let worked = false;
+    for (const [position, entry] of content.entries()) {
+      if (!positions.has(entry.source)) positions.set(entry.source, position);
+      if (entry.owner === entry.source && TURN_STARTS.has(nameOf(entry.source))) {
+        if (turn === 0 || worked) { turn++; worked = false; }
+      } else if (turn) worked = true;
+      if (!turns.has(entry.source)) turns.set(entry.source, turn);
+    }
+    this.turnIndex = { content, turns, positions };
+    return this.turnIndex;
   }
 
   /** Build clipboard text only on demand, from this branch's current semantic block. */

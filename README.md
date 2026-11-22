@@ -37,6 +37,7 @@ If the Activity surface cannot fit without clipping, the view temporarily return
 
 - Arrange Conversation and Activity in columns or rows, swap or resize the panels, and zoom either one while keeping the input full width.
 - Group consecutive Activity tools and expand individual calls inline while keeping thinking visible.
+- Optionally see which work belongs to which request: each request and everything the agent did for it share a color in both panels, pointing at a block highlights all of it, and a block's clock jumps to the same moment in the other panel.
 - Copy an individual user message, assistant reply or thinking block with its own copy icon.
 - Copy a complete tool call with its arguments, saved result and linked late output, including collapsed and off-screen text.
 - Search panel history with literal text, Boolean expressions or regular expressions, then jump between matches.
@@ -85,6 +86,7 @@ Click the toolbar and the buttons in each panel's header. Buttons use text label
 | `[ ≡ ]` | `[Settings]` | Open display and Conversation height settings. |
 | `[ ⌕ ]` | `[Find]` | Search this panel. |
 | `[ ⊟ ]` / `[ ⊞ ]` | `[Compact tools]` / `[Full tools]` | Compact Activity tools / restore full tools. |
+| `[ ⇄ ]` | `[Go to]` | Open the same moment in the other panel (when Go to includes the button). |
 
 **Resize:** drag the double line between the panels — `═` in rows, `║` in columns.
 
@@ -123,6 +125,35 @@ Compact rows and groups work in columns, rows and zoomed Activity. Settings save
 **Stream latest tools** (on by default, in Settings) lets you watch the current work while keeping history short. While Compact or Group is on, a new tool call appears as its full card and updates live. When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place: into a compact row with Compact on, and into the adjacent identical calls' group (`read ×3`) with Group on. With both off, every call already shows in full, so streaming changes nothing.
 
 Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both options survive restart; streaming defaults to on.
+
+## Find your way between requests
+
+A turn is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one turn.
+
+Turn colors, hover highlighting and Go to are on by default. Set **Turns** to `off` in Stereo View settings to turn them all off; the settings indented under it choose what each does, and keep their values while Turns is off.
+
+Every turn gets its own color in both panels, so the work for one request is easy to tell from the next. Turns are marked in four independent ways; use any combination:
+
+| Setting | Values | What it marks |
+| --- | --- | --- |
+| **Clock color** | `on` (default), `off` | The background of each block's clock. |
+| **Stripe** | `block` (default), `line`, `off` | Every block's left column: a colored cell or a thin colored line. |
+| **Background** | `on`, `off` (default) | The background of every block. |
+| **Separator** | `on` (default), `off` | A colored line across both panels where each new turn begins. |
+
+Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Background color strength** (8% by default), **Hover color strength** (10%), **Stripe color strength** (20%, also for separators) and **Clock color strength** (10%). With these strengths and hover in the turn's color, the clock of a hovered block with a turn background is 8 + 10 + 10 = 28% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end.
+
+**Hover color** sets the hover layer's color: `turn` highlights each turn in its own color, or one `#rrggbb` color highlights every turn the same way; the default is gray, `#808080`. `←` and `→` pick from presets; `Enter` opens a field to type any color. Clocks, stripes and separators keep their turn's own color on top of a one-color hover. Tool cards, your messages and extension messages keep their own backgrounds; turn backgrounds only fill the plain background around them.
+
+**Highlight on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
+
+**Go to** opens the same moment of history in the other panel:
+
+- From Activity, it shows the Conversation block just before: for a tool call, the reply that made it.
+- From Conversation, it shows the first Activity block after: for your message, the work it started.
+- A message with a part in both panels, such as a reply with thinking, opens its own other part.
+
+Click a block's clock, including the clock of a compact tool row or group, or the `[ ⇄ ]` / `[Go to]` button beside Copy. The **Go to** setting chooses `clock`, `button`, `both` (default) or `off`. A zoomed panel returns to the split first. The other panel becomes the active one, so keyboard scrolling continues there.
 
 ## Search history
 
@@ -193,7 +224,7 @@ Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active p
 
 ## Settings and limits
 
-Your layout, panel order, sizes, compact Activity choice, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
+Your layout, panel order, sizes, compact Activity choice, turn marks, hover and Go to choices, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
 
 - Tested with Pi 1.1.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.
