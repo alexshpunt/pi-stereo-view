@@ -774,9 +774,14 @@ export class NativeDocument extends Container {
       const color = turn && (inset || tint || hovered === turn) ? this.turns?.color(turn, { background: tint, hover: hovered === turn }) : undefined;
       const background = color?.fill;
       // A line stripe draws on the block's layers; a block stripe is a layer of its own.
-      const prefix = !inset ? "" : !color ? " " : stripe === "line" ? (background ?? "") + color.line + "│\x1b[39m" : color.stripe + " \x1b[49m";
+      const mark = (fill: string | undefined): string =>
+        !inset ? "" : !color ? " " : stripe === "line" ? (fill ?? "") + color.line + "│\x1b[39m" : color.stripe + " \x1b[49m";
+      const prefix = mark(background);
+      // The separator stands between turns: the turn's background and hover start below it.
+      const rulePrefix = mark(undefined);
       for (const child of result) {
-        const childLines = decorateLines(child.render(width), background, prefix);
+        const rule = child instanceof TurnRule;
+        const childLines = decorateLines(child.render(width), rule ? undefined : background, rule ? rulePrefix : prefix);
         heights.push(childLines.length);
         for (const line of childLines) lines.push(line);
       }

@@ -212,10 +212,20 @@ test("a separator rule marks where each later turn starts, combined with other m
   state.marks = { ...state.marks, stripe: "block", background: true };
   document.beginFrame();
   const rows = document.render(20);
-  const rule = rows.find(row => stripTerminalSequences(row).endsWith("─".repeat(19)))!;
-  // Stripe and rule sit on the turn's background layer.
+  const ruleRow = rows.findIndex(row => stripTerminalSequences(row).endsWith("─".repeat(19)));
+  const rule = rows[ruleRow];
+  // The stripe runs on through the rule in the turn's color.
   expect(rule.startsWith(layered(2, true, false).stripe)).toBe(true);
   expect(rule).toContain(layered(2, true, false).line);
+  // The rule and the blank row above it stand between turns: neither the background nor hover tints them,
+  // while the row right below the rule already has the turn's background.
+  state.hovered = 2;
+  document.beginFrame();
+  const hovered = document.render(20);
+  const fill = layered(2, true, true).fill!;
+  expect(hovered[ruleRow - 1]).not.toContain(fill);
+  expect(hovered[ruleRow]).not.toContain(fill);
+  expect(hovered[ruleRow + 1]).toContain(fill);
 });
 
 test("turn backgrounds tint default cells of each turn and hover tints the turn under the pointer", () => {
