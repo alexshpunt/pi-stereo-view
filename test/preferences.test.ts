@@ -8,7 +8,7 @@ const arrangement = {
   side: "right", chatWidth: 73, layout: "rows", chatHeight: 17,
   showTimestamps: false, showCopyButtons: false, compactTools: true, groupTools: false, nestedTree: false, streamTools: true, streamDelay: 8, buttonStyle: "icons",
   turns: true, turnClock: false, turnStripe: "line", turnBackground: true, turnSeparator: true, turnClockMix: 20, turnStripeMix: 50,
-  turnBackgroundMix: 3, turnHoverMix: 40, turnHoverColor: "#3b82f6", turnHover: false, goTo: "button",
+  turnBackgroundMix: 3, turnHoverMix: 40, turnHoverColor: "#3b82f6", turnHover: false, goTo: "button", piWindows: "maximize",
 } as const;
 
 test.each(["chat", "activity", null] as const)("ignores legacy temporary state with %s zoom without losing the saved arrangement", async zoom => {
@@ -55,6 +55,25 @@ test("files saved before turn settings get the default turn marks, on", async ()
       turns: true, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true, turnClockMix: 10, turnStripeMix: 20,
       turnBackgroundMix: 8, turnHoverMix: 10, turnHoverColor: "#808080", turnHover: true, goTo: "both",
     });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("files saved before the Pi windows setting open Pi's windows in combined history", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    const { piWindows: _piWindows, ...older } = arrangement;
+    await writeFile(file, JSON.stringify(older));
+    expect(await loadPreferences(file)).toMatchObject({ piWindows: "combined" });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test.each([{ piWindows: "fullscreen" }, { piWindows: true }])("rejects an invalid Pi windows setting %o", async invalid => {
+  const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    await writeFile(file, JSON.stringify({ ...arrangement, ...invalid }));
+    await expect(loadPreferences(file)).rejects.toThrow("Invalid pi-stereo-view preferences");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

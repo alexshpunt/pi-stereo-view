@@ -64,7 +64,7 @@ test("tool clocks follow new start records and branch changes in a real session"
 // Content routing identifies native Markdown by its class name.
 const CountedMarkdown = class Markdown extends NativeMarkdown {
   renders = 0;
-  override render(width: number): string[] { this.renders++; return super.render(width); }
+  override render(width: number): readonly string[] { this.renders++; return super.render(width); }
 };
 type CountedMarkdown = InstanceType<typeof CountedMarkdown>;
 class AssistantMessageComponent extends Container {

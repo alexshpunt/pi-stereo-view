@@ -27,7 +27,7 @@ export default function startupRoutingProbe(pi: ExtensionAPI): void {
   });
   pi.on("agent_before_settle", async (_event, ctx) => {
     await emittedFrame(tui, () => tui.requestRender(true));
-    const panes: Record<string, string[]> = {};
+    const panes: Record<string, readonly string[]> = {};
     const seen = new Set<Component>();
     const visit = (component: Component): void => {
       if (seen.has(component)) return;

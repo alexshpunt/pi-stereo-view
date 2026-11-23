@@ -108,7 +108,7 @@ export default function turnNavigationProbe(pi: ExtensionAPI): void {
         await click(visibleWidth(toolbar.slice(0, toolbar.indexOf("[ ≡ ]"))) + 2, 0);
         await capture("settings");
         // Past the general settings and the Turns header to Clock color.
-        for (let index = 0; index < 10; index++) await input("\x1b[B");
+        for (let index = 0; index < 11; index++) await input("\x1b[B");
         await input(" ");
         await input("\x1b");
         await reveal("activity", "FIRST-PATH");

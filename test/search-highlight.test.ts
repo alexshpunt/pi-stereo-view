@@ -10,7 +10,7 @@ const hit = (text: string, ranges: { start: number; end: number }[], line = 0, s
 const colors = (highlighted: string[]): Theme => ({
   style: (text: string) => { highlighted.push(text); return "\x1b[30;43m" + text + "\x1b[39;49m"; },
 }) as unknown as Theme;
-const checkText = (before: string[], after: string[]): void => {
+const checkText = (before: readonly string[], after: readonly string[]): void => {
   expect(after.map(stripTerminalSequences)).toEqual(before.map(stripTerminalSequences));
   expect(after.map(visibleWidth)).toEqual(before.map(visibleWidth));
 };

@@ -13,7 +13,7 @@ export default function externalEditorProbe(pi: ExtensionAPI): void {
     await emittedFrame(tui, () => tui.requestRender(true));
     // Fullscreen frames use the layout engine; the width-only render runs during stop().
     const render = tui.render;
-    let stopped: string[] = [];
+    let stopped: readonly string[] = [];
     tui.render = width => { stopped = render.call(tui, width); return stopped; };
     try {
       await emittedFrame(tui, () => tui.handleTerminalInput("\x07"),

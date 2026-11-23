@@ -70,7 +70,7 @@ export default function semanticRoutingProbe(pi: ExtensionAPI): void {
     const reusedStatus = source.children.at(-1) === status;
     source.addChild(new OpaqueSystemNote("UNKNOWN SYSTEM MARKER", 0, 0));
     await emittedFrame(tui, () => tui.requestRender(true));
-    const panes: Record<string, string[]> = {};
+    const panes: Record<string, readonly string[]> = {};
     const search: Record<string, { text: string; label: string }[]> = {};
     for (const document of documents()) {
       document.beginFrame();

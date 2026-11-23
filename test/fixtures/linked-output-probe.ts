@@ -47,7 +47,7 @@ export default function linkedOutputProbe(pi: ExtensionAPI): void {
     const history = mounted[0].source.children[2] as Container;
     const original = [...history.children];
     const native = history.render(180);
-    const panes: Record<string, string[]> = {};
+    const panes: Record<string, readonly string[]> = {};
     const search: Record<string, { text: string; label: string }[]> = {};
     for (const document of mounted) {
       document.beginFrame();
@@ -147,7 +147,7 @@ export default function linkedOutputProbe(pi: ExtensionAPI): void {
     }
     await emittedFrame(tui, () => tui.requestRender(true));
     const native = history.render(180);
-    const panes: Record<string, string[]> = {};
+    const panes: Record<string, readonly string[]> = {};
     const search: Record<string, { text: string; label: string }[]> = {};
     for (const document of mounted) {
       document.beginFrame();
