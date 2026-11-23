@@ -1,6 +1,6 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Container, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { NativeDocument, type DocumentViewport } from "../src/native.ts";
 import { CompactMessage, TranscriptTimestamps } from "../src/timestamps.ts";
 import type { SearchHit } from "../src/search.ts";
@@ -15,10 +15,10 @@ class UserMessageComponent extends Text {
     while (performance.now() < until) { /* simulate an expensive native renderer */ }
     return super.render(width);
   }
-  handleMouse(event: TuiMouseEvent): { handled: true } | undefined {
+  handleMouse(event: TuiMouseEvent): { capture: true } | undefined {
     if (event.type !== "press") return undefined;
     this.clicks.push(event.y);
-    return { handled: true };
+    return { capture: true };
   }
 }
 
@@ -198,9 +198,21 @@ test("mouse events reach an entry far outside the rendered window", () => {
   view({ top: 0, height: 20, following: false });
   frame();
   const row = rowOf(lines, "MSG 180");
-  document.handleMouse({ type: "press", button: "left", x: 1, y: row, screenX: 1, screenY: 5, width: 40, height: lines.length,
-    shift: false, alt: false, ctrl: false });
-  expect(users[180].clicks).toEqual([0]);
+  // Pi-Bolt's handler relies on instance methods. Real containers must still be free to delegate.
+  const handleMouse = Container.prototype.handleMouse;
+  const guard = vi.spyOn(Container.prototype, "handleMouse").mockImplementation(function (this: Container, event) {
+    expect(this).toBeInstanceOf(Container);
+    return handleMouse.call(this, event);
+  });
+  try {
+    const result = document.handleMouse({ type: "press", button: "left", x: 1, y: row, screenX: 61, screenY: 5, width: 40, height: lines.length,
+      shift: false, alt: false, ctrl: false });
+    expect(result).toMatchObject({ handled: true, capture: true, target: { originX: 60, originY: 5, width: 40, height: 1 } });
+    expect(result?.target.component).toBe(users[180]);
+    expect(users.flatMap(user => user.clicks)).toEqual([0]);
+  } finally {
+    guard.mockRestore();
+  }
 });
 
 test("settings and theme changes re-render offscreen entries over the next frames", () => {
