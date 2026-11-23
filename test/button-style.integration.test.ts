@@ -22,7 +22,7 @@ test("switches button presentation in settings, copies, fits narrow rows and sur
     expect((await run("button-style", 1)).exitCode).toBe(0);
     const { frames, copies, compactStates, headerBackgrounds }: { frames: Record<string, string[]>; copies: string[]; compactStates: boolean[]; headerBackgrounds: string[] } = JSON.parse(await readFile(path.join(cwd, "style.json"), "utf8"));
     expect(frames.initial[0]).toContain("[ ≡ ]");
-    expect(frames.menu.join("\n")).toContain("Button style");
+    expect(frames.menu.join("\n")).toContain("Button labels");
     expect(frames.text[0]).toMatch(/^\[[A-Za-z]+\] \[[A-Za-z]+\] \[[A-Za-z]+\] \[[A-Za-z]+\]/);
     expect(frames.text.join("\n")).toContain("[Copy]");
     expect(frames.textSearch.join("\n")).toContain("[Go] [Exit]");

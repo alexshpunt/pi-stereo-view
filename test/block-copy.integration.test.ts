@@ -102,7 +102,7 @@ test.each([
     const beforeUser = userFrame.slice(Math.max(0, userIndex - 3), userIndex).join("\n");
     if (showTimestamps) expect(beforeUser).toMatch(/\d{2}:\d{2}:\d{2}/);
     else expect(beforeUser).not.toMatch(/\d{2}:\d{2}:\d{2}/);
-    expect(observation.frames.copySettings.join("\n")).toContain("Show copy buttons");
+    expect(observation.frames.copySettings.join("\n")).toContain("Copy buttons");
     expect(observation.frames.copyIconsHidden.join("\n")).not.toContain("⧉");
     expect(observation.frames.copyIconsHidden.join("\n")).not.toContain("\u034f");
     expect(observation.frames.copyIconsRestored.join("\n")).toContain("⧉\u034f");

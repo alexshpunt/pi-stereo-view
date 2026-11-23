@@ -82,7 +82,7 @@ export default function buttonStyleProbe(pi: ExtensionAPI): void {
       if (process.env.STYLE_CONTROLS === "1") {
         await click("[ ≡ ]");
         frames.menu = await capture();
-        await click("Button style");
+        await click("Button labels");
         await input("\x1b");
         frames.text = await capture();
         const headerRow = frames.text.findIndex(line => line.includes("Activity"));
@@ -134,7 +134,7 @@ export default function buttonStyleProbe(pi: ExtensionAPI): void {
         }
       } else if (process.env.STYLE_CONTROLS === "2") {
         await click("[Settings]");
-        await click("Button style");
+        await click("Button labels");
         await input("\x1b");
         frames.iconsRestored = await capture();
       }

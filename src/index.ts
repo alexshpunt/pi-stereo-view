@@ -13,8 +13,26 @@ import { NestedCalls } from "./nested-calls.ts";
 import { ProblemReporter } from "./report.ts";
 
 const DELAYS = [1, 2, 3, 5, 10, 30];
-/** Settings show what each Pi menu placement does; the saved file keeps the short values. */
-const PI_MENU_LABELS: Record<PiWindows, string> = { combined: "full width", maximize: "maximize Activity", inline: "in Activity" };
+/**
+ * What a setting's values read as in the settings list, by setting id: what the user sees once it is chosen. The saved
+ * file and the code keep the short values. Values without an entry, such as delays, percents and colors, show as they are.
+ */
+const SHOWN_VALUES: Record<string, Record<string, string>> = {
+  timestamps: { on: "shown", off: "hidden" },
+  copyButtons: { on: "shown", off: "hidden" },
+  buttonStyle: { text: "words" },
+  compactTools: { on: "one line", off: "full" },
+  groupTools: { on: "merge", off: "separate" },
+  nestedTree: { on: "tree", off: "raw output" },
+  streamTools: { on: "full", off: "one line" },
+  height: { auto: "grow with messages", manual: "fixed by drag" },
+  piWindows: { combined: "full screen", maximize: "maximize Activity", inline: "inside Activity" },
+  turnHoverColor: { turn: "request color" },
+  goTo: { clock: "click clock", button: "button" },
+};
+const shownValue = (id: string, value: string): string => SHOWN_VALUES[id]?.[value] ?? value;
+const savedValue = (id: string, shown: string): string =>
+  Object.entries(SHOWN_VALUES[id] ?? {}).find(([, label]) => label === shown)?.[0] ?? shown;
 
 /** Split native fullscreen history without changing message content or the input dock. */
 export default async function transcript(pi: ExtensionAPI): Promise<void> {
@@ -61,8 +79,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         };
         if (dismissOutside) viewport.dispatchMouseToOverlay = dismissOutside;
         const hoverAvailable = layout?.hoverAvailable() ?? false;
-        const HOVER_LABEL = "  Highlight on hover";
-        const TURNS_HEADER = "Turns";
+        const HOVER_LABEL = "  Highlight request on hover";
+        const TURNS_HEADER = "Color each request";
         const SETTINGS_BACKGROUND = "customMessageBg";
         const listTheme = getSettingsListTheme();
         // A saved mix outside the offered steps stays selectable until another is chosen.
@@ -73,83 +91,83 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         // A typed hover color joins the presets, so the arrows can step to and from it.
         const hoverColors = (current: string): string[] => ["turn", ...new Set([...HOVER_COLORS, ...(current === "turn" ? [] : [current])])];
         const items: SettingItem[] = [{
-          id: "timestamps", label: "Show timestamps",
-          description: "Hide clock rows without changing messages or recorded tool starts.",
+          id: "timestamps", label: "Block clocks",
+          description: "The clock row above every block. Hiding it keeps the recorded times.",
           currentValue: preferences.showTimestamps ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "copyButtons", label: "Show copy buttons",
-          description: "Hide copy buttons and their rows; keyboard copying stays available.",
+          id: "copyButtons", label: "Copy buttons",
+          description: "The Copy button on every block. Keyboard copying works either way.",
           currentValue: preferences.showCopyButtons ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "buttonStyle", label: "Button style",
-          description: "Choose icons or text for toolbar, panel and copy controls.",
+          id: "buttonStyle", label: "Button labels",
+          description: "Toolbar, panel and copy buttons as icons, such as [ ⌕ ], or as words, such as [Find].",
           currentValue: preferences.buttonStyle, values: ["icons", "text"],
         }, {
-          id: "compactTools", label: "Compact Activity tools",
-          description: "Show each finished call as one row that opens its full card. Full text stays searchable and copyable.",
+          id: "compactTools", label: "Finished tool calls",
+          description: "How Activity shows a finished tool call: one line that opens the full card when clicked, or the full card. Search and copy always use the full text.",
           currentValue: preferences.compactTools ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "groupTools", label: "Group Activity tools",
-          description: "Merge adjacent calls of the same tool and state under one counted header.",
+          id: "groupTools", label: "Repeated tool calls",
+          description: "Adjacent calls of the same tool in the same state: merged under one counted line, such as read ×3, or each on its own.",
           currentValue: preferences.groupTools ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "nestedTree", label: "Nested call tree",
-          description: "Show the calls a tool makes, such as Codemode's, as a tree. Off keeps the tool's own output panel.",
+          id: "nestedTree", label: "Codemode calls",
+          description: "The calls a tool makes, such as Codemode's: a tree under the tool, or the tool's own raw output.",
           currentValue: preferences.nestedTree ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "streamTools", label: "Stream latest tools",
-          description: "While compact or grouped, show new tool calls in full and collapse them after the delay.",
+          id: "streamTools", label: "Running tool calls",
+          description: "While finished calls show as one line or merged: a running call shows its full card and folds after the delay below, or shows as one line right away.",
           currentValue: preferences.streamTools ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "streamDelay", label: "Collapse delay",
-          description: "How long a finished streamed tool call stays fully visible before it collapses.",
+          id: "streamDelay", label: "Fold finished calls after",
+          description: "How long a finished call stays full before it folds into one line or its merged group.",
           currentValue: `${preferences.streamDelay}s`, values: [...new Set([...DELAYS, preferences.streamDelay])].sort((a, b) => a - b).map(seconds => `${seconds}s`),
         }, {
-          id: "height", label: "Conversation height",
-          description: "Auto grows to half the history area. Drag sets a manual maximum.",
+          id: "height", label: "Conversation height in rows",
+          description: "In the Rows layout, Conversation grows with its messages up to half the history, or keeps the height you dragged the divider to.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
         }, {
-          id: "piWindows", label: "Pi menus like /tree",
-          description: "Where Pi's own menus, such as /tree, /resume and /model, open while the panels are side by side. Full width hides the panels until the menu closes, maximize Activity hides Conversation, in Activity keeps them in the half-width Activity panel. Extension dialogs and agent questions always stay in Activity.",
-          currentValue: PI_MENU_LABELS[preferences.piWindows], values: PI_WINDOWS.map(value => PI_MENU_LABELS[value]),
+          id: "piWindows", label: "Pi pickers in split",
+          description: "Pi's own pickers, such as the session tree or the model list, while the panels are side by side: full screen until the picker closes, Activity maximized, or inside the half-width Activity. Extension dialogs and agent questions stay inside Activity.",
+          currentValue: preferences.piWindows, values: [...PI_WINDOWS],
         }, {
-          // The Turns header switches the whole feature; its settings sit indented under it and keep their values while it is off.
+          // The header switches the whole feature; its settings sit indented under it and keep their values while it is off.
           id: "turns", label: TURNS_HEADER,
-          description: "A turn is one request, yours or an extension's, with all the work that answers it. On colors each turn alike in both panels, highlights it on hover and links the panels with Go to, as the settings below choose.",
+          description: "A request is a message you or an extension send, with all the work that answers it. On colors each request alike in both panels, highlights it on hover and links the panels, as the settings below choose.",
           currentValue: preferences.turns ? "on" : "off", values: ["on", "off"],
         }, {
-          id: "turnClock", label: "  Clock color",
-          description: "Color the background of every block's clock in its turn's color.",
+          id: "turnClock", label: "  Tint clocks",
+          description: "Color the background of every block's clock with its request's color.",
           currentValue: preferences.turnClock ? "on" : "off", values: ["on", "off"],
         }, {
-          ...mixSetting("turnClockMix", "  Clock color strength", "How strongly the turn's color shows behind the clock: the percent of the hue mixed into the terminal background."),
+          ...mixSetting("turnClockMix", "  Clock tint strength", "How strongly the request's color shows behind the clock: the percent of the color mixed into the terminal background."),
         }, {
-          id: "turnStripe", label: "  Stripe",
-          description: "Mark every block of a turn on the left: a colored cell (block), a thin colored line, or nothing.",
+          id: "turnStripe", label: "  Left stripe",
+          description: "Mark every block of a request on the left: a colored cell (block), a thin colored line, or nothing.",
           currentValue: preferences.turnStripe, values: [...TURN_STRIPES],
         }, {
-          ...mixSetting("turnStripeMix", "  Stripe color strength", "How strongly the turn's color shows in stripes, lines and separators: 100% is the full hue."),
+          ...mixSetting("turnStripeMix", "  Stripe strength", "How strongly the request's color shows in stripes and in lines between requests: 100% is the full color."),
         }, {
-          id: "turnBackground", label: "  Background",
-          description: "Tint the background of every block of a turn. Tool cards and messages shift by the same amount.",
+          id: "turnBackground", label: "  Tint blocks",
+          description: "Tint the background of every block of a request. Tool cards and messages shift by the same amount.",
           currentValue: preferences.turnBackground ? "on" : "off", values: ["on", "off"],
         }, {
-          ...mixSetting("turnBackgroundMix", "  Background color strength", "How strongly the turn's color tints the background of its blocks."),
+          ...mixSetting("turnBackgroundMix", "  Block tint strength", "How strongly the request's color tints the background of its blocks."),
         }, {
-          id: "turnSeparator", label: "  Separator",
-          description: "Draw a line in the turn's color in both panels where each new turn begins.",
+          id: "turnSeparator", label: "  Line between requests",
+          description: "Draw a line in the request's color in both panels where each new request begins.",
           currentValue: preferences.turnSeparator ? "on" : "off", values: ["on", "off"],
         }, {
           id: "turnHover", label: HOVER_LABEL,
-          description: hoverAvailable ? "While the pointer is over any block, highlight its whole turn in both panels."
+          description: hoverAvailable ? "While the pointer is over any block, highlight its whole request in both panels."
             : "Unavailable: the terminal does not report pointer motion here, such as inside tmux, zellij or screen, or with Pi's mouse support off.",
           currentValue: hoverAvailable ? (preferences.turnHover ? "on" : "off") : "unavailable",
           values: hoverAvailable ? ["on", "off"] : ["unavailable"],
         }, {
-          ...mixSetting("turnHoverMix", "  Hover color strength", "How strongly the hover color tints every block of the turn under the pointer."),
+          ...mixSetting("turnHoverMix", "  Hover strength", "How strongly the hover color tints every block of the request under the pointer."),
         }, {
           id: "turnHoverColor", label: "  Hover color",
-          description: "turn highlights each turn in its own color; a #rrggbb color highlights every turn in that one color. ←/→ pick a preset; Enter types any color.",
+          description: "request color highlights each request in its own color; a #rrggbb color highlights every request in that one color. ←/→ pick a preset; Enter types any color.",
           currentValue: preferences.turnHoverColor, values: hoverColors(preferences.turnHoverColor),
           submenu: (current, done) => new HexInput(current, {
             title: text => ui.theme.bold(ui.theme.fg("accent", text)),
@@ -157,12 +175,17 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
             error: text => ui.theme.fg("error", text),
           }, done),
         }, {
-          id: "goTo", label: "  Go to",
-          description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
+          id: "goTo", label: "  Jump to other panel",
+          description: "Open the same point of history in the other panel by clicking a block's clock, with a Go to button beside Copy, both or neither.",
           currentValue: preferences.goTo, values: [...GO_TO],
         }];
+        for (const item of items) {
+          item.currentValue = shownValue(item.id, item.currentValue);
+          item.values = item.values?.map(value => shownValue(item.id, value));
+        }
         const VISIBLE_SETTINGS = 22;
-        const apply = (id: string, value: string): void => {
+        const apply = (id: string, shown: string): void => {
+          const value = savedValue(id, shown);
           if (id === "turns" || id === "turnClock" || id === "turnBackground" || id === "turnSeparator") layout?.setTurnMark(id, value === "on");
           else if (id === "turnStripe") layout?.setTurnMark("turnStripe", value as TurnStripe);
           else if (id === "turnClockMix" || id === "turnStripeMix" || id === "turnBackgroundMix" || id === "turnHoverMix") {
@@ -170,14 +193,11 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           } else if (id === "turnHoverColor") {
             layout?.setTurnMark(id, value);
             const item = items.find(entry => entry.id === id);
-            if (item) item.values = hoverColors(value);
+            if (item) item.values = hoverColors(value).map(entry => shownValue(id, entry));
           }
           else if (id === "turnHover") { if (value !== "unavailable") layout?.setTurnHover(value === "on"); }
           else if (id === "goTo") layout?.setGoTo(value as GoTo);
-          else if (id === "piWindows") {
-            const piWindows = PI_WINDOWS.find(entry => PI_MENU_LABELS[entry] === value);
-            if (piWindows) layout?.setPiWindows(piWindows);
-          }
+          else if (id === "piWindows") layout?.setPiWindows(value as PiWindows);
           else if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
           else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");

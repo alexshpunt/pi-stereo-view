@@ -27,13 +27,13 @@ Unrecognized content stays in Conversation unless its metadata links it to a kno
 
 Late output linked to a tool call appears directly below that call in Activity, even if other work has happened since. Combined history keeps its original order.
 
-Expand a parent tool such as Codemode to browse its nested call tree. To keep the parent's own output panel instead, turn off **Nested call tree** in Settings. Adjacent calls of the same tool form a group with individual call headers. Each independent native result opens under its call. A combined result covering several calls stays whole inside their group. Panels without child execution identities remain available inside the parent's output disclosure. Session restoration uses Pi's saved nested-call metadata and the original saved panels.
+Expand a parent tool such as Codemode to browse its nested call tree. To keep the parent's own output panel instead, set **Codemode calls** to `raw output` in Settings. Adjacent calls of the same tool form a group with individual call headers. Each independent native result opens under its call. A combined result covering several calls stays whole inside their group. Panels without child execution identities remain available inside the parent's output disclosure. Session restoration uses Pi's saved nested-call metadata and the original saved panels.
 
 Messages and tools keep their familiar appearance. Extension widgets and inline dialogs appear at the bottom of Activity, below its independently scrolling history. Standard select, confirm, input and editor dialogs and non-overlay custom components keep Pi's native input, focus and completion behavior. The message editor, including extension-provided replacements, stays full width whenever Pi displays it. Explicit overlays keep their native placement.
 
 If the Activity surface cannot fit without clipping, the view temporarily returns to combined history and Pi's normal placement. Combined history, zoomed Conversation and unsupported native layouts also leave dialogs and widgets in Pi's dock. Open forms stay live as layouts change and disappear when their producer closes them; they are not added to history.
 
-Pi's own menus, such as the session tree (`/tree` or double Escape), `/fork`, `/resume`, `/model`, `/login` and Pi's settings, are wide lists that only you open. While one is open with the panels side by side, the view temporarily returns to combined history so the menu gets the full width, then restores the split when it closes. Pi's follow-up questions, such as **Summarize branch?** after you pick another point in the tree, keep that placement. The **Pi menus like /tree** setting chooses **full width** (default), **maximize Activity**, which temporarily hides Conversation instead, or **in Activity**, which keeps them in the half-width Activity panel like extension dialogs. Rows and a maximized panel already give the menu the full width and keep it there. Extension dialogs, including questions the agent asks, stay under Activity so Conversation remains visible.
+Pi's own menus, such as the session tree (`/tree` or double Escape), `/fork`, `/resume`, `/model`, `/login` and Pi's settings, are wide lists that only you open. While one is open with the panels side by side, the view temporarily returns to combined history so the menu gets the full width, then restores the split when it closes. Pi's follow-up questions, such as **Summarize branch?** after you pick another point in the tree, keep that placement. The **Pi pickers in split** setting chooses `full screen` (default), `maximize Activity`, which temporarily hides Conversation instead, or `inside Activity`, which keeps them in the half-width Activity panel like extension dialogs. Rows and a maximized panel already give the menu the full width and keep it there. Extension dialogs, including questions the agent asks, stay under Activity so Conversation remains visible.
 
 ## Features
 
@@ -77,7 +77,7 @@ pi --tui-mode fullscreen
 
 ## Use it
 
-Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button style** to `icons`. The choice survives restart.
+Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button labels** to `icons`. The choice survives restart.
 
 | Icons | Text | Action |
 | --- | --- | --- |
@@ -87,14 +87,14 @@ Click the toolbar and the buttons in each panel's header. Buttons use text label
 | `[ ↗ ]` / `[ ↙ ]` | `[Maximize]` / `[Restore]` | Zoom a panel / restore the split. |
 | `[ ≡ ]` | `[Settings]` | Open display and Conversation height settings. |
 | `[ ⌕ ]` | `[Find]` | Search this panel. |
-| `[ ⊟ ]` / `[ ⊞ ]` | `[Compact tools]` / `[Full tools]` | Compact Activity tools / restore full tools. |
-| `[ ⇄ ]` | `[Go to]` | Open the same moment in the other panel (when Go to includes the button). |
+| `[ ⊟ ]` / `[ ⊞ ]` | `[Compact tools]` / `[Full tools]` | Show finished tool calls as one line / in full. |
+| `[ ⇄ ]` | `[Go to]` | Open the same moment in the other panel (when **Jump to other panel** includes the button). |
 
 **Resize:** drag the double line between the panels — `═` in rows, `║` in columns.
 
 New installs start in Columns: Conversation gets 20% of the width on the left, and Activity gets 80% on the right. Drag the divider or use the size shortcuts to change this.
 
-In Rows, Conversation grows with its messages up to half the available history area, then scrolls. Dragging the divider or setting a height changes that limit. Choose **Conversation height: auto** in settings, or run `/stereo-view height auto`, to restore automatic sizing.
+In Rows, Conversation grows with its messages up to half the available history area, then scrolls. Dragging the divider or setting a height changes that limit. Set **Conversation height in rows** to `grow with messages` in settings, or run `/stereo-view height auto`, to restore automatic sizing.
 
 Panels fit short content and scroll when history fills up. Each panel has its own scrolling, text selection and copy.
 
@@ -102,17 +102,17 @@ Swap the panels whenever you want. Zoom a panel to give it the whole history are
 
 ## Compact Activity
 
-Three independent settings in `/stereo-view settings` control how Activity shows tool calls. All three are on by default and survive restart.
+Three independent settings in `/stereo-view settings` control how Activity shows tool calls. Each survives restart; the first value is the default.
 
-| Setting | On | Off |
+| Setting | Values | What it shows |
 | --- | --- | --- |
-| **Compact Activity tools** | Each call is a one-line row; click it to open its full card and linked output. | Calls show their full cards. |
-| **Group Activity tools** | Adjacent calls to the same tool in the same state share one header with a count, such as `read ×3`. | Every call stands alone. |
-| **Nested call tree** | Calls made by a tool such as Codemode appear as a tree under it. | The tool keeps its own output panel. |
+| **Finished tool calls** | `one line`, `full` | One line per call that you click to open its full card and linked output, or the full card. |
+| **Repeated tool calls** | `merge`, `separate` | Adjacent calls to the same tool in the same state share one header with a count, such as `read ×3`, or each stands alone. |
+| **Codemode calls** | `tree`, `raw output` | Calls made by a tool such as Codemode appear as a tree under it, or the tool keeps its own output panel. |
 
-Compact and Group combine freely. With both on, a group opens into compact rows, and each row opens its card. With only Group on, a group opens straight into the members' full cards. With only Compact on, every call keeps its own row. With both off, Activity shows the original cards; this suits other extensions that draw their own tool cards.
+One-line and merged calls combine freely. With both, a group opens into one-line rows, and each row opens its card. With merged full calls, a group opens straight into the members' full cards. With one-line separate calls, every call keeps its own row. With full separate calls, Activity shows the original cards; this suits other extensions that draw their own tool cards.
 
-Click `[ ⊟ ]` or `[Compact tools]` beside Find and Maximize in the Activity header to turn compact rows on, and `[ ⊞ ]` or `[Full tools]` to turn them off. The button changes only **Compact Activity tools**.
+Click `[ ⊟ ]` or `[Compact tools]` beside Find and Maximize in the Activity header to turn compact rows on, and `[ ⊞ ]` or `[Full tools]` to turn them off. The button changes only **Finished tool calls**.
 
 Every failed call stays separate, even beside another failure. Left guides mark each level: members sit inside their group, and an open card and its linked output sit inside their call. Collapse a call or its group independently; reopening the group keeps your expanded calls, and so does turning grouping off and on again. Thinking, Conversation content and different tools end a group.
 
@@ -122,32 +122,32 @@ Search and `/stereo-view copy` still include full saved results and linked outpu
 
 Compact rows and groups work in columns, rows and zoomed Activity. Settings saved before grouping was a separate setting keep their look: grouping follows the saved compact choice.
 
-### Stream latest tools
+### Running tool calls
 
-**Stream latest tools** (on by default, in Settings) lets you watch the current work while keeping history short. While Compact or Group is on, a new tool call appears as its full card and updates live. When it finishes, it stays fully visible for the **Collapse delay** (1, 2, 3, 5, 10 or 30 seconds; default 5), then collapses in place: into a compact row with Compact on, and into the adjacent identical calls' group (`read ×3`) with Group on. With both off, every call already shows in full, so streaming changes nothing.
+**Running tool calls** (`full` by default) lets you watch the current work while keeping history short. While finished calls show as one line or merged, a new tool call appears as its full card and updates live. When it finishes, it stays full for **Fold finished calls after** (1, 2, 3, 5, 10 or 30 seconds; default 5), then folds in place: into one line, and into the adjacent identical calls' group (`read ×3`) when merged. With `one line`, a running call shows as one line right away. When finished calls show full and separate, every call already shows in full, so this setting changes nothing.
 
-Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both options survive restart; streaming defaults to on.
+Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both settings survive restart.
 
 ## Find your way between requests
 
 A turn is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one turn.
 
-Turn colors, hover highlighting and Go to are on by default. Set **Turns** to `off` in Stereo View settings to turn them all off; the settings indented under it choose what each does, and keep their values while Turns is off.
+Turn colors, hover highlighting and Go to are on by default. Set **Color each request** to `off` in Stereo View settings to turn them all off; the settings indented under it choose what each does, and keep their values while it is off.
 
 Every turn gets its own color in both panels, so the work for one request is easy to tell from the next. Turns are marked in four independent ways; use any combination:
 
 | Setting | Values | What it marks |
 | --- | --- | --- |
-| **Clock color** | `on` (default), `off` | The background of each block's clock. |
-| **Stripe** | `block` (default), `line`, `off` | Every block's left column: a colored cell or a thin colored line. |
-| **Background** | `on`, `off` (default) | The background of every block. |
-| **Separator** | `on` (default), `off` | A colored line across both panels where each new turn begins. |
+| **Tint clocks** | `on` (default), `off` | The background of each block's clock. |
+| **Left stripe** | `block` (default), `line`, `off` | Every block's left column: a colored cell or a thin colored line. |
+| **Tint blocks** | `on`, `off` (default) | The background of every block. |
+| **Line between requests** | `on` (default), `off` | A colored line across both panels where each new turn begins. |
 
-Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Background color strength** (8% by default), **Hover color strength** (10%), **Stripe color strength** (20%, also for separators) and **Clock color strength** (10%). With these strengths and hover in the turn's color, the clock of a hovered block with a turn background is 8 + 10 + 10 = 28% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end.
+Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Block tint strength** (8% by default), **Hover strength** (10%), **Stripe strength** (20%, also for lines between requests) and **Clock tint strength** (10%). With these strengths and hover in the turn's color, the clock of a hovered block with a turn background is 8 + 10 + 10 = 28% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end.
 
-**Hover color** sets the hover layer's color: `turn` highlights each turn in its own color, or one `#rrggbb` color highlights every turn the same way; the default is gray, `#808080`. `←` and `→` pick from presets; `Enter` opens a field to type any color. Clocks, stripes and separators keep their turn's own color on top of a one-color hover. Tool cards, your messages and other cells with their own background shift by the same amount as the plain background around them, so they stay as distinct from it as without the layers. The terminal's basic 16 colors stay as they are.
+**Hover color** sets the hover layer's color: `request color` highlights each turn in its own color, or one `#rrggbb` color highlights every turn the same way; the default is gray, `#808080`. `←` and `→` pick from presets; `Enter` opens a field to type any color. Clocks, stripes and separators keep their turn's own color on top of a one-color hover. Tool cards, your messages and other cells with their own background shift by the same amount as the plain background around them, so they stay as distinct from it as without the layers. The terminal's basic 16 colors stay as they are.
 
-**Highlight on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
+**Highlight request on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 
 **Go to** opens the same moment of history in the other panel:
 
@@ -155,7 +155,7 @@ Neighbouring turns get different hues. Colors stack in layers over your terminal
 - From Conversation, it shows the first Activity block after: for your message, the work it started.
 - A message with a part in both panels, such as a reply with thinking, opens its own other part.
 
-Click a block's clock, including the clock of a compact tool row or group, or the `[ ⇄ ]` / `[Go to]` button beside Copy. The **Go to** setting chooses `clock`, `button`, `both` (default) or `off`. A zoomed panel returns to the split first. The other panel becomes the active one, so keyboard scrolling continues there.
+Click a block's clock, including the clock of a compact tool row or group, or the `[ ⇄ ]` / `[Go to]` button beside Copy. The **Jump to other panel** setting chooses `click clock`, `button`, `both` (default) or `off`. A zoomed panel returns to the split first. The other panel becomes the active one, so keyboard scrolling continues there.
 
 ## Search history
 
@@ -190,7 +190,7 @@ During streaming, each click copies the content available at that moment. Copy u
 
 For keyboard access, run `/stereo-view copy` and choose a numbered block from the active panel. It copies the same text as that block's button.
 
-Use **Show copy buttons** in Stereo View settings to hide the buttons and their rows. This choice survives restart. Keyboard copying stays available when the buttons are hidden.
+Set **Copy buttons** to `hidden` in Stereo View settings to hide the buttons and their rows. This choice survives restart. Keyboard copying stays available when the buttons are hidden.
 
 ## Timestamps
 

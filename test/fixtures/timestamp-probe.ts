@@ -92,7 +92,7 @@ export default function timestampProbe(pi: ExtensionAPI): void {
     if (process.env.TIMESTAMP_ENABLE_TIMES === "1") {
       frames.hidden = await capture();
       await click("[ ≡ ]");
-      await click("Show timestamps");
+      await click("Block clocks");
       tui.handleTerminalInput("\x1b");
       frames.enabled = await capture();
     }
