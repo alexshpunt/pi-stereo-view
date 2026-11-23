@@ -56,12 +56,12 @@ export default function invisibleToolProbe(pi: ExtensionAPI): void {
     const original = [...history.children];
     activity.beginFrame();
     const lines = activity.render(180);
-    const blocks: Record<string, string[]> = {};
+    const blocks: Record<string, readonly string[]> = {};
     for (const child of activity.children) {
       const id = toolId(child);
       if (id) blocks[id] = child.render(180);
     }
-    const nativeBlocks: Record<string, string[]> = {};
+    const nativeBlocks: Record<string, readonly string[]> = {};
     for (const child of history.children as Native[]) if (child.toolCallId) nativeBlocks[child.toolCallId] = child.render(180);
     const chat = mounted.find(document => document.pane === "chat")!;
     chat.beginFrame();

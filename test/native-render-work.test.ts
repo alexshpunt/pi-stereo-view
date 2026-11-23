@@ -6,7 +6,7 @@ import { TranscriptTimestamps } from "../src/timestamps.ts";
 
 class UserMessageComponent extends Text {
   renders = 0;
-  override render(width: number): string[] { this.renders++; return super.render(width); }
+  override render(width: number): readonly string[] { this.renders++; return super.render(width); }
 }
 
 const colors = { fg: (_name: string, value: string) => value } as Theme;

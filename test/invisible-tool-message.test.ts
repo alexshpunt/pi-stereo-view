@@ -9,7 +9,7 @@ const imageResult = () => ({ content: [
 ], isError: false });
 const colors = { fg: (_name: string, value: string) => value } as Theme;
 const capabilities = getCapabilities();
-const images = (lines: string[]) => lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="));
+const images = (lines: readonly string[]) => lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;File="));
 type Renderers = NonNullable<ConstructorParameters<typeof ToolExecutionComponent>[4]>;
 const tool = (renderers?: Renderers) => new ToolExecutionComponent("unrelated_capture", "capture-owner", {}, {}, renderers,
   { requestRender() {} } as unknown as TUI, process.cwd());

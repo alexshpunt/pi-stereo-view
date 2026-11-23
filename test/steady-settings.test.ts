@@ -15,7 +15,7 @@ test("the settings list keeps one height and keeps its hint on the last row whil
   ];
   const list = new SettingsList(items, 10, theme, () => {}, () => {});
   const steady = new SteadySettings(list, items, 10, () => {});
-  const frames: string[][] = [];
+  const frames: (readonly string[])[] = [];
   for (let index = 0; index < items.length; index++) {
     frames.push(steady.render(30));
     steady.handleInput(DOWN);

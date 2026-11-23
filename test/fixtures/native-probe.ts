@@ -31,7 +31,7 @@ export default function nativeProbe(pi: ExtensionAPI): void {
   const capture = async (): Promise<string[]> => {
     tui!.requestRender(true);
     await setImmediate();
-    return tui!.getScreenLines?.() ?? tui!.render(tui!.terminal.columns);
+    return tui!.getScreenLines?.() ?? [...tui!.render(tui!.terminal.columns)];
   };
   pi.on("message_update", (event, ctx) => {
     if (!tui || process.env.TRANSCRIPT_PROBE_DYNAMIC !== "1" ||

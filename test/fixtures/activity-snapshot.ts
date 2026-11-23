@@ -30,7 +30,7 @@ export default function activitySnapshot(pi: ExtensionAPI): void {
       if (node.child) visit(node.child);
     };
     visit(tui.layoutRoot);
-    const panes: Record<string, string[]> = {};
+    const panes: Record<string, readonly string[]> = {};
     for (const document of documents) { document.beginFrame(); panes[document.pane] = document.render(180); }
     const activity = documents.find(document => document.pane === "activity")!;
     const lines = panes.activity.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));

@@ -20,7 +20,7 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
   const widths: Record<string, Record<string, number>> = {};
   class NativeCallText extends Text {
     constructor(private readonly tag: string) { super("NATIVE-HEADER-" + tag, 0, 0); }
-    override render(width: number): string[] {
+    override render(width: number): readonly string[] {
       renderWidths[this.tag] = width;
       return super.render(width);
     }

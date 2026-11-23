@@ -310,7 +310,7 @@ test("projects deferred native thinking and text after each streaming update wit
         }
       }
     }
-    override render(width: number): string[] {
+    override render(width: number): readonly string[] {
       if (this.contentIsStale) this.buildContent(this.lastMessage);
       return super.render(width);
     }
@@ -352,7 +352,7 @@ test("projects a settled Pi-Bolt reply after Pi-Bolt releases its native childre
     contentContainer = new Container();
     hasToolCalls = false;
     lastMessage = { content: [{ type: "thinking", thinking: "SETTLED REASONING" }, { type: "text", text: "SETTLED ANSWER" }] };
-    private compacted?: string[];
+    private compacted?: readonly string[];
     constructor() { super(); this.addChild(this.contentContainer); this.buildContent(); }
     private buildContent(): void {
       this.compacted = undefined;
@@ -371,7 +371,7 @@ test("projects a settled Pi-Bolt reply after Pi-Bolt releases its native childre
     isCompacted(): boolean { return this.compacted !== undefined; }
     // Private in Pi-Bolt; it makes the children again before drawing the message at another width.
     private thaw(): void { if (this.compacted) this.buildContent(); }
-    override render(width: number): string[] { return this.compacted ?? super.render(width); }
+    override render(width: number): readonly string[] { return this.compacted ?? super.render(width); }
     setHideThinkingBlock(): void {}
   }
   const assistant = new AssistantMessageComponent();

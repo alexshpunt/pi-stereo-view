@@ -10,7 +10,7 @@ type Host = TUI & { layoutRoot: Component; getScreenLines(): string[] };
 type Entry = { source: Component; owner: Component; component: Component; search(width: number): { text: string } };
 interface GroupDisclosure { closed: string[]; opened: string[]; reclosed: string[]; reopened: string[]; panelCounts: number[][] }
 interface CallDisclosure extends GroupDisclosure { id: string; name: string; expandable: boolean }
-interface Capture { panes: Record<string, string[]>; search: Record<string, { text: string; label: string }[]>; screen: string[]; children: { type: string; text: string }[]; toolIds: string[]; originalSources: boolean; originalRenderers: boolean; copies: string[]; folded: string[]; group?: GroupDisclosure; individual?: { grouped: string[]; panelCounts: number[]; calls: CallDisclosure[] } }
+interface Capture { panes: Record<string, readonly string[]>; search: Record<string, { text: string; label: string }[]>; screen: string[]; children: { type: string; text: string }[]; toolIds: string[]; originalSources: boolean; originalRenderers: boolean; copies: string[]; folded: string[]; group?: GroupDisclosure; individual?: { grouped: string[]; panelCounts: number[]; calls: CallDisclosure[] } }
 
 /** Follow rendered component links once per parent, retaining duplicate placements. */
 function references(root: Component, ancestors = new Set<Component>()): Component[] {
@@ -38,7 +38,7 @@ export default function nestedActivityProbe(pi: ExtensionAPI): void {
       if (node.child) visit(node.child);
     };
     visit(tui.layoutRoot);
-    const panes: Record<string, string[]> = {};
+    const panes: Record<string, readonly string[]> = {};
     const search: Record<string, { text: string; label: string }[]> = {};
     let children: Capture["children"] = [];
     let toolIds: string[] = [];

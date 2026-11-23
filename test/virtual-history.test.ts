@@ -9,7 +9,7 @@ class UserMessageComponent extends Text {
   renders = 0;
   delay = 0;
   clicks: number[] = [];
-  override render(width: number): string[] {
+  override render(width: number): readonly string[] {
     this.renders++;
     const until = performance.now() + this.delay;
     while (performance.now() < until) { /* simulate an expensive native renderer */ }

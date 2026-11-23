@@ -13,7 +13,7 @@ class ThemedText extends Text {
   private pendingText?: string;
   update(text: string): void { this.pendingText = text; this.invalidate(); }
   override invalidate(): void { super.invalidate(); this.stale = true; }
-  override render(width: number): string[] {
+  override render(width: number): readonly string[] {
     if (this.stale && this.pendingText !== undefined) super.setText(this.pendingText);
     this.stale = false;
     this.renders++;
