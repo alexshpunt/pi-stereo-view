@@ -66,6 +66,8 @@ The passes that feed the document run every frame too, so each reuses its result
 
 Render results stay immutable: when a segment changes, `NativeDocument.render` returns new row and child arrays instead of rewriting the previous ones, because probes and Pi's layout compare earlier results with later ones.
 
+Pointer hit-testing in `NativeDocument` uses the segment offsets and child heights from that same frame. It sends the translated event to the real projected component without re-rendering the segment or supplying a stand-in for Pi's container state. Forwarded capture targets keep their screen coordinates so Pi can send later drag and release events directly to them.
+
 ## Rendering profiles
 
 The profiles run real Pi with scripted responses and write measurements under `tmp/profiling`. Compare a candidate with a baseline checkout through `PROFILE_TRANSCRIPT_PATH`, on an otherwise idle machine, with the Pi version users run (`PI_COMMAND`); `npm run` puts the development dependency's older `pi` first on `PATH`.
