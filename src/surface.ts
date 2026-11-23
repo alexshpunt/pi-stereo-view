@@ -2,6 +2,7 @@ import {
   Container, CURSOR_MARKER, getOsc8LinkAtColumn, ScrollView, sliceByColumn, stripTerminalSequences, truncateToWidth, visibleWidth,
   type Component, type TUI, type TuiMouseEvent, type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
+import { dispatchMouseEvent, type Dispatched } from "./mouse-dispatch.ts";
 
 // Pi exports stacks and scroll views but not its layout engine. Stacks describe themselves through this symbol.
 const LAYOUT_NODE = Symbol.for("@earendil-works/pi-tui/layout-node");
@@ -33,7 +34,6 @@ interface Geometry { column: number; trackTop: number; trackHeight: number; thum
 interface Frame { width: number; height: number; root: Box; lines: string[]; scrolls: Map<ScrollView, Box>; indicator?: { row: number; column: number; width: number } }
 interface Point { row: number; col: number; view: ScrollView; boundary?: boolean }
 interface Range { start: Point; end: Point }
-type Dispatched = TuiMouseEventResult & { handled: true; target: { component: Component; originX: number; originY: number; width: number; height: number }; focusTarget?: Component };
 /** Read-only and opaque scroll-follow hooks offered by projected documents. */
 interface ScrollContent { takeScrollShift?(): number }
 
@@ -495,14 +495,8 @@ export class SplitSurface extends Container {
       if (layoutNode(component) && component.handleMouse === Container.prototype.handleMouse) continue;
       visited.add(component);
       const local = { ...event, x: event.x - box.rect.x, y: event.y - box.rect.y, width: box.rect.width, height: box.rect.height };
-      const result = component.handleMouse(local) as (TuiMouseEventResult & Partial<Dispatched>) | undefined;
-      if (!result) continue;
-      if (result.target) return result as Dispatched;
-      if (!result.handled && !result.capture && !result.focus) continue;
-      return {
-        ...result, handled: true, ...(result.focus ? { focusTarget: component } : {}),
-        target: { component, originX: event.screenX - local.x, originY: event.screenY - local.y, width: local.width, height: local.height },
-      };
+      const result = dispatchMouseEvent(component, local);
+      if (result) return result;
     }
     return undefined;
   }

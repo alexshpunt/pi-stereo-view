@@ -13,6 +13,7 @@ import { NestedTree, type NativeTreeBody } from "./nested-tree.ts";
 import { pushShellInputs, sameValues } from "./render-cache.ts";
 import { decorateLine, decorateLines, type TurnColor, type TurnLayers, type TurnMix } from "./turns.ts";
 import type { TurnStripe, GoTo } from "./preferences.ts";
+import { dispatchMouseEvent } from "./mouse-dispatch.ts";
 export type { Pane } from "./content.ts";
 
 /** Turn marks, hover and Go to, shared by both panels through the split layout. */
@@ -387,7 +388,7 @@ export class NativeDocument extends Container {
       if (event.x < this.inset && event.type !== "move") return undefined;
       event = { ...event, x: event.x - this.inset, width: Math.max(0, event.width - this.inset) };
     }
-    // Find the entry under the pointer, then route like a container of that entry's components.
+    // Find the painted entry under the pointer without asking Pi to lay it out again.
     let low = 0;
     let high = built.order.length - 1;
     while (low < high) {
@@ -403,11 +404,15 @@ export class NativeDocument extends Container {
       this.turns?.hover(turn);
     }
     if (!segment || segment.estimate || row >= segment.lines.length) return undefined;
-    const entry = {
-      children: segment.components,
-      mouseLayout: { width: event.width, children: segment.components.map((component, index) => ({ component, height: segment.heights[index] })) },
-    };
-    return Container.prototype.handleMouse.call(entry, { ...event, y: row, height: segment.lines.length });
+    let childY = 0;
+    for (let index = 0; index < segment.components.length; index++) {
+      const height = segment.heights[index];
+      if (row < childY + height) {
+        return dispatchMouseEvent(segment.components[index], { ...event, y: row - childY, height });
+      }
+      childY += height;
+    }
+    return undefined;
   }
   /**
    * The turn color behind a block's clock, when clock marks are on. Blocks render inside this document's render, so the turns it
