@@ -13,6 +13,8 @@ import { NestedCalls } from "./nested-calls.ts";
 import { ProblemReporter } from "./report.ts";
 
 const DELAYS = [1, 2, 3, 5, 10, 30];
+/** Settings show what each Pi menu placement does; the saved file keeps the short values. */
+const PI_MENU_LABELS: Record<PiWindows, string> = { combined: "full width", maximize: "maximize Activity", inline: "in Activity" };
 
 /** Split native fullscreen history without changing message content or the input dock. */
 export default async function transcript(pi: ExtensionAPI): Promise<void> {
@@ -107,9 +109,9 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
         }, {
-          id: "piWindows", label: "Pi windows",
-          description: "How Pi's own windows, such as /tree, /resume and /model, open side by side: combined shows Pi's single history with the window at full width, maximize gives Activity the whole screen, inline keeps them under Activity. Extension dialogs and agent questions stay under Activity.",
-          currentValue: preferences.piWindows, values: [...PI_WINDOWS],
+          id: "piWindows", label: "Pi menus like /tree",
+          description: "Where Pi's own menus, such as /tree, /resume and /model, open while the panels are side by side. Full width hides the panels until the menu closes, maximize Activity hides Conversation, in Activity keeps them in the half-width Activity panel. Extension dialogs and agent questions always stay in Activity.",
+          currentValue: PI_MENU_LABELS[preferences.piWindows], values: PI_WINDOWS.map(value => PI_MENU_LABELS[value]),
         }, {
           // The Turns header switches the whole feature; its settings sit indented under it and keep their values while it is off.
           id: "turns", label: TURNS_HEADER,
@@ -172,7 +174,10 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           }
           else if (id === "turnHover") { if (value !== "unavailable") layout?.setTurnHover(value === "on"); }
           else if (id === "goTo") layout?.setGoTo(value as GoTo);
-          else if (id === "piWindows") layout?.setPiWindows(value as PiWindows);
+          else if (id === "piWindows") {
+            const piWindows = PI_WINDOWS.find(entry => PI_MENU_LABELS[entry] === value);
+            if (piWindows) layout?.setPiWindows(piWindows);
+          }
           else if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
           else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");

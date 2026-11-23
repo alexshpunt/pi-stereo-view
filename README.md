@@ -33,7 +33,7 @@ Messages and tools keep their familiar appearance. Extension widgets and inline 
 
 If the Activity surface cannot fit without clipping, the view temporarily returns to combined history and Pi's normal placement. Combined history, zoomed Conversation and unsupported native layouts also leave dialogs and widgets in Pi's dock. Open forms stay live as layouts change and disappear when their producer closes them; they are not added to history.
 
-Pi's own windows, such as the session tree (`/tree` or double Escape), `/fork`, `/resume`, `/model`, `/login` and Pi's settings, are wide lists that only you open. While one is open with the panels side by side, the view temporarily returns to combined history so the window gets the full width, then restores the split when it closes. Pi's follow-up questions, such as **Summarize branch?** after you pick another point in the tree, keep that placement. The **Pi windows** setting chooses `combined` (default), `maximize`, which temporarily maximizes Activity instead, or `inline`, which keeps them under Activity like extension dialogs. Rows and a maximized panel already give the window the full width and keep it there. Extension dialogs, including questions the agent asks, stay under Activity so Conversation remains visible.
+Pi's own menus, such as the session tree (`/tree` or double Escape), `/fork`, `/resume`, `/model`, `/login` and Pi's settings, are wide lists that only you open. While one is open with the panels side by side, the view temporarily returns to combined history so the menu gets the full width, then restores the split when it closes. Pi's follow-up questions, such as **Summarize branch?** after you pick another point in the tree, keep that placement. The **Pi menus like /tree** setting chooses **full width** (default), **maximize Activity**, which temporarily hides Conversation instead, or **in Activity**, which keeps them in the half-width Activity panel like extension dialogs. Rows and a maximized panel already give the menu the full width and keep it there. Extension dialogs, including questions the agent asks, stay under Activity so Conversation remains visible.
 
 ## Features
 
@@ -226,7 +226,7 @@ Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active p
 
 ## Settings and limits
 
-Your layout, panel order, sizes, compact Activity choice, turn marks, hover, Go to and Pi windows choices, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
+Your layout, panel order, sizes, compact Activity choice, turn marks, hover, Go to and Pi menu choices, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
 
 - Tested with Pi 1.6.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.
