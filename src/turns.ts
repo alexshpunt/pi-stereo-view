@@ -131,6 +131,9 @@ const ZONES = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/;
 
 const clamp = (value: number): number => Math.min(255, Math.max(0, Math.round(value)));
 
+/** Moved colors a shift keeps; diffs and other renderers can bring many distinct backgrounds. */
+const MOVED_COLORS = 1024;
+
 /**
  * Moves explicit backgrounds by the offset the layers gave the terminal background, so a card keeps its contrast to the
  * plain background around it. Truecolor and 256-color backgrounds move; the basic 16 colors are the terminal's own and
@@ -139,7 +142,7 @@ const clamp = (value: number): number => Math.min(255, Math.max(0, Math.round(va
 export class BackgroundShift {
   private readonly moved = new Map<string, string>();
   private readonly exempt: string;
-  constructor(readonly offset: RgbColor, private readonly mode: TerminalColorMode, exempt: string) {
+  constructor(private readonly offset: RgbColor, private readonly mode: TerminalColorMode, exempt: string) {
     this.exempt = exempt.slice(2, -1);
   }
   /** SGR parameters of a background with this offset added, in the terminal's color mode. */
@@ -147,7 +150,7 @@ export class BackgroundShift {
     const key = color.r + "," + color.g + "," + color.b;
     let moved = this.moved.get(key);
     if (moved === undefined) {
-      if (this.moved.size >= 1024) this.moved.clear();
+      if (this.moved.size >= MOVED_COLORS) this.moved.clear();
       const ansi = backgroundAnsi(rgbColor(clamp(color.r + this.offset.r), clamp(color.g + this.offset.g), clamp(color.b + this.offset.b)), this.mode);
       this.moved.set(key, moved = ansi.slice(2, -1));
     }
