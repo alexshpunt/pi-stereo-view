@@ -8,7 +8,7 @@
 
 ### Changed
 
-- Settings say what you see: each name describes what it changes and each value what it shows, such as **Finished tool calls**: `one line` / `full`, **Block clocks**: `shown` / `hidden` and **Color each request** for turn colors. Saved settings keep working.
+- Settings say what you see: each name describes what it changes and each value what it shows, such as **Finished tool calls**: `one line` / `full`, **Block clocks**: `shown` / `hidden` and **Color each turn**. Settings are grouped under Blocks, Activity tools, Layout and Turns titles. Saved settings keep working.
 - Development and tests run against Pi 1.6.0.
 
 ## 0.1.26 - 2026-11-23

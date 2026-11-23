@@ -29,6 +29,37 @@ test("the settings list keeps one height and keeps its hint on the last row whil
   for (const frame of frames) expect(frame.slice(0, 3).map(row => row.replace("→ ", "  ").trim().split(/\s+/)[0])).toEqual(["Short", "Long", "None"]);
 });
 
+test("group titles sit above their first setting, the selection skips them and clicks still reach the right setting", () => {
+  const items: SettingItem[] = [
+    { id: "a", label: "Alpha", description: "One line.", currentValue: "on", values: ["on", "off"] },
+    { id: "b", label: "Beta", currentValue: "on", values: ["on", "off"] },
+    { id: "c", label: "Gamma", currentValue: "on", values: ["on", "off"] },
+  ];
+  const changes: string[] = [];
+  const list = new SettingsList(items, 10, theme, (id, value) => changes.push(id + "=" + value), () => {});
+  const steady = new SteadySettings(list, items, 10, () => {},
+    { titles: new Map([["a", "First"], ["c", "Second"]]), style: text => "<" + text + ">" });
+  const rows = steady.render(30);
+  const name = (row: string): string => row.replace("→ ", "  ").trim().split(/\s+/)[0];
+  // A blank row separates groups; the first title opens the list.
+  expect(rows.slice(0, 6).map(name)).toEqual(["<First>", "Alpha", "Beta", "", "<Second>", "Gamma"]);
+  steady.handleInput(DOWN);
+  steady.handleInput(DOWN);
+  expect(steady.render(30)[5]).toContain("→ Gamma");
+  // A click on a setting's row changes that setting; a click on a title or a blank row changes nothing.
+  const click = (y: number): void => {
+    steady.handleMouse({ type: "press", button: "left", x: 4, y } as Parameters<SteadySettings["handleMouse"]>[0]);
+    steady.handleMouse({ type: "click", button: "left", x: 4, y } as Parameters<SteadySettings["handleMouse"]>[0]);
+  };
+  click(0);
+  click(3);
+  expect(changes).toEqual([]);
+  click(2);
+  click(5);
+  expect(changes).toEqual(["b=off", "c=off"]);
+  expect(new Set([0, 1, 2].map(() => { steady.handleInput(DOWN); return steady.render(30).length; })).size).toBe(1);
+});
+
 test("left and right step the selected value around in both directions, and up and down still move the selection", () => {
   const items: SettingItem[] = [
     { id: "strength", label: "Strength", currentValue: "10%", values: ["5%", "10%", "15%"] },

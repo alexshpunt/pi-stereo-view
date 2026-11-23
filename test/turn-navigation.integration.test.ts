@@ -102,14 +102,14 @@ test("hover highlights a turn in both panels and Go to opens the same point in t
 test("turn clock colors come from settings and hover is unavailable inside a terminal multiplexer", async () => {
   const observation = await run("turn-settings", "settings", { ...NO_MARKS, turnHover: true, goTo: "clock" }, { TMUX: "/tmp/turn-test,1,0" });
   const settings = observation.frames.settings.join("\n");
-  expect(settings).toMatch(/Highlight request on hover\s+unavailable/);
+  expect(settings).toMatch(/Highlight turn on hover\s+unavailable/);
   // The overlay floats over the panels, so its rows share lines with history text.
-  expect(settings).toMatch(/ {2}Color each request {2,}on\s*\n.* {4}Tint clocks\s+off/);
+  expect(settings).toMatch(/ {2}Color each turn {2,}on\s*\n.* {4}Tint clocks\s+off/);
   expect(settings).toMatch(/ {2}Tint clocks\s+off/);
   expect(settings).toMatch(/ {2}Clock tint strength\s+10%/);
   expect(settings).toMatch(/ {2}Hover strength\s+5%/);
   expect(settings).toMatch(/ {2}Left stripe\s+off/);
-  expect(settings).toMatch(/ {2}Line between requests\s+off/);
+  expect(settings).toMatch(/ {2}Line between turns\s+off/);
   expect(settings).toMatch(/Jump to other panel\s+click clock/);
   // The same turn has the same clock color in both panels.
   const clockColor = (line: string): string | undefined =>
