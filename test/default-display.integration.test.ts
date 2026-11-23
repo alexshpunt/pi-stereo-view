@@ -45,6 +45,7 @@ test("a fresh install starts side by side with compact, streaming tools and text
     expect(body("settings")).toMatch(/Codemode calls\s+tree/);
     expect(body("settings")).toMatch(/Fold finished calls after\s+5s/);
     expect(body("settings")).toMatch(/Conversation height in rows\s+grow with messages/);
+    expect(body("settings")).toMatch(/Pi pickers in split\s+full screen/);
     // The last header label keeps one cell clear of the panel's right edge.
     const maximize = rows("running").find(line => line.includes("[Maximize]"))!;
     expect(maximize.slice(maximize.indexOf("[Maximize]") + "[Maximize]".length)).toMatch(/^\s/);
