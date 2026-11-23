@@ -437,7 +437,7 @@ test("locating a block outside a frame reads clock colors without classifying th
   expect(reads).toBeLessThan(10);
 });
 
-test("hovering a turn darkens its messages with their own background as much as the plain background around them", () => {
+test("hovering a turn moves its messages' own backgrounds as far as the plain background around them", () => {
   const card = new UserMessageComponent("\x1b[48;2;52;53;65mCARD\x1b[49m");
   const { source, index } = history(card, new ToolExecutionComponent("call-1"));
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
