@@ -2,7 +2,7 @@ import { stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 
 const imagePlacement = (line: string): boolean => line.includes("\x1b_G") || line.includes("\x1b]1337;File=");
 
-function nativeLines(component: Component, width: number): string[] {
+function nativeLines(component: Component, width: number): readonly string[] {
   const lines = component.render(width);
   const tool = component as Component & {
     toolDefinition?: { renderShell?: string; renderCall?: unknown; renderResult?: unknown };
@@ -166,7 +166,7 @@ export class NativeRenderCache {
   private imagePlacement = false;
   private readonly changed = (): void => { this.invalidations++; this.cached = undefined; this.notify?.(); };
   private readonly watched = new Map<Component, () => void>();
-  private cached?: { width: number; theme: object; state: State; lines: string[] };
+  private cached?: { width: number; theme: object; state: State; lines: readonly string[] };
 
   /** notify runs when an observed native node invalidates, before the next render. */
   constructor(private readonly component: Component, private readonly notify?: () => void) {}
@@ -206,7 +206,7 @@ export class NativeRenderCache {
   }
 
   /** Render current native state, or reuse only an unchanged, observable block. */
-  render(width: number, theme: object): string[] {
+  render(width: number, theme: object): readonly string[] {
     const cached = this.cached;
     if (cached?.width === width && cached.theme === theme && matches(this.component, cached.state)) return cached.lines;
     this.cached = undefined;

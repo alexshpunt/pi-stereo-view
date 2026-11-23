@@ -6,7 +6,7 @@ import { HexInput } from "./hex-input.ts";
 import { parseHex } from "./turns.ts";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
-import { HOVER_COLORS, TURN_MIXES, TURN_STRIPES, GO_TO, defaults, loadPreferences, savePreferences, type TurnStripe, type GoTo, type Preferences } from "./preferences.ts";
+import { HOVER_COLORS, TURN_MIXES, TURN_STRIPES, GO_TO, PI_WINDOWS, defaults, loadPreferences, savePreferences, type TurnStripe, type GoTo, type PiWindows, type Preferences } from "./preferences.ts";
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -107,6 +107,10 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Auto grows to half the history area. Drag sets a manual maximum.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
         }, {
+          id: "piWindows", label: "Pi windows",
+          description: "How Pi's own windows, such as /tree, /resume and /model, open side by side: combined shows Pi's single history with the window at full width, maximize gives Activity the whole screen, inline keeps them under Activity. Extension dialogs and agent questions stay under Activity.",
+          currentValue: preferences.piWindows, values: [...PI_WINDOWS],
+        }, {
           // The Turns header switches the whole feature; its settings sit indented under it and keep their values while it is off.
           id: "turns", label: TURNS_HEADER,
           description: "A turn is one request, yours or an extension's, with all the work that answers it. On colors each turn alike in both panels, highlights it on hover and links the panels with Go to, as the settings below choose.",
@@ -155,7 +159,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button beside Copy, both or neither.",
           currentValue: preferences.goTo, values: [...GO_TO],
         }];
-        const VISIBLE_SETTINGS = 21;
+        const VISIBLE_SETTINGS = 22;
         const apply = (id: string, value: string): void => {
           if (id === "turns" || id === "turnClock" || id === "turnBackground" || id === "turnSeparator") layout?.setTurnMark(id, value === "on");
           else if (id === "turnStripe") layout?.setTurnMark("turnStripe", value as TurnStripe);
@@ -168,6 +172,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           }
           else if (id === "turnHover") { if (value !== "unavailable") layout?.setTurnHover(value === "on"); }
           else if (id === "goTo") layout?.setGoTo(value as GoTo);
+          else if (id === "piWindows") layout?.setPiWindows(value as PiWindows);
           else if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
           else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");

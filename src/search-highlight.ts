@@ -20,7 +20,7 @@ interface Position { row: number; start: number; end: number }
 /** Presentation-only rows supplied by CompactMessage, never guessed from saved text. */
 export interface SearchClock { row: number; column: number; footerRow?: number }
 
-function locate(lines: string[], hit: SearchHit, lettersOnly: boolean, clock?: SearchClock): { text: string; positions: Position[] } | undefined {
+function locate(lines: readonly string[], hit: SearchHit, lettersOnly: boolean, clock?: SearchClock): { text: string; positions: Position[] } | undefined {
   const wanted = normalize(hit.text, lettersOnly);
   if (!wanted) return undefined;
   let text = "";
@@ -55,7 +55,7 @@ function locate(lines: string[], hit: SearchHit, lettersOnly: boolean, clock?: S
 }
 
 /** Locate the exact saved occurrence using the same mapping as its highlight. */
-export function searchHitRow(lines: string[], hit: SearchHit, clock?: SearchClock): number | undefined {
+export function searchHitRow(lines: readonly string[], hit: SearchHit, clock?: SearchClock): number | undefined {
   return (locate(lines, hit, false, clock) ?? locate(lines, hit, true, clock))?.positions[0]?.row;
 }
 function decorate(line: string, selected: Position[], theme: Theme): string {
@@ -95,7 +95,7 @@ function decorate(line: string, selected: Position[], theme: Theme): string {
  * widths, links and markers stay unchanged; images and unmapped fragments are skipped.
  * No query parsing or matching happens during rendering.
  */
-export function highlightSearchRows(lines: string[], hit: SearchHit, theme: Theme, clock?: SearchClock): string[] {
+export function highlightSearchRows(lines: readonly string[], hit: SearchHit, theme: Theme, clock?: SearchClock): readonly string[] {
   if (!hit.ranges?.length || lines.some(line => line.includes("\x1b_G") || line.includes("\x1b]1337;") || line.includes("\x1bP"))) return lines;
   let lettersOnly = false;
   let found = locate(lines, hit, false, clock);

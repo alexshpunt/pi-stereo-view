@@ -12,7 +12,7 @@ interface Node { key: string; summary: ToolSummary; children: Node[]; count?: nu
 
 /** Structural disclosure only: every result body is the original native component. */
 export class NestedTree extends Container {
-  readonly positions = new Map<Component, { row: number; lines: string[]; clock?: SearchClock; excerptRow?: number }>();
+  readonly positions = new Map<Component, { row: number; lines: readonly string[]; clock?: SearchClock; excerptRow?: number }>();
   private parent?: NativeTreeBody;
   private panels: NativeTreeBody[] = [];
   private reveal?: Component;
@@ -56,7 +56,7 @@ export class NestedTree extends Container {
     }
     return row;
   }
-  override render(width: number): string[] {
+  override render(width: number): readonly string[] {
     if (!this.parent) return [];
     if (this.mode !== this.compact()) { this.open.clear(); this.mode = this.compact(); }
     this.revealed.clear();
@@ -128,7 +128,7 @@ export class NestedTree extends Container {
     const result: Component[] = [];
     this.positions.clear();
     let row = 0;
-    const append = (component: Component, depth: number, body = false): string[] => {
+    const append = (component: Component, depth: number, body = false): readonly string[] => {
       const view = this.indent(component, depth, body);
       result.push(view);
       const lines = view.render(width); row += lines.length; return lines;

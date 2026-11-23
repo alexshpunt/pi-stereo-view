@@ -40,7 +40,7 @@ export interface DocumentTurns {
 
 /** Decorate one selected block without changing native text or mouse coordinates. */
 class SearchHighlight implements Component {
-  private cache?: { lines: string[]; result: string[]; width: number; query: string; hit: SearchHit; revision: number };
+  private cache?: { lines: readonly string[]; result: readonly string[]; width: number; query: string; hit: SearchHit; revision: number };
 
   constructor(
     private readonly component: Component,
@@ -50,7 +50,7 @@ class SearchHighlight implements Component {
     private readonly revision: () => number,
   ) {}
 
-  render(width: number): string[] {
+  render(width: number): readonly string[] {
     const lines = this.component.render(width);
     const hit = this.hit();
     const query = this.query();
@@ -166,7 +166,7 @@ export class NativeDocument extends Container {
   private searchTool?: Component;
   private readonly clockOwners = new WeakMap<Component, Component>();
   private readonly compactBlocks = new Map<Component, CompactMessage>();
-  private readonly positions = new Map<Component, { row: number; lines: string[]; clock?: SearchClock; excerptRow?: number }>();
+  private readonly positions = new Map<Component, { row: number; lines: readonly string[]; clock?: SearchClock; excerptRow?: number }>();
   private excerpt?: SearchHit;
   private searchAnchor?: SearchHit;
   private searchQuery = "";
