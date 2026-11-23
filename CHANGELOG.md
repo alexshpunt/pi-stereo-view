@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.27 - 2026-11-23
 
 ### Added
 
-- Pi's own menus, such as the session tree (`/tree` or double Escape), `/resume` and `/model`, now open at full width while the panels are side by side: the view temporarily shows combined history and restores the split when the menu closes. The **Pi pickers in split** setting can instead maximize Activity or keep them inside Activity. Extension dialogs and agent questions stay under Activity. Thanks to [@okuuva](https://github.com/okuuva) for the idea ([#101](https://github.com/alexshpunt/pi-stereo-view/pull/101)).
+- Pi's own pickers, such as the session tree (`/tree` or double Escape), `/resume` and `/model`, now open at full width while the panels are side by side: the view temporarily shows combined history and restores the split when the picker closes. The **Pi pickers in split** setting can instead maximize Activity or keep them inside Activity. Extension dialogs and agent questions stay inside Activity. Thanks to [@okuuva](https://github.com/okuuva) for the idea ([#101](https://github.com/alexshpunt/pi-stereo-view/pull/101)).
 
 ### Changed
 
