@@ -1,5 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { backgroundAnsi, colorToOkhsl, colorToRgb, foregroundAnsi, okhslColor, rgbColor, type Color, type RgbColor, type TUI } from "@earendil-works/pi-tui";
+import {
+  backgroundAnsi, colorToOkhsl, colorToRgb, foregroundAnsi, indexedColor, okhslColor, rgbColor, type Color, type RgbColor, type TerminalColorMode, type TUI,
+} from "@earendil-works/pi-tui";
 
 /** Hues of the turn palette; consecutive turns step by a stride coprime with it, so neighbours differ strongly. */
 const HUES = 16;
@@ -15,6 +17,8 @@ export interface TurnColor {
   clock: Color;
   /** Background of default cells: the turn background and hover layers; none when neither applies. */
   fill?: string;
+  /** Moves the block's own explicit backgrounds as far as `fill` moved the terminal background; none without layers. */
+  shift?: BackgroundShift;
   /** Background of the one-cell block stripe on the left, on top of the block's layers. */
   stripe: string;
   /** Foreground of the line stripe and the separator rule, on top of the block's layers. */
@@ -95,9 +99,14 @@ export function turnColor(theme: Theme, turn: number, background?: RgbColor, mix
         ...(layers.hover ? [{ color: hover, share: share(mix.hover) }] : []),
       ];
       const stripe = layered(baseRgb, [...under, { color: hue, share: share(mix.stripe) }]);
+      const clock = layered(baseRgb, [...under, { color: hue, share: share(mix.clock) }]);
+      const fill = under.length ? colorToRgb(layered(baseRgb, under)) : undefined;
+      const offset = fill && { r: fill.r - baseRgb.r, g: fill.g - baseRgb.g, b: fill.b - baseRgb.b };
       colors.push({
-        clock: layered(baseRgb, [...under, { color: hue, share: share(mix.clock) }]),
-        fill: under.length ? backgroundAnsi(layered(baseRgb, under), mode) : undefined,
+        clock,
+        fill: fill && backgroundAnsi(rgbColor(fill.r, fill.g, fill.b), mode),
+        // The clock is drawn over the block's layers already; moving it again would take it past them.
+        shift: offset && (offset.r || offset.g || offset.b) ? new BackgroundShift(offset, mode, backgroundAnsi(clock, mode)) : undefined,
         stripe: backgroundAnsi(stripe, mode),
         line: foregroundAnsi(stripe, mode),
       });
@@ -120,47 +129,112 @@ const SGR = /\x1b\[([0-9;:]*)m/g;
 // eslint-disable-next-line no-control-regex
 const ZONES = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/;
 
-/** Whether a sequence leaves the default background active. */
-function resetsBackground(parameters: string): boolean {
-  if (parameters === "") return true;
+const clamp = (value: number): number => Math.min(255, Math.max(0, Math.round(value)));
+
+/**
+ * Moves explicit backgrounds by the offset the layers gave the terminal background, so a card keeps its contrast to the
+ * plain background around it. Truecolor and 256-color backgrounds move; the basic 16 colors are the terminal's own and
+ * have no known RGB value. One background, the block's clock, is exempt: its color already includes the layers.
+ */
+export class BackgroundShift {
+  private readonly moved = new Map<string, string>();
+  private readonly exempt: string;
+  constructor(readonly offset: RgbColor, private readonly mode: TerminalColorMode, exempt: string) {
+    this.exempt = exempt.slice(2, -1);
+  }
+  /** SGR parameters of a background with this offset added, in the terminal's color mode. */
+  background(color: RgbColor): string {
+    const key = color.r + "," + color.g + "," + color.b;
+    let moved = this.moved.get(key);
+    if (moved === undefined) {
+      if (this.moved.size >= 1024) this.moved.clear();
+      const ansi = backgroundAnsi(rgbColor(clamp(color.r + this.offset.r), clamp(color.g + this.offset.g), clamp(color.b + this.offset.b)), this.mode);
+      this.moved.set(key, moved = ansi.slice(2, -1));
+    }
+    return moved;
+  }
+  /** Whether a background's SGR parameters are the exempt one. */
+  keeps(parameters: string): boolean {
+    return parameters === this.exempt;
+  }
+}
+
+/**
+ * Read one SGR sequence: whether it leaves the default background active, and its parameters with each explicit
+ * background moved by `shift`.
+ */
+function scan(parameters: string, shift: BackgroundShift | undefined): { reset: boolean; parameters: string } {
+  if (parameters === "") return { reset: true, parameters };
   const parts = parameters.split(";");
+  const out: string[] = [];
   let reset = false;
   for (let index = 0; index < parts.length; index++) {
     const part = parts[index];
     const code = Number(part.split(":")[0] || "0");
     if (code === 0 || code === 49) reset = true;
     else if (code === 48 || (code >= 40 && code <= 47) || (code >= 100 && code <= 107)) reset = false;
-    if (EXTENDED.has(part)) index += parts[index + 1] === "5" ? 2 : parts[index + 1] === "2" ? 4 : 0;
+    if (EXTENDED.has(part)) {
+      const length = parts[index + 1] === "5" ? 2 : parts[index + 1] === "2" ? 4 : 0;
+      const sequence = parts.slice(index, index + length + 1);
+      index += length;
+      if (part === "48" && shift) {
+        const color = extendedColor(sequence.slice(1).map(Number));
+        if (color && !shift.keeps(sequence.join(";"))) { out.push(shift.background(color)); continue; }
+      }
+      out.push(...sequence);
+      continue;
+    }
+    if (code === 48 && shift && part.includes(":")) {
+      // Colon form: 48:5:N, 48:2:R:G:B or 48:2:<color space>:R:G:B.
+      const fields = part.split(":").slice(1).map(Number);
+      const color = extendedColor(fields[0] === 2 && fields.length > 4 ? [2, ...fields.slice(-3)] : fields);
+      if (color) { out.push(shift.background(color)); continue; }
+    }
+    out.push(part);
   }
-  return reset;
+  return { reset, parameters: shift ? out.join(";") : parameters };
+}
+
+/** The RGB value of an extended color's fields after 38/48 (`5;N` or `2;R;G;B`); none for the basic 16 colors. */
+function extendedColor(fields: number[]): RgbColor | undefined {
+  if (fields[0] === 5 && fields[1] >= 16 && fields[1] <= 255) return colorToRgb(indexedColor(fields[1]));
+  if (fields[0] === 2 && fields.length >= 4 && fields.slice(1, 4).every(value => Number.isFinite(value))) {
+    return { r: fields[1], g: fields[2], b: fields[3] };
+  }
+  return undefined;
 }
 
 /**
- * Give every cell with the default background a color and put a prefix before the row. Native backgrounds stay as
- * they are; image rows keep their placement, and shell zone markers stay at the start of the row.
+ * Give every cell with the default background a color, move every explicit background by `shift`, and put a prefix
+ * before the row. Image rows keep their placement, and shell zone markers stay at the start of the row.
  */
-export function decorateLine(line: string, background: string | undefined, prefix = ""): string {
+export function decorateLine(line: string, background: string | undefined, prefix = "", shift?: BackgroundShift): string {
   if (line.includes("\x1b_G") || line.includes("\x1b]1337;")) return prefix + line;
   const zones = ZONES.exec(line)?.[0] ?? "";
   const body = zones ? line.slice(zones.length) : line;
   if (!background) return zones + prefix + body;
-  return zones + prefix + background + body.replace(SGR, (sequence, parameters: string) =>
-    resetsBackground(parameters) ? sequence + background : sequence);
+  return zones + prefix + background + body.replace(SGR, (sequence, parameters: string) => {
+    const scanned = scan(parameters, shift);
+    const rewritten = scanned.parameters === parameters ? sequence : "\x1b[" + scanned.parameters + "m";
+    return scanned.reset ? rewritten + background : rewritten;
+  });
 }
 
-const decorated = new WeakMap<readonly string[], { background?: string; prefix: string; source: string[]; lines: string[] }>();
+const decorated = new WeakMap<readonly string[], {
+  background?: string; prefix: string; shift?: BackgroundShift; source: string[]; lines: string[];
+}>();
 
 /**
  * Decorate rows, reusing the result while a renderer returns the same rows. Native renderers may mutate and return
  * the same array, so the cache compares the rows themselves, not only the array.
  */
-export function decorateLines(lines: readonly string[], background: string | undefined, prefix = ""): readonly string[] {
+export function decorateLines(lines: readonly string[], background: string | undefined, prefix = "", shift?: BackgroundShift): readonly string[] {
   if (!background && !prefix) return lines;
   const cached = decorated.get(lines);
-  if (cached && cached.background === background && cached.prefix === prefix && cached.source.length === lines.length &&
+  if (cached && cached.background === background && cached.prefix === prefix && cached.shift === shift && cached.source.length === lines.length &&
     cached.source.every((line, index) => line === lines[index])) return cached.lines;
-  const result = lines.map(line => decorateLine(line, background, prefix));
-  decorated.set(lines, { background, prefix, source: [...lines], lines: result });
+  const result = lines.map(line => decorateLine(line, background, prefix, shift));
+  decorated.set(lines, { background, prefix, shift, source: [...lines], lines: result });
   return result;
 }
 

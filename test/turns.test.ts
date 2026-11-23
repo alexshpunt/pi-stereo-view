@@ -1,5 +1,5 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { backgroundAnsi, Container, rgbColor, stripTerminalSequences, Text, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { backgroundAnsi, Container, rgbColor, stripTerminalSequences, Text, type Color, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { turnColor, decorateLine, decorateLines, DEFAULT_MIX, pointerMotionAvailable } from "../src/turns.ts";
 import { NativeContentIndex } from "../src/content.ts";
@@ -38,7 +38,9 @@ class AssistantMessageComponent extends Container {
 const BG = "\x1b[48;2;1;2;3m";
 const theme = {
   fg: (_color: string, text: string) => text,
-  style: (text: string, style: { bg?: unknown }) => style.bg ? "\x1b[48;2;9;9;9m" + text + "\x1b[49m" : text,
+  // Like Pi's theme: a concrete color renders as itself, a token as a fixed stand-in.
+  style: (text: string, style: { bg?: unknown }) => !style.bg ? text :
+    (typeof style.bg === "string" ? "\x1b[48;2;9;9;9m" : backgroundAnsi(style.bg as Color, "truecolor")) + text + "\x1b[49m",
   colors: { userMessageBg: rgbColor(52, 53, 65) },
   appearance: "dark",
   getColorMode: () => "truecolor",
@@ -160,6 +162,36 @@ test("a one-color hover tints every turn alike, and the marks on top keep their 
   // Each turn's hue stays the default: the same colors as without a hover color.
   expect(turnColor(theme, 1, terminal, mix, { background: true, hover: false })!.fill)
     .toBe(turnColor(theme, 1, terminal, { ...mix, hoverColor: undefined }, { background: true, hover: false })!.fill);
+});
+
+test("layers shift every explicit background of a block as far as its plain background", () => {
+  // A light terminal with a gray hover: the plain background and a #f0f0f0 card both move toward gray by the same amount.
+  const terminal = { r: 250, g: 250, b: 250 };
+  const mix = { ...DEFAULT_MIX, hover: 10, hoverColor: { r: 128, g: 128, b: 128 } };
+  const color = turnColor(theme, 1, terminal, mix, { background: false, hover: true })!;
+  const fill = color.fill!;
+  const [fr, fg, fb] = fill.match(/48;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
+  const offset = fr - 250;
+  expect(offset).toBeLessThan(0);
+  expect([fg - 250, fb - 250]).toEqual([offset, offset]);
+  const card = 240 + offset;
+  const line = "plain \x1b[48;2;240;240;240mcard\x1b[49m plain";
+  expect(decorateLine(line, fill, "", color.shift)).toBe(fill + "plain \x1b[48;2;" + [card, card, card].join(";") + "mcard\x1b[49m" + fill + " plain");
+  // Colon-separated truecolor and 256-color backgrounds move too; 256-color ones become their RGB value moved.
+  expect(decorateLine("\x1b[48:2::240:240:240mx", fill, "", color.shift)).toBe(fill + "\x1b[48;2;" + [card, card, card].join(";") + "mx");
+  // xterm color 255 is #eeeeee.
+  const gray = 238 + offset;
+  expect(decorateLine("\x1b[1;48;5;255;38;5;0mx", fill, "", color.shift)).toBe(fill + "\x1b[1;48;2;" + [gray, gray, gray].join(";") + ";38;5;0mx");
+  // The basic 16 colors are the terminal's own; foregrounds are not backgrounds.
+  for (const kept of ["\x1b[44mx", "\x1b[104mx", "\x1b[48;5;4mx", "\x1b[38;2;240;240;240mx"]) {
+    expect(decorateLine(kept, fill, "", color.shift)).toBe(fill + kept);
+  }
+  // The block's clock is already drawn over its layers, so it keeps its color.
+  const clock = backgroundAnsi(color.clock, "truecolor");
+  expect(decorateLine(clock + "12:00\x1b[49m", fill, "", color.shift)).toBe(fill + clock + "12:00\x1b[49m" + fill);
+  // Without layers, nothing moves.
+  expect(turnColor(theme, 1, terminal, mix)!.shift).toBeUndefined();
+  expect(decorateLine(line, undefined)).toBe(line);
 });
 
 test("hover is unavailable in terminal multiplexers and without Pi's mouse support", () => {
@@ -342,7 +374,7 @@ test("a timed block opens the other panel from its clock or its Go to button", (
   const block = new CompactMessage(native, () => "12:34:56", () => theme, () => 0, () => true, () => {}, () => true, () => "text",
     undefined, () => rgbColor(1, 2, 3), { clock: () => goTo === "clock" || goTo === "both", button: () => goTo !== "clock" && goTo !== "off", go: () => { jumps++; } });
   try {
-    expect(block.render(40)[0]).toContain("\x1b[48;2;9;9;9m12:34:56");
+    expect(block.render(40)[0]).toContain("\x1b[48;2;1;2;3m12:34:56");
     expect(block.handleMouse(pointer("press", 3, 0))).toMatchObject({ capture: true });
     block.handleMouse(pointer("release", 3, 0));
     block.handleMouse(pointer("click", 3, 0));
@@ -366,7 +398,7 @@ test("a compact row's clock opens the other panel; the rest of the row still tog
     clock: () => "12:34:56", clockBackground: () => rgbColor(1, 2, 3), clockAction: () => () => { jumps++; },
     expanded: () => false, toggle: () => { toggles++; },
   });
-  expect(row.render(40)[0]).toContain("\x1b[48;2;9;9;9m12:34:56");
+  expect(row.render(40)[0]).toContain("\x1b[48;2;1;2;3m12:34:56");
   row.handleMouse(pointer("press", 2, 0));
   row.handleMouse(pointer("click", 2, 0));
   row.handleMouse(pointer("press", 20, 0));
@@ -403,4 +435,31 @@ test("locating a block outside a frame reads clock colors without classifying th
   expect(document.locate(calls[30])).toBeDefined();
   // Every read outside a frame verifies the whole history, so the count must not grow with the number of rows.
   expect(reads).toBeLessThan(10);
+});
+
+test("hovering a turn darkens its messages with their own background as much as the plain background around them", () => {
+  const card = new UserMessageComponent("\x1b[48;2;52;53;65mCARD\x1b[49m");
+  const { source, index } = history(card, new ToolExecutionComponent("call-1"));
+  const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
+  let hovered: number | undefined;
+  const turns: DocumentTurns = {
+    clock: () => true, stripe: () => "off", background: () => false, separator: () => false, mix: () => DEFAULT_MIX,
+    color: (turn, layers) => turnColor(theme, turn, undefined, DEFAULT_MIX, layers), hovered: () => hovered, hover: () => {},
+    goTo: () => "clock", jump: () => {},
+  };
+  const document = new NativeDocument(source, "chat", timestamps, () => theme, () => 0, () => false, () => {}, true, index,
+    undefined, () => true, undefined, undefined, undefined, () => "text", undefined, turns);
+  const channels = (ansi: string): number[] => ansi.match(/48;2;(\d+);(\d+);(\d+)m/)!.slice(1).map(Number);
+  document.beginFrame();
+  const plain = document.render(30).find(row => row.includes("CARD"))!;
+  expect(plain).toContain("\x1b[48;2;52;53;65mCARD");
+  hovered = 1;
+  document.beginFrame();
+  const row = document.render(30).find(line => line.includes("CARD"))!;
+  const fill = layered(1, false, true).fill!;
+  const terminal = channels(backgroundAnsi(rgbColor(24, 24, 27), "truecolor"));
+  const offset = channels(fill).map((value, channel) => value - terminal[channel]);
+  const moved = [52, 53, 65].map((value, channel) => value + offset[channel]);
+  expect(row).toContain("\x1b[48;2;" + moved.join(";") + "mCARD");
+  expect(row).not.toContain("\x1b[48;2;52;53;65m");
 });

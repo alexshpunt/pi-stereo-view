@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Turn backgrounds and hover now tint tool cards, your messages and other cells with their own background by the same amount as the plain background, so a card no longer blends into a hover color close to its own.
+
 ## 0.1.25 - 2026-11-23
 
 ### Fixed
