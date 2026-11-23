@@ -47,12 +47,11 @@ test.each([[true, true], [true, false], [false, true]])("streams the latest tool
       expect(body("collapsed")).not.toContain("×2");
       expect(frames.collapsed.filter(line => /●\s+▸\s+stream_probe/u.test(line))).toHaveLength(2);
     }
-    expect(body("settings")).toMatch(new RegExp("Compact Activity tools\\s+" + (compactTools ? "on" : "off")));
-    expect(body("settings")).toMatch(new RegExp("Group Activity tools\\s+" + (groupTools ? "on" : "off")));
-    expect(body("settings")).toMatch(/Nested call tree\s+on/);
-    expect(body("settings")).toContain("Stream latest tools");
-    expect(body("settings")).toContain("Collapse delay");
-    expect(body("settings")).toMatch(/Collapse delay\s+1s/);
+    expect(body("settings")).toMatch(new RegExp("Finished tool calls\\s+" + (compactTools ? "one line" : "full")));
+    expect(body("settings")).toMatch(new RegExp("Repeated tool calls\\s+" + (groupTools ? "merge" : "separate")));
+    expect(body("settings")).toMatch(/Codemode calls\s+tree/);
+    expect(body("settings")).toContain("Running tool calls");
+    expect(body("settings")).toMatch(/Fold finished calls after\s+1s/);
   } finally {
     await rm(cwd, { recursive: true, force: true });
     await rm(agent, { recursive: true, force: true });

@@ -58,8 +58,8 @@ test.each(["left", "right"])("grows to half the history, then scrolls, and keeps
   const reset: Record<string, Sample> = JSON.parse(await readFile(path.join(cwd, "automatic-height-reset.json"), "utf8"));
   expect(reset.final.height).toBe(manual);
   expect(reset.autoCommand.height).toBe(Math.floor(reset.autoCommand.available / 2));
-  expect(reset.settings.lines.map(stripTerminalSequences).join("\n")).toMatch(/Conversation height\s+auto/);
-  expect(reset.manualSetting.lines.map(stripTerminalSequences).join("\n")).toMatch(/Conversation height\s+manual/);
-  expect(reset.autoSetting.lines.map(stripTerminalSequences).join("\n")).toMatch(/Conversation height\s+auto/);
+  expect(reset.settings.lines.map(stripTerminalSequences).join("\n")).toMatch(/Conversation height in rows\s+grow with messages/);
+  expect(reset.manualSetting.lines.map(stripTerminalSequences).join("\n")).toMatch(/Conversation height in rows\s+fixed by drag/);
+  expect(reset.autoSetting.lines.map(stripTerminalSequences).join("\n")).toMatch(/Conversation height in rows\s+grow with messages/);
   expect(JSON.parse(await readFile(file, "utf8")).chatHeight).toBeNull();
 }, 150_000);

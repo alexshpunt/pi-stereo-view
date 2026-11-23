@@ -32,7 +32,7 @@ export default function displayControls(pi: ExtensionAPI): void {
       if (process.env.DISPLAY_SETTINGS_CONTROLS === "1") {
         await click("[ ≡ ]");
         frames.settings = await capture();
-        await click("Show timestamps");
+        await click("Block clocks");
         frames.offMenu = await capture();
         tui.handleTerminalInput("\x1b");
         frames.off = await capture();
@@ -42,7 +42,7 @@ export default function displayControls(pi: ExtensionAPI): void {
         for (const character of "/stereo-view settings") tui.handleTerminalInput(character);
         tui.handleTerminalInput("\r");
         frames.commandMenu = await capture();
-        await click("Show timestamps");
+        await click("Block clocks");
         tui.handleTerminalInput("\x1b");
         frames.on = await capture();
         await click("[ ▥ ]");
@@ -58,7 +58,7 @@ export default function displayControls(pi: ExtensionAPI): void {
         frames.light = await capture();
         await click("[ ↙ ]");
         await click("[ ≡ ]");
-        await click("Show timestamps");
+        await click("Block clocks");
         tui.handleTerminalInput("\x1b");
         frames.savedOff = await capture();
       }
