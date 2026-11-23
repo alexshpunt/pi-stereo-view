@@ -125,7 +125,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           ...mixSetting("turnStripeMix", "  Stripe color strength", "How strongly the turn's color shows in stripes, lines and separators: 100% is the full hue."),
         }, {
           id: "turnBackground", label: "  Background",
-          description: "Tint the plain background of every block of a turn. Tool cards and messages keep their own backgrounds.",
+          description: "Tint the background of every block of a turn. Tool cards and messages shift by the same amount.",
           currentValue: preferences.turnBackground ? "on" : "off", values: ["on", "off"],
         }, {
           ...mixSetting("turnBackgroundMix", "  Background color strength", "How strongly the turn's color tints the background of its blocks."),
