@@ -77,7 +77,7 @@ pi --tui-mode fullscreen
 
 ## Use it
 
-Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button labels** to `icons`. The choice survives restart.
+Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button labels** to `icons`. The choice survives restart. Settings are grouped under **Blocks**, **Activity tools**, **Layout** and **Turns**.
 
 | Icons | Text | Action |
 | --- | --- | --- |
@@ -132,7 +132,7 @@ Calls that are still running or waiting to collapse are never grouped. Thinking,
 
 A turn is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one turn.
 
-Turn colors, hover highlighting and Go to are on by default. Set **Color each request** to `off` in Stereo View settings to turn them all off; the settings indented under it choose what each does, and keep their values while it is off.
+Turn colors, hover highlighting and Go to are on by default. Set **Color each turn** to `off` in Stereo View settings to turn them all off; the settings indented under it choose what each does, and keep their values while it is off.
 
 Every turn gets its own color in both panels, so the work for one request is easy to tell from the next. Turns are marked in four independent ways; use any combination:
 
@@ -141,13 +141,13 @@ Every turn gets its own color in both panels, so the work for one request is eas
 | **Tint clocks** | `on` (default), `off` | The background of each block's clock. |
 | **Left stripe** | `block` (default), `line`, `off` | Every block's left column: a colored cell or a thin colored line. |
 | **Tint blocks** | `on`, `off` (default) | The background of every block. |
-| **Line between requests** | `on` (default), `off` | A colored line across both panels where each new turn begins. |
+| **Line between turns** | `on` (default), `off` | A colored line across both panels where each new turn begins. |
 
-Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Block tint strength** (8% by default), **Hover strength** (10%), **Stripe strength** (20%, also for lines between requests) and **Clock tint strength** (10%). With these strengths and hover in the turn's color, the clock of a hovered block with a turn background is 8 + 10 + 10 = 28% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end.
+Neighbouring turns get different hues. Colors stack in layers over your terminal's background: the turn background, then hover, then stripes, separators and clocks. Each layer adds its strength to the layers under it: **Block tint strength** (8% by default), **Hover strength** (10%), **Stripe strength** (20%, also for lines between turns) and **Clock tint strength** (10%). With these strengths and hover in the turn's color, the clock of a hovered block with a turn background is 8 + 10 + 10 = 28% of the hue, so a clock always stays darker than the block it sits on. In settings, `←` and `→` step a strength down or up, wrapping around at either end.
 
-**Hover color** sets the hover layer's color: `request color` highlights each turn in its own color, or one `#rrggbb` color highlights every turn the same way; the default is gray, `#808080`. `←` and `→` pick from presets; `Enter` opens a field to type any color. Clocks, stripes and separators keep their turn's own color on top of a one-color hover. Tool cards, your messages and other cells with their own background shift by the same amount as the plain background around them, so they stay as distinct from it as without the layers. The terminal's basic 16 colors stay as they are.
+**Hover color** sets the hover layer's color: `turn color` highlights each turn in its own color, or one `#rrggbb` color highlights every turn the same way; the default is gray, `#808080`. `←` and `→` pick from presets; `Enter` opens a field to type any color. Clocks, stripes and separators keep their turn's own color on top of a one-color hover. Tool cards, your messages and other cells with their own background shift by the same amount as the plain background around them, so they stay as distinct from it as without the layers. The terminal's basic 16 colors stay as they are.
 
-**Highlight request on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
+**Highlight turn on hover** (on by default) highlights the turn under the pointer in both panels while the pointer stays there. It needs a terminal that reports pointer movement. Pi turns that off inside tmux, zellij and screen, so there the setting is shown as `unavailable`.
 
 **Go to** opens the same moment of history in the other panel:
 

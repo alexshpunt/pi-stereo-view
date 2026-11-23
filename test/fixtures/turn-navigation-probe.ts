@@ -107,7 +107,7 @@ export default function turnNavigationProbe(pi: ExtensionAPI): void {
         const toolbar = first[0];
         await click(visibleWidth(toolbar.slice(0, toolbar.indexOf("[ ≡ ]"))) + 2, 0);
         await capture("settings");
-        // Past the general settings and the Color each request header to Tint clocks.
+        // Past the general settings and Color each turn to Tint clocks; the arrows skip group titles.
         for (let index = 0; index < 11; index++) await input("\x1b[B");
         await input(" ");
         await input("\x1b");
