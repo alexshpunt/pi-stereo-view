@@ -12,6 +12,7 @@ import type { TurnMarkSetting, Preferences } from "./preferences.ts";
 import type { TranscriptTimestamps } from "./timestamps.ts";
 import { PANEL_SEARCH_ROWS, PanelSearch, PanelSearchShortcut, type SearchHit } from "./search.ts";
 import { SplitSurface } from "./surface.ts";
+import { showsPiWindow } from "./pi-windows.ts";
 import { sameValues } from "./render-cache.ts";
 import type { Problem } from "./report.ts";
 
@@ -29,8 +30,8 @@ const TOOLBAR_BUTTON_WIDTH = 6;
  * A control that renders again only when one of its inputs changes. Every spinner frame lays out
  * all toolbar and panel controls; restyling unchanged labels would cost more than the panels themselves.
  */
-function memoized(inputs: (width: number) => unknown[], render: (width: number) => string[]): Component {
-  let last: { inputs: unknown[]; lines: string[] } | undefined;
+function memoized(inputs: (width: number) => unknown[], render: (width: number) => readonly string[]): Component {
+  let last: { inputs: unknown[]; lines: readonly string[] } | undefined;
   return {
     render: width => {
       const current = inputs(width);
@@ -237,6 +238,8 @@ export class TranscriptLayout {
   private drag?: { position: number; size: number };
   private failed = false;
   private fallback = false;
+  /** How an open Pi window temporarily changes the side-by-side split; the saved layout and zoom stay unchanged. */
+  private piWindow?: "combined" | "maximize";
   private automaticHeight = MIN_ROWS;
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
@@ -264,6 +267,11 @@ export class TranscriptLayout {
     private readonly report: (problem: Problem) => void = problem => this.warn("pi-stereo-view " + problem.summary +
       (problem.error === undefined ? "" : ": " + (problem.error instanceof Error ? problem.error.message : String(problem.error)))),
   ) {}
+
+  /** The zoom the split shows: the user's, or Activity while a Pi window maximizes it. */
+  private get zoom(): Preferences["zoom"] {
+    return this.piWindow === "maximize" ? "activity" : this.preferences.zoom;
+  }
 
   /** Refuse a Pi layout the split cannot use; Pi keeps its own history view. */
   private refuse(reason: string): void {
@@ -357,6 +365,8 @@ export class TranscriptLayout {
       const editor = this.getEditor();
       return !!editor && !!editorSlot && editorSlot.children.length === 1 && editorSlot.children[0] !== editor;
     };
+    // Updated once per frame, whatever the setting, so a chain of Pi's windows is followed through every swap.
+    let piWindowOpen = false;
     const projectedDock = supportedDock ? new VStack(entries.filter((_, i) => i !== 2 && i !== 4).map(entry =>
       entry.component === editorSlot ? { ...entry, visible: () => !projectDialog } : entry)) : undefined;
     // Preserve the original containers and Pi's above/editor/below order. Pi still owns their lifecycle.
@@ -441,8 +451,13 @@ export class TranscriptLayout {
       // Width-only stack rendering during external-editor handoff has no viewport height bound.
       height = Math.min(height, Math.max(1, host.terminal.rows));
       const previousHeight = historyHeight;
+      piWindowOpen = showsPiWindow(editorSlot?.children.length === 1 ? editorSlot.children[0] : undefined, piWindowOpen);
+      // A Pi window under half-width Activity would cut its wide lists; give it the full width until it closes.
+      this.piWindow = this.preferences.mode === "split" && this.preferences.layout === "columns" && !this.preferences.zoom &&
+        this.preferences.piWindows !== "inline" && piWindowOpen ? this.preferences.piWindows : undefined;
+      const combinedWindow = this.piWindow === "combined";
       const candidate = !!projectedDock && (widgetsPresent() || dialogPresent()) && dockUnchanged() && !this.failed &&
-        this.preferences.mode === "split" && this.preferences.zoom !== "chat";
+        this.preferences.mode === "split" && this.zoom !== "chat" && !combinedWindow;
       projectDialog = candidate && dialogPresent();
       historyHeight = Math.max(0, height - (candidate ? projectedDock : dock).render(width).length - toolbar.render(width).length);
       const search = this.search;
@@ -450,20 +465,21 @@ export class TranscriptLayout {
         if (this.search === search) search.bar.reposition();
       });
       this.automaticHeight = Math.max(MIN_ROWS, Math.floor(historyHeight / 2));
-      const chatWidth = this.preferences.zoom || this.preferences.layout === "rows" ? width : Math.min(width - MIN_ACTIVITY - 1,
+      const chatWidth = this.zoom || this.preferences.layout === "rows" ? width : Math.min(width - MIN_ACTIVITY - 1,
         Math.max(MIN_CHAT, this.preferences.chatWidth ?? this.defaultWidth(width)));
-      const activityWidth = this.preferences.zoom || this.preferences.layout === "rows" ? width : width - chatWidth - 1;
+      const activityWidth = this.zoom || this.preferences.layout === "rows" ? width : width - chatWidth - 1;
       const chatSearch = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
       const activitySearch = this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0;
       const chatMin = Math.max(MIN_ROWS + chatSearch, chatHeader.render(Math.max(1, chatWidth)).length + 1);
       const activityMin = Math.max(MIN_ROWS + activitySearch, activityHeader.render(Math.max(1, activityWidth)).length + 1);
-      const fits = this.preferences.zoom ? width >= MIN_CHAT && historyHeight >= (this.preferences.zoom === "chat" ? chatMin : activityMin) :
+      // A Pi window shown in combined history counts as not fitting: Pi's own history and dock take the screen.
+      const fits = !combinedWindow && (this.zoom ? width >= MIN_CHAT && historyHeight >= (this.zoom === "chat" ? chatMin : activityMin) :
         this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= Math.max(chatMin, activityMin) :
-          width >= MIN_CHAT && historyHeight >= chatMin + activityMin + 1;
+          width >= MIN_CHAT && historyHeight >= chatMin + activityMin + 1);
       this.fallback = this.preferences.mode === "split" && !fits;
       projectSurface = candidate && fits;
       if (this.search && (this.fallback || this.failed || this.preferences.mode !== "split" ||
-        (this.preferences.zoom && this.preferences.zoom !== this.search.pane))) this.closeSearch(false);
+        (this.zoom && this.zoom !== this.search.pane))) this.closeSearch(false);
       this.searchShortcut.sync(!this.failed && this.preferences.mode === "split" && fits);
       if (this.failed) return false;
       try {
@@ -474,7 +490,7 @@ export class TranscriptLayout {
           const widgetWidth = activityWidth;
           const chatLimit = Math.max(chatMin, Math.min((this.preferences.chatHeight ?? this.automaticHeight) + chatSearch,
             historyHeight - activityMin - 1));
-          const activityHeight = this.preferences.zoom || this.preferences.layout === "columns" ? historyHeight :
+          const activityHeight = this.zoom || this.preferences.layout === "columns" ? historyHeight :
             historyHeight - 1 - Math.min(chatLimit, Math.max(chatMin, chatPane.render(width).length));
           // Do not clip opaque interactive surfaces: their own wheel handlers may consume scrolling.
           // If the entire surface cannot fit, leave Pi's original dock available instead.
@@ -511,7 +527,7 @@ export class TranscriptLayout {
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(
         () => this.preferences.buttonStyle === "icons" ? (this.preferences.layout === "columns" ? "↔" : "↕") : "Swap", () => this.swap(),
-        () => this.preferences.mode === "split" && !this.preferences.zoom && !this.fallback && !this.failed,
+        () => this.preferences.mode === "split" && !this.zoom && !this.fallback && !this.failed,
       ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
       { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Settings", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
     ], [
@@ -559,8 +575,9 @@ export class TranscriptLayout {
           this.openSearch(target);
         }, () => true, () => palette().fill), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
         { component: this.button(
-          () => this.preferences.zoom === target ? (this.preferences.buttonStyle === "icons" ? "↙" : "Restore") : (this.preferences.buttonStyle === "icons" ? "↗" : "Maximize"),
-          () => this.maximize(target), () => true, () => palette().fill,
+          () => this.zoom === target ? (this.preferences.buttonStyle === "icons" ? "↙" : "Restore") : (this.preferences.buttonStyle === "icons" ? "↗" : "Maximize"),
+          // A Pi window's temporary zoom ends when the window closes, not by Restore.
+          () => this.maximize(target), () => !this.piWindow, () => palette().fill,
         ), basis: 5, shrink: 0 },
       ], target === "activity" ? [
         { index: 1, icon: 6 },
@@ -574,7 +591,7 @@ export class TranscriptLayout {
       headers.push(label);
       const header = new VStack([
         { component: line, basis: 1, shrink: 0, visible: () =>
-          this.preferences.zoom !== null || this.preferences.layout === "columns" ||
+          this.zoom !== null || this.preferences.layout === "columns" ||
           (this.preferences.side === "left" ? target === "chat" : target === "activity") },
         { component: label, basis: "auto", shrink: 0 },
         { component: line, basis: 1, shrink: 0 },
@@ -645,7 +662,7 @@ export class TranscriptLayout {
     this.rebuild();
     const surface = new SplitSurface(host, {
       model: () => {
-        const zoom = this.preferences.zoom;
+        const zoom = this.zoom;
         if (zoom) return { component: zoom === "chat" ? chatPane : activityPane, fill: false, minSize: MIN_ROWS };
         return this.preferences.layout === "columns" ? { component: columns, fill: true, minSize: 1 } : { component: rows, fill: false, minSize: 1 };
       },
@@ -745,7 +762,8 @@ export class TranscriptLayout {
   /** Scroll the other panel to the same point of history as a block, returning from a zoomed panel first. */
   async goTo(from: Pane, source: Component): Promise<void> {
     const target = this.index?.counterpart(source, from);
-    if (!target || !this.searchPane()) return;
+    // The other panel stays hidden while a Pi window maximizes Activity.
+    if (!target || !this.searchPane() || this.piWindow) return;
     const pane: Pane = from === "chat" ? "activity" : "chat";
     if (this.preferences.zoom) {
       this.preferences.zoom = null;
@@ -773,7 +791,7 @@ export class TranscriptLayout {
   searchPane(): Pane | undefined {
     if (!this.host || this.host.layoutRoot !== this.mounted || this.failed || this.fallback ||
       this.preferences.mode !== "split") return undefined;
-    return this.preferences.zoom ?? this.activePane;
+    return this.zoom ?? this.activePane;
   }
 
   /** Offer block copying only from a currently visible split panel. */
@@ -919,6 +937,12 @@ export class TranscriptLayout {
     this.changed();
   }
 
+  /** Choose how Pi's own windows open while the panels are side by side. */
+  setPiWindows(piWindows: Preferences["piWindows"]): void {
+    this.preferences.piWindows = piWindows;
+    this.changed();
+  }
+
   /** Show or hide clock rows without changing their recorded source times. */
   setTimestamps(show: boolean): void {
     this.preferences.showTimestamps = show;
@@ -983,7 +1007,7 @@ export class TranscriptLayout {
   }
 
   private currentHeight(): number {
-    if (this.preferences.layout === "rows" && !this.preferences.zoom && this.chat?.viewportHeight) {
+    if (this.preferences.layout === "rows" && !this.zoom && this.chat?.viewportHeight) {
       return this.chat.viewportHeight + (this.preferences.side === "left" ? 3 : 2);
     }
     return this.preferences.chatHeight ?? this.automaticHeight;
@@ -1036,7 +1060,7 @@ export class TranscriptLayout {
   /** Cycle keyboard scrolling and search to the other panel. */
   cyclePanel(): void {
     const pane = this.searchPane();
-    if (!pane || this.preferences.zoom) return;
+    if (!pane || this.zoom) return;
     this.activate(pane === "chat" ? "activity" : "chat");
   }
 
@@ -1068,6 +1092,7 @@ export class TranscriptLayout {
     this.index = undefined;
     this.hoverAct = undefined;
     this.moving = undefined;
+    this.piWindow = undefined;
     this.drag = undefined;
     this.rebuild = () => {};
   }

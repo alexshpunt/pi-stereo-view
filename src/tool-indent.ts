@@ -9,8 +9,8 @@ export class ToolIndent extends Container {
     this.prefix = " ".repeat(gutter) + " │".repeat(depth) + (body ? " " : "");
   }
   // Expanded runs are re-indented on every frame; reuse rows while the native rows are unchanged.
-  private cached?: { width: number; prefix: string; source: string[]; lines: string[] };
-  override render(width: number): string[] {
+  private cached?: { width: number; prefix: string; source: readonly string[]; lines: readonly string[] };
+  override render(width: number): readonly string[] {
     const inset = Math.min(width, this.prefix.length);
     const prefix = this.theme().fg("dim", this.prefix.slice(0, inset));
     const source = super.render(Math.max(0, width - inset));

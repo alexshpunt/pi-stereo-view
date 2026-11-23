@@ -26,9 +26,9 @@ type LayoutNode =
   | { type: "scroll"; component: Component; state: ScrollView };
 interface Box {
   component: Component; rect: Rect; clip: Rect; children: Box[];
-  lines?: string[]; lineOffset?: number; scrollView?: ScrollView; scrollContentLines?: string[];
+  lines?: readonly string[]; lineOffset?: number; scrollView?: ScrollView; scrollContentLines?: readonly string[];
 }
-interface Context { viewport: Viewport; cache: Map<Component, Map<number, string[]>>; requestRender: () => void; scrolls: Map<ScrollView, Box> }
+interface Context { viewport: Viewport; cache: Map<Component, Map<number, readonly string[]>>; requestRender: () => void; scrolls: Map<ScrollView, Box> }
 interface Segment { x: number; width: number; line: string; raw?: boolean; background?: boolean }
 interface Geometry { column: number; trackTop: number; trackHeight: number; thumbTop: number; thumbHeight: number; maxScrollTop: number }
 interface Frame { width: number; height: number; root: Box; lines: string[]; scrolls: Map<ScrollView, Box>; indicator?: { row: number; column: number; width: number } }
@@ -52,7 +52,7 @@ function contains(rect: Rect, x: number, y: number): boolean {
   return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
 }
 
-function rendered(context: Context, component: Component, width: number): string[] {
+function rendered(context: Context, component: Component, width: number): readonly string[] {
   const safeWidth = Math.max(1, Math.floor(width));
   let widths = context.cache.get(component);
   if (!widths) { widths = new Map(); context.cache.set(component, widths); }
@@ -251,7 +251,7 @@ function highlightSelection(text: string): string {
 
 /** One scroll position for Pi's keyboard scrolling, prompt jumps and follow-end: the active split panel's. */
 export class ActivePaneScrollView extends ScrollView {
-  constructor(private readonly target: () => ScrollView | undefined, lines: () => string[]) {
+  constructor(private readonly target: () => ScrollView | undefined, lines: () => readonly string[]) {
     super({ render: () => lines(), invalidate() {} }, { follow: "end" });
     Object.defineProperty(this, "primary", { value: true });
     Object.defineProperty(this, "followEnd", { get: () => this.target()?.followEnd ?? false });

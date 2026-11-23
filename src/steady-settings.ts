@@ -24,7 +24,7 @@ export class SteadySettings implements Component {
     private readonly change: (id: string, value: string) => void,
   ) {}
 
-  render(width: number): string[] {
+  render(width: number): readonly string[] {
     const rows = this.rows(width);
     // A submenu, such as a color input, keeps the list's height too: blank rows follow it.
     if (this.submenuOpen()) {

@@ -51,6 +51,8 @@ export interface Preferences {
   turnHover: boolean;
   /** How a block opens the same point of history in the other panel. */
   goTo: GoTo;
+  /** How Pi's own windows, such as the session tree, open while the panels are side by side. */
+  piWindows: PiWindows;
 }
 
 export type TurnStripe = "off" | "block" | "line";
@@ -60,12 +62,18 @@ export type TurnMarkSetting = "turns" | "turnClock" | "turnStripe" | "turnBackgr
 export type GoTo = "clock" | "button" | "both" | "off";
 export const TURN_STRIPES: readonly TurnStripe[] = ["off", "block", "line"];
 export const GO_TO: readonly GoTo[] = ["clock", "button", "both", "off"];
+/**
+ * `combined` shows Pi's single history with the window at full width, `maximize` gives Activity the whole screen,
+ * `inline` keeps the window under Activity like extension dialogs.
+ */
+export type PiWindows = "combined" | "maximize" | "inline";
+export const PI_WINDOWS: readonly PiWindows[] = ["combined", "maximize", "inline"];
 
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null, showTimestamps: true, showCopyButtons: true, compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
   // Strengths chosen on dark and light terminals; one gray hover reads as "this turn" without competing with turn hues.
   turns: true, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true,
-  turnClockMix: 10, turnStripeMix: 20, turnBackgroundMix: 8, turnHoverMix: 10, turnHoverColor: "#808080", turnHover: true, goTo: "both",
+  turnClockMix: 10, turnStripeMix: 20, turnBackgroundMix: 8, turnHoverMix: 10, turnHoverColor: "#808080", turnHover: true, goTo: "both", piWindows: "combined",
 };
 
 /** One-color hover choices offered in settings besides each turn's own hue; any `#rrggbb` can be typed in. */
@@ -111,6 +119,7 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const turnHoverColor = record.turnHoverColor === undefined ? defaults.turnHoverColor : record.turnHoverColor;
   const turnHover = record.turnHover === undefined ? defaults.turnHover : record.turnHover;
   const goTo = record.goTo === undefined ? defaults.goTo : record.goTo;
+  const piWindows = record.piWindows === undefined ? defaults.piWindows : record.piWindows;
   if ((record.side !== "left" && record.side !== "right") ||
       (record.chatWidth !== null && (typeof record.chatWidth !== "number" || !Number.isInteger(record.chatWidth) ||
         record.chatWidth < 24 || record.chatWidth > 240)) ||
@@ -122,13 +131,13 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       (buttonStyle !== "icons" && buttonStyle !== "text") || typeof turns !== "boolean" || typeof turnClock !== "boolean" ||
       !TURN_STRIPES.includes(turnStripe as TurnStripe) || typeof turnBackground !== "boolean" || typeof turnSeparator !== "boolean" ||
       !validMix(turnClockMix) || !validMix(turnStripeMix) || !validMix(turnBackgroundMix) || !validMix(turnHoverMix) || !validHoverColor(turnHoverColor) ||
-      typeof turnHover !== "boolean" || !GO_TO.includes(goTo as GoTo)) {
+      typeof turnHover !== "boolean" || !GO_TO.includes(goTo as GoTo) || !PI_WINDOWS.includes(piWindows as PiWindows)) {
     throw new Error("Invalid pi-stereo-view preferences");
   }
   // Legacy files may contain mode/zoom. Every session starts with both panels visible.
   return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
     turns, turnClock, turnStripe: turnStripe as TurnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix,
-    turnHoverColor: turnHoverColor.toLowerCase(), turnHover, goTo: goTo as GoTo };
+    turnHoverColor: turnHoverColor.toLowerCase(), turnHover, goTo: goTo as GoTo, piWindows: piWindows as PiWindows };
 }
 
 /** Atomically save only the display settings, never session messages. */
@@ -137,9 +146,9 @@ export async function savePreferences(file: string, preferences: Preferences): P
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
     const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-      turns, turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix, turnHoverColor, turnHover, goTo } = preferences;
+      turns, turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix, turnHoverColor, turnHover, goTo, piWindows } = preferences;
     const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
-      turns, turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix, turnHoverColor, turnHover, goTo };
+      turns, turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix, turnHoverColor, turnHover, goTo, piWindows };
     await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
   } finally {
