@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.25 - 2026-11-23
+
+### Fixed
+
+- Clicking or dragging in split history on Pi-Bolt no longer turns off split view with `this.ownChildren is not a function`. Thanks to [@Unk-now](https://github.com/Unk-now) for the report ([#133](https://github.com/alexshpunt/pi-stereo-view/issues/133)).
+
 ## 0.1.24 - 2026-11-22
 
 ### Added
