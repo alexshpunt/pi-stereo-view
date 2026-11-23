@@ -800,7 +800,7 @@ export class NativeDocument extends Container {
       for (const child of result) {
         const childLines = child instanceof TurnRule && rule !== undefined
           ? this.separatorRows(child.render(width), turn, mark)
-          : decorateLines(child.render(width), background, prefix);
+          : decorateLines(child.render(width), background, prefix, color?.shift);
         heights.push(childLines.length);
         for (const line of childLines) lines.push(line);
       }
