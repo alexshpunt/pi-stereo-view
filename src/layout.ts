@@ -387,7 +387,11 @@ export class TranscriptLayout {
     const timestampGutter = (): number => scroll.scrollbar === "auto" ? 1 : 0;
     const showTimestamps = (): boolean => this.preferences.showTimestamps;
     const showCopyButtons = (): boolean => this.preferences.showCopyButtons;
-    const index = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree);
+    const metrics = {
+      durations: () => this.preferences.showToolDurations,
+      usage: () => this.preferences.showModelUsage,
+    };
+    const index = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree, metrics.usage);
     this.index = index;
     // With turns off, every turn setting keeps its value but nothing marks, highlights or jumps.
     const on = (): boolean => this.preferences.turns;
@@ -411,10 +415,10 @@ export class TranscriptLayout {
       () => { if (this.activity) this.activity.scrollTo(this.activity.scrollTop, { disableFollow: true }); }, () => this.preferences.buttonStyle, {
         enabled: () => this.preferences.streamTools, delay: () => this.preferences.streamDelay * 1000,
         changed: () => this.host?.requestRender(),
-      }, turns);
+      }, turns, metrics);
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle,
-      undefined, turns);
+      undefined, turns, metrics);
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
@@ -946,6 +950,12 @@ export class TranscriptLayout {
   /** Show or hide clock rows without changing their recorded source times. */
   setTimestamps(show: boolean): void {
     this.preferences.showTimestamps = show;
+    this.changed();
+  }
+
+  /** Show or hide the recorded metrics attached by the split view. */
+  setMetric(metric: "showToolDurations" | "showModelUsage", show: boolean): void {
+    this.preferences[metric] = show;
     this.changed();
   }
 

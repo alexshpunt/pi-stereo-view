@@ -14,6 +14,7 @@ import { pushShellInputs, sameValues } from "./render-cache.ts";
 import { decorateLine, decorateLines, type TurnColor, type TurnLayers, type TurnMix } from "./turns.ts";
 import type { TurnStripe, GoTo } from "./preferences.ts";
 import { dispatchMouseEvent } from "./mouse-dispatch.ts";
+import { durationLabel, usageLabel, type MetricDisplay } from "./recorded-metrics.ts";
 export type { Pane } from "./content.ts";
 
 /** Turn marks, hover and Go to, shared by both panels through the split layout. */
@@ -205,6 +206,7 @@ export class NativeDocument extends Container {
   private requestRender?: () => void;
   private followUp = false;
   private readonly print: unknown[] = [];
+  private readonly annotations = new WeakMap<Component, { text: string; standalone?: boolean }>();
 
   constructor(
     private readonly source: Container,
@@ -224,6 +226,7 @@ export class NativeDocument extends Container {
     private readonly buttonStyle: () => "icons" | "text" = () => "text",
     private readonly streaming?: { enabled(): boolean; delay(): number; changed(): void },
     private readonly turns?: DocumentTurns,
+    private readonly metrics?: MetricDisplay,
   ) {
     super();
     if (streaming) this.streamer = new ToolStreaming(() => streaming.delay(), () => streaming.changed());
@@ -476,6 +479,7 @@ export class NativeDocument extends Container {
         const summary = entry.tool!();
         return { ...summary, name: this.present(summary.name).name };
       }, this.theme, {
+        metrics: this.metrics,
         clock: () => this.showTimestamps() ? this.timestamps.label(entry.source) : "",
         gutter: this.timestampGutter,
         clockBackground: () => this.clockBackground(entry.source),
@@ -524,10 +528,18 @@ export class NativeDocument extends Container {
     }
     return row;
   }
-  private nativeBlock(entry: ContentEntry): CompactMessage {
+  private nativeBlock(entry: ContentEntry, includeToolMetrics = false): CompactMessage {
     const component = entry.source;
     const routed = entry.component;
     this.clockOwners.set(component, entry.owner);
+    const response = this.metrics?.usage() ? usageLabel(entry.modelUsage?.(), "response") : "";
+    const call = includeToolMetrics && entry.owner === component && (this.metrics?.durations() || this.metrics?.usage()) ? entry.tool?.() : undefined;
+    const duration = call && call.status !== "running" && this.metrics?.durations() ? durationLabel(call.durationMs) : "";
+    const usage = call && call.status !== "running" && this.metrics?.usage() ? usageLabel(call.usage, call.inclusive ? "inclusive" : "tool") : "";
+    if (response || duration || usage) this.annotations.set(routed, {
+      text: response || [duration, usage].filter(Boolean).join(" · "), standalone: !!response,
+    });
+    else this.annotations.delete(routed);
     let stamped = this.stamped.get(routed);
     if (!stamped) {
       stamped = new CompactMessage(routed, () => this.timestamps.label(this.clockOwners.get(component) ?? component),
@@ -539,7 +551,7 @@ export class NativeDocument extends Container {
           clock: () => this.goToClock(),
           button: () => { const goTo = this.turns?.goTo(); return goTo === "button" || goTo === "both"; },
           go: () => this.turns?.jump(this.pane, component),
-        });
+        }, () => this.annotations.get(routed));
       this.stamped.set(routed, stamped);
     }
     this.compactBlocks.set(component, stamped);
@@ -622,7 +634,7 @@ export class NativeDocument extends Container {
         }, () => {
           const clock = this.showTimestamps() && this.toolDisplay().compact ? this.timestamps.label(entry.source) : "";
           return clock ? clock.length + 1 : 0;
-        });
+        }, this.metrics);
         this.nestedTrees.set(entry.source, tree);
       }
       trees.set(entry.source, tree);
@@ -674,7 +686,7 @@ export class NativeDocument extends Container {
     const hoverColor = mix?.hoverColor && `${mix.hoverColor.r},${mix.hoverColor.g},${mix.hoverColor.b}`;
     const presentation = [theme, stripe, tint, separator, this.turns?.clock(), mix?.clock, mix?.stripe, mix?.background, mix?.hover, hoverColor,
       display.compact, display.group, this.index.nestedTrees(), this.streamActive, this.showTimestamps(),
-      this.showCopy(), this.buttonStyle(), this.turns?.goTo(), this.timestampGutter(), this.invalidations];
+      this.showCopy(), this.buttonStyle(), this.turns?.goTo(), this.timestampGutter(), this.metrics?.durations(), this.metrics?.usage(), this.invalidations];
     if (!sameValues(presentation, this.presentation)) {
       this.presentation = presentation;
       this.epoch++;
@@ -743,7 +755,7 @@ export class NativeDocument extends Container {
         // Native blocks bring their own separator; a tree needs one to stand apart from the block above.
         if (separate) { result.push(new Spacer(1)); treeOffset = 1; }
         const panels = entries.filter(panel => panel.owner === component && panel.source !== component);
-        tree.setBodies(this.treeBody(entry), panels.map(panel => this.treeBody(panel)), this.searchAnchor?.entry.source);
+        tree.setBodies(this.treeBody(entry), panels.map(panel => this.treeBody(panel)), this.searchAnchor?.entry.source, !rowed ? entry.tool?.() : undefined);
         result.push(tree);
         if (!rowed) toolRun = false;
         visibleBlock = true;
@@ -753,7 +765,7 @@ export class NativeDocument extends Container {
         result.push(...(rule === undefined ? entry.spacing : []), routed);
       } else if (nativeBody) {
         if (!rowed) toolRun = false;
-        const stamped = this.nativeBlock(entry);
+        const stamped = this.nativeBlock(entry, !rowed);
         visibleBlock = stamped.prepare(bodyWidth, separate) || visibleBlock;
         result.push(stamped);
         clock = stamped.searchClock();
@@ -945,6 +957,11 @@ export class NativeDocument extends Container {
       this.stamped.get(routed)?.revision, rowed, this.toolOpen(entry.owner),
       group?.calls[0].source, group?.calls.length, group && group.calls.length > 1 ? this.groupOpen(group) : undefined,
       tree ? this.index.nested.revision : undefined);
+    if (this.metrics?.usage() || this.metrics?.durations()) {
+      const call = entry.tool?.();
+      if (this.metrics.usage()) out.push(entry.modelUsage?.(), call?.usage, call?.inclusive);
+      if (this.metrics.durations()) out.push(call?.durationMs);
+    }
   }
 
   /** Measure the remaining offscreen entries in later frames. */

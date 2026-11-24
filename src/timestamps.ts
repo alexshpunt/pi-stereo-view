@@ -5,6 +5,8 @@ import {
 } from "@earendil-works/pi-tui";
 
 import { NativeRenderCache, sameValues } from "./render-cache.ts";
+import type { SearchClock } from "./search-highlight.ts";
+import { metricRows } from "./recorded-metrics.ts";
 type Message = ReturnType<typeof sessionEntryToContextMessages>[number];
 type TimedSource = { message: Message; time: unknown };
 type UserSlot = { kind: string; text?: string; time: unknown };
@@ -307,7 +309,7 @@ export class CompactMessage extends Container {
   private prepared?: { width: number; content: string[]; lines: string[] };
   private readonly nativeCache: NativeRenderCache;
   private formatted?: {
-    width: number; time: string; background?: Color; copy: string; goTo: string; gutter: number; theme: Theme; version: number; top: number; lines: string[];
+    width: number; time: string; annotation: string; background?: Color; copy: string; goTo: string; gutter: number; theme: Theme; version: number; top: number; lines: string[];
   };
 
   constructor(private readonly component: Component, private readonly label: () => string,
@@ -315,7 +317,8 @@ export class CompactMessage extends Container {
     private readonly show: () => boolean, private readonly copy?: () => void,
     private readonly showCopy: () => boolean = () => true,
     private readonly buttonStyle: () => "icons" | "text" = () => "text", changed?: () => void,
-    private readonly clockBackground: () => Color | undefined = () => undefined, private readonly goTo?: BlockGoTo) {
+    private readonly clockBackground: () => Color | undefined = () => undefined, private readonly goTo?: BlockGoTo,
+    private readonly annotation?: () => { text: string; standalone?: boolean } | undefined) {
     super();
     this.addChild(component);
     this.nativeCache = new NativeRenderCache(component, changed);
@@ -342,10 +345,11 @@ export class CompactMessage extends Container {
   }
 
   /** Exclude presentation rows when mapping saved-text search matches. */
-  searchClock(): { row: number; column: number; footerRow?: number } | undefined {
-    if (!this.hasClock && this.copyRow === undefined) return undefined;
+  searchClock(): SearchClock | undefined {
+    if (!this.headerRows && this.copyRow === undefined) return undefined;
     return {
       row: this.hasClock ? this.leadingRows : -1, column: 0,
+      ...(this.headerRows ? { headerEnd: this.leadingRows + this.headerRows } : {}),
       ...(this.copyRow === undefined ? {} : { footerRow: this.leadingRows + this.copyRow }),
     };
   }
@@ -358,6 +362,8 @@ export class CompactMessage extends Container {
     const shownTime = label && this.show() && visibleWidth(label) + 1 <= this.contentWidth;
     const background = shownTime ? this.clockBackground() : undefined;
     const time = shownTime ? " " + label : "";
+    const note = this.annotation?.();
+    const annotation = note?.text ?? "";
     const icons = this.buttonStyle() === "icons";
     const control = icons ? ICON_COPY_CONTROL : TEXT_COPY_CONTROL;
     const controlWidth = visibleWidth(control);
@@ -368,7 +374,7 @@ export class CompactMessage extends Container {
     const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
     const cached = this.formatted;
-    if (cached?.width === width && cached.time === time && cached.copy === copy && cached.goTo === goTo && cached.background === background &&
+    if (cached?.width === width && cached.time === time && cached.annotation === annotation && cached.copy === copy && cached.goTo === goTo && cached.background === background &&
       cached.gutter === gutter && cached.theme === theme &&
       cached.version === this.nativeCache.version) {
       this.top = cached.top;
@@ -390,7 +396,12 @@ export class CompactMessage extends Container {
       while (end > this.top && blank(content[end - 1])) end--;
     }
     const body = content.slice(this.top, end);
-    if (!body.length) return body;
+    const notes = metricRows(annotation, this.contentWidth, theme);
+    if (!body.length) {
+      if (!note?.standalone) return body;
+      this.headerRows = notes.length;
+      return notes;
+    }
     if (!this.nativeCache.hasImagePlacement) {
       // User message zones live on native padding rows. Keep those shell markers.
       const zones = (rows: string[]): string => rows.join("").match(/\x1b\]133;[ABC](?:\x07|\x1b\\)/g)?.join("") ?? "";
@@ -399,10 +410,10 @@ export class CompactMessage extends Container {
     }
     this.hasClock = Boolean(time);
     this.clockWidth = time ? visibleWidth(time) : 0;
-    this.headerRows = time ? 1 : 0;
+    this.headerRows = (time ? 1 : 0) + notes.length;
     this.bodyRows = body.length;
     const clock = !time ? "" : background ? " " + theme.style(label, { fg: "text", bg: background }) : theme.fg("dim", time);
-    const lines = time ? [clock, ...body] : body;
+    const lines = time ? [clock, ...notes, ...body] : notes.length ? [...notes, ...body] : body;
     if (copy || goTo) {
       this.copyRow = lines.length;
       const style = { fg: "dim" as const, dim: icons };
@@ -419,7 +430,7 @@ export class CompactMessage extends Container {
       }
       lines.push(row);
     }
-    this.formatted = { width, time, background, copy, goTo, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
+    this.formatted = { width, time, annotation, background, copy, goTo, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
     return lines;
   }
 
