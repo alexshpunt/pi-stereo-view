@@ -133,7 +133,7 @@ Calls that are still running or waiting to collapse are never grouped. Thinking,
 Both settings take effect immediately and are off by default.
 
 - Under **Activity tools**, turn on **Tool durations** to see the recorded time for each finished call, including individual calls in the Codemode tree and in expanded groups. A parent shows its own time. Groups do not add their members' times, because calls may run in parallel. For a tool that starts a background job, its time ends when the call returns.
-- Under **Blocks**, turn on **Model usage** to see one summary for each model response. The summary includes recorded input, output, cache read and cache write tokens, and Pi's cost in USD when available. Tools that report model usage show it on their calls. An inclusive tool total already counts usage from its nested calls.
+- Under **Blocks**, turn on **Model usage** to see one summary for each model response. The summary uses Pi's notation: `↑` for input, `↓` for output, `R` for cache reads and `W` for cache writes, followed by the recorded cost in USD when available. In Conversation it sits to the right of the clock, or above the message if it doesn't fit or clocks are off. Tools that report model usage show it on their calls. An inclusive tool total already counts usage from its nested calls.
 
 Stereo View leaves missing values blank and keeps the fields Pi saved when you reopen a session. The settings do not change Pi's combined history or original tool cards. Codemode's raw output still shows the details it recorded for its own model calls.
 
