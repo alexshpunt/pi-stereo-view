@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.28 - 2026-11-24
+
+### Added
+
+- Turn on **Model usage** under **Blocks** to see recorded tokens and USD cost. In Conversation, the summary sits beside the clock and uses Pi’s notation: `↑` input, `↓` output, `R` cache reads and `W` cache writes. It moves above the message when the pane is too narrow or clocks are hidden.
+- Turn on **Tool durations** under **Activity tools** to see how long each completed call took, including nested Codemode calls. Tools that report their own model usage show it with **Model usage** enabled.
+
+Both settings are off by default and work with saved session history when it contains the measurements.
+
 ## 0.1.27 - 2026-11-23
 
 ### Added
