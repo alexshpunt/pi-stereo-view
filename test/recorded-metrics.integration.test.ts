@@ -28,7 +28,7 @@ test("live execution and resumed split history show only recorded metrics when e
     session.appendMessage({ role: "toolResult", toolCallId: "legacy", toolName: "read", content: [{ type: "text", text: "Legacy body" }], isError: false, timestamp: at });
     const run = async (phase: "live" | "resume" | "disabled", enabled: boolean) => {
       await writeFile(path.join(agent, "transcript.json"), JSON.stringify({
-        layout: "columns", side: "left", chatWidth: 26, showTimestamps: false, compactTools: true,
+        layout: "columns", side: "left", chatWidth: 46, showTimestamps: phase !== "resume", compactTools: true,
         groupTools: false, showToolDurations: enabled, showModelUsage: enabled,
       }));
       const capture = path.join(cwd, phase + ".json");
@@ -57,14 +57,18 @@ test("live execution and resumed split history show only recorded metrics when e
       expect(tools).toHaveLength(3);
       if (phase === "disabled") {
         for (const row of tools) expect(row).not.toMatch(duration);
-        expect([...activity, ...chat].join("\n")).not.toMatch(/7,654|4,321|0\.0036/);
+        expect([...activity, ...chat].join("\n")).not.toMatch(/↑7\.7k|↑4\.3k|0\.0036/);
       } else {
         for (const row of tools) expect(row).toMatch(duration);
-        expect(chat.filter(line => line.includes("7,654"))).toHaveLength(1);
-        expect(activity.filter(line => line.includes("4,321"))).toHaveLength(1);
+        const modelRows = chat.filter(line => line.includes("↑7.7k"));
+        expect(modelRows).toHaveLength(1);
+        expect(modelRows[0]).toContain("↑7.7k ↓36 R52 W9 $0.0073");
+        if (phase === "live") expect(modelRows[0]).toMatch(/\d{2}:\d{2}:\d{2}\s+↑7\.7k/);
+        else expect(modelRows[0]).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+        expect(activity.filter(line => line.includes("↑4.3k"))).toHaveLength(1);
         expect(activity.filter(line => line.includes("$0.0036"))).toHaveLength(phase === "live" ? 2 : 1);
         expect(screen.join("\n")).toContain("$0.0036");
-        expect(activity.join("\n")).not.toContain("7,654");
+        expect(activity.join("\n")).not.toContain("↑7.7k");
       }
     }
   } finally {

@@ -5,6 +5,25 @@ import { CompactMessage } from "../src/timestamps.ts";
 
 const theme = () => ({ fg: (_color: string, value: string) => value }) as Theme;
 
+test("puts model usage to the right of the clock when it fits and preserves it in a narrow block", () => {
+  const clock = "12:34:56";
+  const usage = "↑7.7k ↓36 R52 W9 $0.0073";
+  const native = { render: () => ["body"], invalidate() {} };
+  const block = new CompactMessage(native, () => clock, theme, () => 1, () => true,
+    undefined, undefined, undefined, undefined, undefined, undefined, () => ({ text: usage, inline: true }));
+  const render = (width: number) => {
+    block.prepare(width, false);
+    return block.render(width).map(stripTerminalSequences);
+  };
+  expect(render(40).map(row => row.trim())).toEqual([`${clock}  ${usage}`, "body"]);
+  const narrow = render(18);
+  expect(narrow[0].trim()).toBe(clock);
+  expect(narrow.slice(1, -1).map(row => row.trim()).join(" ")).toBe(usage);
+  expect(narrow.every(row => visibleWidth(row) < 18)).toBe(true);
+  expect(narrow.at(-1)).toBe("body");
+  expect(block.searchClock()?.headerEnd).toBe(narrow.length - 1);
+});
+
 test("reuses compact formatting for unchanged native lines without hiding native updates", () => {
   let clocks = 0;
   let renders = 0;

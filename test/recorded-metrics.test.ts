@@ -46,7 +46,8 @@ test("tool duration and usage visibility change independently on an already rend
 test("empty response accounting does not hide measured zero fields on a metered response", () => {
   const empty = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: { total: 0 } };
   expect(usageLabel(empty, "response")).toBe("");
-  expect(usageLabel({ ...empty, input: 789 }, "response")).toMatch(/789/);
-  expect(usageLabel({ ...empty, input: 789 }, "response")).toMatch(/0.*\$0\.00/);
+  expect(usageLabel({ ...empty, input: 789 }, "response")).toBe("↑789 ↓0 R0 W0 $0.00");
+  expect(usageLabel({ input: 12_345, output: 18, cacheRead: 1_234_567, cacheWrite: 1_430 }, "response"))
+    .toMatch(/↑12k ↓18 R1\.2M W1\.4k/);
   expect(usageLabel(empty, "tool")).toMatch(/\$0\.00/);
 });
