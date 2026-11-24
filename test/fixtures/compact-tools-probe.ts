@@ -53,11 +53,9 @@ export default function compactToolsProbe(pi: ExtensionAPI): void {
     await input(`\x1b[<0;${x + 1};${y + 1}M`);
     await input(`\x1b[<0;${x + 1};${y + 1}m`);
   };
-  // Grouping is the fifth setting; the toolbar button changes only compact rows.
   const toggleGrouping = async (): Promise<void> => {
     await click("[ ≡ ]");
-    for (let row = 0; row < 4; row++) await input("\x1b[B");
-    await input(" ");
+    await click("Repeated tool calls");
     await input("\x1b");
   };
   const clickGroup = (): Promise<void> => click("compact_probe", "", line =>
