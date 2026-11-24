@@ -128,6 +128,15 @@ Compact rows and groups work in columns, rows and zoomed Activity. Settings save
 
 Calls that are still running or waiting to collapse are never grouped. Thinking, answers and other content between calls appear as usual and end a group. Several calls running together collapse separately, each after its own delay. A call you opened yourself stays open. Scroll position is not changed when a call collapses; if you are at the end of Activity, you stay there. A reopened session shows all its calls collapsed. Both settings survive restart.
 
+## Tool durations and model usage
+
+Both settings take effect immediately and are off by default.
+
+- Under **Activity tools**, turn on **Tool durations** to see the recorded time for each finished call, including individual calls in the Codemode tree and in expanded groups. A parent shows its own time. Groups do not add their members' times, because calls may run in parallel. For a tool that starts a background job, its time ends when the call returns.
+- Under **Blocks**, turn on **Model usage** to see one summary for each model response. The summary includes recorded input, output, cache read and cache write tokens, and Pi's cost in USD when available. Tools that report model usage show it on their calls. An inclusive tool total already counts usage from its nested calls.
+
+Stereo View leaves missing values blank and keeps the fields Pi saved when you reopen a session. The settings do not change Pi's combined history or original tool cards. Codemode's raw output still shows the details it recorded for its own model calls.
+
 ## Find your way between requests
 
 A turn is one message you sent, or one message an extension gave the agent, together with everything the agent did and said until the next such message. Consecutive messages with no work in between form one turn.
