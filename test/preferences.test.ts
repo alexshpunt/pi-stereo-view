@@ -6,7 +6,7 @@ import { defaults, loadPreferences, savePreferences, type Preferences } from "..
 
 const arrangement = {
   side: "right", chatWidth: 73, layout: "rows", chatHeight: 17,
-  showTimestamps: false, showCopyButtons: false, compactTools: true, groupTools: false, nestedTree: false, streamTools: true, streamDelay: 8, buttonStyle: "icons",
+  showTimestamps: false, showCopyButtons: false, showToolDurations: true, showModelUsage: false, compactTools: true, groupTools: false, nestedTree: false, streamTools: true, streamDelay: 8, buttonStyle: "icons",
   turns: true, turnClock: false, turnStripe: "line", turnBackground: true, turnSeparator: true, turnClockMix: 20, turnStripeMix: 50,
   turnBackgroundMix: 3, turnHoverMix: 40, turnHoverColor: "#3b82f6", turnHover: false, goTo: "button", piWindows: "maximize",
 } as const;
@@ -74,6 +74,38 @@ test.each([{ piWindows: "fullscreen" }, { piWindows: true }])("rejects an invali
   try {
     await writeFile(file, JSON.stringify({ ...arrangement, ...invalid }));
     await expect(loadPreferences(file)).rejects.toThrow("Invalid pi-stereo-view preferences");
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("leaves tool durations and model usage off unless chosen", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    expect(await loadPreferences(file)).toMatchObject({ showToolDurations: false, showModelUsage: false });
+    await writeFile(file, JSON.stringify({ side: "right", chatWidth: 73 }));
+    expect(await loadPreferences(file)).toMatchObject({ side: "right", chatWidth: 73, showToolDurations: false, showModelUsage: false });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test.each([
+  { showToolDurations: true, showModelUsage: false },
+  { showToolDurations: false, showModelUsage: true },
+])("persists independent tool duration and model usage choices %o", async metrics => {
+  const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    await savePreferences(file, { ...defaults, ...metrics });
+    expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject(metrics);
+    expect(await loadPreferences(file)).toMatchObject(metrics);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test.each([{ showToolDurations: "on" }, { showModelUsage: null }])("rejects an invalid metric setting %o", async invalid => {
+  const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    await writeFile(file, JSON.stringify({ ...arrangement, ...invalid }));
+    await expect(loadPreferences(file)).rejects.toThrow();
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
