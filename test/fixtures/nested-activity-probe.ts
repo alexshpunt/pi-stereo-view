@@ -169,7 +169,11 @@ export default function nestedActivityProbe(pi: ExtensionAPI): void {
     async execute(_id, args) {
       await setTimeout(350);
       if (args.fail) throw new Error("FAILURE-RESULT-Q82");
-      return { content: [{ type: "text", text: "SUCCESS-RESULT-P82" }], details: { nativeValue: "NATIVE-RESULT-P82" } };
+      const usage = process.env.NESTED_ACTIVITY_USAGE ? {
+        input: 318, output: 69, cacheRead: 211, cacheWrite: 17, totalTokens: 615,
+        cost: { input: 0.001, output: 0.002, cacheRead: 0.0005, cacheWrite: 0.0001, total: 0.0036 },
+      } : undefined;
+      return { content: [{ type: "text", text: "SUCCESS-RESULT-P82" }], details: { nativeValue: "NATIVE-RESULT-P82" }, usage };
     },
   });
   pi.registerTool({
