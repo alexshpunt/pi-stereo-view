@@ -27,7 +27,14 @@ export function durationLabel(ms: number | undefined): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
-const counts = new Intl.NumberFormat("en-US");
+// Match Pi's footer without importing a private Pi module.
+function formatTokens(count: number): string {
+  if (count < 1000) return String(count);
+  if (count < 10_000) return `${(count / 1000).toFixed(1)}k`;
+  if (count < 1_000_000) return `${Math.round(count / 1000)}k`;
+  if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  return `${Math.round(count / 1_000_000)}M`;
+}
 const dollars = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 12 });
 const labels = new WeakMap<RecordedUsage, { text: string; hasUsage: boolean }>();
 
@@ -37,18 +44,19 @@ export function usageLabel(usage: RecordedUsage | undefined, scope: "response" |
   if (label === undefined) {
     const parts: string[] = [];
     let hasUsage = false;
-    for (const [field, name] of [["input", "in"], ["output", "out"], ["cacheRead", "cache read"], ["cacheWrite", "cache write"]] as const) {
+    for (const [field, prefix] of [["input", "↑"], ["output", "↓"], ["cacheRead", "R"], ["cacheWrite", "W"]] as const) {
       const tokens = usage[field];
-      if (measured(tokens)) { parts.push(`${counts.format(tokens)} ${name}`); hasUsage ||= tokens > 0; }
+      if (measured(tokens)) { parts.push(prefix + formatTokens(tokens)); hasUsage ||= tokens > 0; }
     }
     const total = usage.cost?.total;
     if (measured(total)) { parts.push(dollars.format(total)); hasUsage ||= total > 0; }
-    label = { text: parts.join(" · "), hasUsage };
+    label = { text: parts.join(" "), hasUsage };
     labels.set(usage, label);
   }
   // Pi creates an all-zero usage object even if a model returned no accounting.
   if (!label.text || (scope === "response" && !label.hasUsage)) return "";
-  return `${scope === "response" ? "Model usage" : scope === "inclusive" ? "Tool usage incl. nested" : "Tool usage"}: ${label.text}`;
+  if (scope === "response") return label.text;
+  return `${scope === "inclusive" ? "Tool usage incl. nested" : "Tool usage"}: ${label.text}`;
 }
 
 /** Keep all recorded fields readable when panes are narrow without clipping original rows. */

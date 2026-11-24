@@ -2,7 +2,7 @@ import type { Theme, ToolInfo } from "@earendil-works/pi-coding-agent";
 import { Container, Spacer, stripTerminalSequences, Text, type Color, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { searchText, type SearchEntry, type SearchHit } from "./search.ts";
 import { highlightSearchRows, searchHitRow, type SearchClock } from "./search-highlight.ts";
-import { CompactMessage, type TranscriptTimestamps } from "./timestamps.ts";
+import { CompactMessage, type BlockAnnotation, type TranscriptTimestamps } from "./timestamps.ts";
 import { NativeContentIndex, callStatus, type ContentEntry, type Pane } from "./content.ts";
 import { CompactTool } from "./compact-tools.ts";
 import { toolPresentations, type ToolPresentation } from "./tool-presentation.ts";
@@ -206,7 +206,7 @@ export class NativeDocument extends Container {
   private requestRender?: () => void;
   private followUp = false;
   private readonly print: unknown[] = [];
-  private readonly annotations = new WeakMap<Component, { text: string; standalone?: boolean }>();
+  private readonly annotations = new WeakMap<Component, BlockAnnotation>();
 
   constructor(
     private readonly source: Container,
@@ -537,7 +537,8 @@ export class NativeDocument extends Container {
     const duration = call && call.status !== "running" && this.metrics?.durations() ? durationLabel(call.durationMs) : "";
     const usage = call && call.status !== "running" && this.metrics?.usage() ? usageLabel(call.usage, call.inclusive ? "inclusive" : "tool") : "";
     if (response || duration || usage) this.annotations.set(routed, {
-      text: response || [duration, usage].filter(Boolean).join(" · "), standalone: !!response,
+      text: response ? (this.pane === "chat" ? response : `Model usage: ${response}`) : [duration, usage].filter(Boolean).join(" · "),
+      standalone: !!response, inline: !!response && this.pane === "chat",
     });
     else this.annotations.delete(routed);
     let stamped = this.stamped.get(routed);
