@@ -290,6 +290,14 @@ export interface BlockGoTo {
   button(): boolean;
   go(): void;
 }
+/** A supplemental row above a compact block. */
+export interface BlockAnnotation {
+  text: string;
+  standalone?: boolean;
+  /** Share the clock row when the annotation fits. */
+  inline?: boolean;
+}
+
 /** Keep message text full-width, with a clock above and copy action below. */
 export class CompactMessage extends Container {
   private top = 0;
@@ -309,7 +317,7 @@ export class CompactMessage extends Container {
   private prepared?: { width: number; content: string[]; lines: string[] };
   private readonly nativeCache: NativeRenderCache;
   private formatted?: {
-    width: number; time: string; annotation: string; background?: Color; copy: string; goTo: string; gutter: number; theme: Theme; version: number; top: number; lines: string[];
+    width: number; time: string; annotation: string; inline: boolean; background?: Color; copy: string; goTo: string; gutter: number; theme: Theme; version: number; top: number; lines: string[];
   };
 
   constructor(private readonly component: Component, private readonly label: () => string,
@@ -318,7 +326,7 @@ export class CompactMessage extends Container {
     private readonly showCopy: () => boolean = () => true,
     private readonly buttonStyle: () => "icons" | "text" = () => "text", changed?: () => void,
     private readonly clockBackground: () => Color | undefined = () => undefined, private readonly goTo?: BlockGoTo,
-    private readonly annotation?: () => { text: string; standalone?: boolean } | undefined) {
+    private readonly annotation?: () => BlockAnnotation | undefined) {
     super();
     this.addChild(component);
     this.nativeCache = new NativeRenderCache(component, changed);
@@ -364,6 +372,7 @@ export class CompactMessage extends Container {
     const time = shownTime ? " " + label : "";
     const note = this.annotation?.();
     const annotation = note?.text ?? "";
+    const inline = !!note?.inline;
     const icons = this.buttonStyle() === "icons";
     const control = icons ? ICON_COPY_CONTROL : TEXT_COPY_CONTROL;
     const controlWidth = visibleWidth(control);
@@ -374,7 +383,7 @@ export class CompactMessage extends Container {
     const content = this.nativeCache.render(this.contentWidth, theme);
     this.contentHeight = content.length;
     const cached = this.formatted;
-    if (cached?.width === width && cached.time === time && cached.annotation === annotation && cached.copy === copy && cached.goTo === goTo && cached.background === background &&
+    if (cached?.width === width && cached.time === time && cached.annotation === annotation && cached.inline === inline && cached.copy === copy && cached.goTo === goTo && cached.background === background &&
       cached.gutter === gutter && cached.theme === theme &&
       cached.version === this.nativeCache.version) {
       this.top = cached.top;
@@ -396,9 +405,9 @@ export class CompactMessage extends Container {
       while (end > this.top && blank(content[end - 1])) end--;
     }
     const body = content.slice(this.top, end);
-    const notes = metricRows(annotation, this.contentWidth, theme);
     if (!body.length) {
       if (!note?.standalone) return body;
+      const notes = metricRows(annotation, this.contentWidth, theme);
       this.headerRows = notes.length;
       return notes;
     }
@@ -410,10 +419,15 @@ export class CompactMessage extends Container {
     }
     this.hasClock = Boolean(time);
     this.clockWidth = time ? visibleWidth(time) : 0;
+    const gap = "  ";
+    const besideClock = this.hasClock && inline && annotation &&
+      this.clockWidth + gap.length + visibleWidth(annotation) <= this.contentWidth;
+    const notes = besideClock ? [] : metricRows(annotation, this.contentWidth, theme);
     this.headerRows = (time ? 1 : 0) + notes.length;
     this.bodyRows = body.length;
     const clock = !time ? "" : background ? " " + theme.style(label, { fg: "text", bg: background }) : theme.fg("dim", time);
-    const lines = time ? [clock, ...notes, ...body] : notes.length ? [...notes, ...body] : body;
+    const lines = time ? [besideClock ? clock + gap + theme.fg("dim", annotation) : clock, ...notes, ...body] :
+      notes.length ? [...notes, ...body] : body;
     if (copy || goTo) {
       this.copyRow = lines.length;
       const style = { fg: "dim" as const, dim: icons };
@@ -430,7 +444,7 @@ export class CompactMessage extends Container {
       }
       lines.push(row);
     }
-    this.formatted = { width, time, annotation, background, copy, goTo, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
+    this.formatted = { width, time, annotation, inline, background, copy, goTo, gutter, theme, version: this.nativeCache.version, top: this.top, lines };
     return lines;
   }
 
