@@ -106,10 +106,12 @@ export default function turnNavigationProbe(pi: ExtensionAPI): void {
         // Turn clock colors from the settings list, with hover unavailable in a multiplexer.
         const toolbar = first[0];
         await click(visibleWidth(toolbar.slice(0, toolbar.indexOf("[ ≡ ]"))) + 2, 0);
-        await capture("settings");
-        // Past the general settings and Color each turn to Tint clocks; the arrows skip group titles.
-        for (let index = 0; index < 11; index++) await input("\x1b[B");
-        await input(" ");
+        const settings = await capture("settings");
+        const tintLabel = "Tint clocks";
+        const tintRow = settings.findIndex(line => line.includes(tintLabel));
+        if (tintRow < 0) throw new Error("Missing clock tint setting");
+        const tintColumn = visibleWidth(settings[tintRow].slice(0, settings[tintRow].indexOf(tintLabel)));
+        await click(tintColumn + 1, tintRow);
         await input("\x1b");
         await reveal("activity", "FIRST-PATH");
         await reveal("chat", "FIRST REQUEST");

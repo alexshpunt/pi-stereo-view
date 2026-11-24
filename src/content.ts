@@ -2,6 +2,7 @@ import { Container, Markdown, Text, stripTerminalSequences, type Component } fro
 import { searchText, type SearchEntry } from "./search.ts";
 import { NestedCalls } from "./nested-calls.ts";
 import { sameValues } from "./render-cache.ts";
+import { usageLabel, type RecordedUsage, type ToolMetrics } from "./recorded-metrics.ts";
 
 export type Pane = "activity" | "chat";
 export type ContentKind = "dialogue" | "system" | "thinking" | "tool" | "shell";
@@ -17,7 +18,7 @@ interface NativeContent extends Component {
   toolCallId?: string;
   toolName?: string;
   args?: unknown;
-  result?: { content?: unknown; isError?: boolean };
+  result?: { content?: unknown; isError?: boolean; durationMs?: number; usage?: RecordedUsage };
   isPartial?: boolean;
   command?: string;
   outputLines?: string[];
@@ -27,7 +28,7 @@ interface NativeContent extends Component {
 interface NativeAssistant extends Container {
   contentContainer: Container;
   hasToolCalls: boolean;
-  lastMessage?: { content: { type: string; text?: string; thinking?: string }[] };
+  lastMessage?: { content: { type: string; text?: string; thinking?: string }[]; stopReason?: string; usage?: RecordedUsage };
   contentIsStale?: boolean;
   buildContent?(message: NonNullable<NativeAssistant["lastMessage"]>): void;
   isCompacted?(): boolean;
@@ -35,7 +36,7 @@ interface NativeAssistant extends Container {
   setHideThinkingBlock(hidden: boolean): void;
 }
 
-export interface ToolSummary {
+export interface ToolSummary extends ToolMetrics {
   name: string;
   args: unknown;
   status: "running" | "success" | "error" | "unknown";
@@ -53,6 +54,8 @@ export interface ContentEntry {
   search(width: number): Omit<SearchEntry, "source">;
   /** Live execution metadata exists only on calls, never on linked output. */
   tool?(): ToolSummary;
+  /** Exactly one projection of a finished model response owns its recorded usage. */
+  modelUsage?(): RecordedUsage | undefined;
 }
 /** A call's status from Pi's result fields, which Pi updates in place without invalidating the call. */
 export function callStatus(call: Component): ToolSummary["status"] {
@@ -140,7 +143,7 @@ const parentOf = (component: NativeContent): unknown => component.entry?.data?.p
 function reuse(entry: ContentEntry, previous: readonly ContentEntry[]): ContentEntry {
   const match = previous.find(candidate => candidate.source === entry.source && candidate.component === entry.component);
   return match && match.owner === entry.owner && match.kind === entry.kind && match.compact === entry.compact &&
-    sameValues(match.spacing, entry.spacing) ? match : entry;
+    Boolean(match.modelUsage) === Boolean(entry.modelUsage) && sameValues(match.spacing, entry.spacing) ? match : entry;
 }
 
 /** Read supported native execution identities; unrecognized content is system information. */
@@ -201,13 +204,15 @@ export class NativeContentIndex {
   private readonly views = new WeakMap<NativeAssistant, Partial<Record<Pane, Container>>>();
   private readonly diagnostics = new WeakMap<NativeAssistant, Component[]>();
 
-  private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number; trees: boolean } };
+  private usageEnabled = false;
+  private pass?: { active: boolean; verified?: { children: Component[]; length: number; last?: Component; parts: number; revision: number; trees: boolean; usage: boolean } };
 
   /**
    * With `nestedTrees` on, a parented output panel is split into the native parts of its nested calls, which Activity
    * shows as the caller's tree. Off, the panel stays one original entry beside its owner.
    */
-  constructor(private readonly source: Container, readonly nested = new NestedCalls(), readonly nestedTrees: () => boolean = () => true) {}
+  constructor(private readonly source: Container, readonly nested = new NestedCalls(), readonly nestedTrees: () => boolean = () => true,
+    private readonly showUsage: () => boolean = () => false) {}
 
   /**
    * Native history cannot change while Pi lays out one frame, so the panes of a pass
@@ -306,10 +311,11 @@ export class NativeContentIndex {
     const pass = this.pass?.active ? this.pass : undefined;
     const children = history.children;
     const verified = pass?.verified;
+    const usage = this.showUsage();
     if (verified && verified.children === children && verified.length === children.length && verified.last === children.at(-1) &&
-      verified.parts === this.source.children.length && verified.revision === this.nested.revision && verified.trees === this.nestedTrees()) return;
-    this.verify(history);
-    if (pass) pass.verified = { children, length: children.length, last: children.at(-1), parts: this.source.children.length, revision: this.nested.revision, trees: this.nestedTrees() };
+      verified.parts === this.source.children.length && verified.revision === this.nested.revision && verified.trees === this.nestedTrees() && verified.usage === usage) return;
+    this.verify(history, usage);
+    if (pass) pass.verified = { children, length: children.length, last: children.at(-1), parts: this.source.children.length, revision: this.nested.revision, trees: this.nestedTrees(), usage };
   }
 
   /** Whether a classified block still has the native inputs its entries were built from. */
@@ -335,14 +341,16 @@ export class NativeContentIndex {
    * and parented panels whose owner or parts changed. Unchanged blocks keep their entry objects, and the
    * content array keeps its identity while no entry changed, so streaming does not rebuild the index.
    */
-  private verify(history: Container): void {
+  private verify(history: Container, usage: boolean): void {
     const children = history.children;
     const head = this.source.children;
     let same = 0;
     const limit = Math.min(children.length, this.history.length);
     while (same < limit && children[same] === this.history[same]) same++;
     const structural = same !== children.length || same !== this.history.length;
-    if (!structural && sameValues(this.head, head) && this.blocks.every(block => this.unchanged(block))) return;
+    const usageChanged = this.usageEnabled !== usage;
+    this.usageEnabled = usage;
+    if (!structural && !usageChanged && sameValues(this.head, head) && this.blocks.every(block => this.unchanged(block))) return;
     this.owners.clear();
     for (const component of children) {
       const adapter = nativeKinds[nameOf(component)];
@@ -371,7 +379,7 @@ export class NativeContentIndex {
       const old = find(component, blocks.length);
       // Spacing before a block in the unchanged prefix lies in that prefix too.
       const sameSpacing = old !== undefined && (position < same || sameValues(old.spacing, spacing));
-      const block = old && sameSpacing && this.unchanged(old) ? old : this.classify(component, sameSpacing ? old!.spacing : spacing, old);
+      const block = old && sameSpacing && !(usageChanged && old.content) && this.unchanged(old) ? old : this.classify(component, sameSpacing ? old!.spacing : spacing, old);
       blocks.push(block);
       for (const entry of block.entries) entries.push(entry);
       spacing = [];
@@ -434,9 +442,11 @@ export class NativeContentIndex {
   private entry(source: Component, kind: ContentKind, spacing: Component[], compact: boolean, owner?: NativeContent): ContentEntry {
     const tool = kind === "tool" ? (): ToolSummary => {
       const native = source as NativeContent;
+      const reported = native.toolCallId ? this.nested.rootUsage(native.toolCallId) : undefined;
       return {
         name: native.toolName!, args: native.args,
         status: callStatus(native), images: imageCount(native.result?.content),
+        durationMs: native.result?.durationMs, usage: reported?.usage ?? native.result?.usage, inclusive: reported?.inclusive,
       };
     } : undefined;
     return { source, owner: owner ?? source, component: source, kind: owner ? "tool" : kind, spacing, compact, tool, search: width => {
@@ -499,9 +509,12 @@ export class NativeContentIndex {
     const views = this.views.get(source) ?? {};
     this.views.set(source, views);
     const result: ContentEntry[] = [];
+    const responseUsage = (): RecordedUsage | undefined => source.lastMessage?.stopReason !== "pending" ? source.lastMessage?.usage : undefined;
+    const usagePane = groups.chat.length ? "chat" : "activity";
+    const usageOnly = this.usageEnabled && !groups.chat.length && !groups.activity.length && !!usageLabel(responseUsage(), "response");
     for (const pane of ["chat", "activity"] as const) {
       const parts = groups[pane];
-      if (!parts.length) continue;
+      if (!parts.length && !(usageOnly && pane === usagePane)) continue;
       let view = views[pane];
       if (!view) {
         view = Object.create(source) as Container;
@@ -518,6 +531,7 @@ export class NativeContentIndex {
       if (content.children.length !== parts.length || content.children.some((child, index) => child !== parts[index])) content.children = parts;
       result.push({
         source, owner: source, component: view, kind: pane === "activity" ? "thinking" : runs.includes("dialogue") ? "dialogue" : "system", spacing, compact: true,
+        modelUsage: pane === usagePane ? responseUsage : undefined,
         search: width => {
           const kind = pane === "activity" ? "thinking" : "text";
           const saved = (source.lastMessage?.content ?? []).filter(block => block.type === kind)

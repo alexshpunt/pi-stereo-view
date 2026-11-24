@@ -4,6 +4,7 @@ import { componentTree, type ContentEntry, type ToolSummary } from "./content.ts
 import { CompactTool } from "./compact-tools.ts";
 import type { SearchClock } from "./search-highlight.ts";
 import type { NestedCall, NestedCalls } from "./nested-calls.ts";
+import type { MetricDisplay, ToolMetrics } from "./recorded-metrics.ts";
 import type { ToolPresentation } from "./tool-presentation.ts";
 import { ToolIndent } from "./tool-indent.ts";
 
@@ -16,6 +17,7 @@ export class NestedTree extends Container {
   private parent?: NativeTreeBody;
   private panels: NativeTreeBody[] = [];
   private reveal?: Component;
+  private parentMetrics?: ToolMetrics;
   private readonly open = new Map<string, boolean>();
   private readonly revealed = new Set<string>();
   private readonly rows = new Map<string, CompactTool>();
@@ -25,10 +27,11 @@ export class NestedTree extends Container {
   private mode?: boolean;
 
   constructor(readonly rootId: string, private readonly calls: NestedCalls, private readonly theme: () => Theme,
-    private readonly present: (name: string) => ToolPresentation, private readonly compact: () => boolean, private readonly changed: () => void, private readonly gutter: () => number = () => 0) { super(); }
+    private readonly present: (name: string) => ToolPresentation, private readonly compact: () => boolean, private readonly changed: () => void, private readonly gutter: () => number = () => 0,
+    private readonly metrics?: MetricDisplay) { super(); }
 
-  setBodies(parent: NativeTreeBody, panels: NativeTreeBody[], reveal?: Component): void {
-    this.parent = parent; this.panels = panels; this.reveal = reveal;
+  setBodies(parent: NativeTreeBody, panels: NativeTreeBody[], reveal?: Component, parentMetrics?: ToolMetrics): void {
+    this.parent = parent; this.panels = panels; this.reveal = reveal; this.parentMetrics = parentMetrics;
   }
   private isOpen(key: string): boolean { return this.revealed.has(key) || (this.open.get(key) ?? !this.compact()); }
   private indent(component: Component, depth: number, body = false): Component {
@@ -48,6 +51,7 @@ export class NestedTree extends Container {
     if (!row) {
       row = new CompactTool(() => this.nodes.get(node.key)!.summary, this.theme, {
         alignControl: true,
+        metrics: this.metrics,
         count: node.count ? () => this.nodes.get(node.key)!.count! : undefined,
         expanded: () => this.isOpen(node.key),
         toggle: expandable ? () => { this.open.set(node.key, !this.isOpen(node.key)); this.changed(); } : undefined,
@@ -122,7 +126,8 @@ export class NestedTree extends Container {
       const list = attached.get(key) ?? []; list.push(panel); attached.set(key, list);
       if (this.reveal === panel.entry.source) for (const ancestor of paths.get(key) ?? ["output"]) this.revealed.add(ancestor);
     }
-    const output: Node = { key: "output", summary: { ...this.parent.entry.tool!(), name: this.present(this.parent.entry.tool!().name).name + " output", args: undefined }, children: [] };
+    const parent = this.parent.entry.tool!();
+    const output: Node = { key: "output", summary: { ...this.parentMetrics, name: this.present(parent.name).name + " output", status: parent.status, images: parent.images, args: undefined }, children: [] };
     this.nodes.set(output.key, output);
     if (this.reveal === this.parent.entry.source) this.revealed.add(output.key);
     const result: Component[] = [];

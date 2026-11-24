@@ -8,7 +8,7 @@ if [ -n "${PI_CODING_AGENT_DIR:-}" ] && [ -z "${PI_TRANSCRIPT_TEST_DEFAULTS:-}" 
     const file = path.join(process.env.PI_CODING_AGENT_DIR, "transcript.json");
     let saved = {};
     try { saved = JSON.parse(fs.readFileSync(file, "utf8")); } catch (error) { if (error.code !== "ENOENT") process.exit(0); }
-    const baseline = { side: "left", chatWidth: null, layout: "columns", chatHeight: null, showTimestamps: true, showCopyButtons: true, compactTools: false, streamTools: false, streamDelay: 5, buttonStyle: "icons", turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 8, turnBackgroundMix: 5, turnHoverMix: 5, turnHoverColor: "turn", turnHover: false, goTo: "off", piWindows: "inline" };
+    const baseline = { side: "left", chatWidth: null, layout: "columns", chatHeight: null, showTimestamps: true, showCopyButtons: true, showToolDurations: false, showModelUsage: false, compactTools: false, streamTools: false, streamDelay: 5, buttonStyle: "icons", turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 8, turnBackgroundMix: 5, turnHoverMix: 5, turnHoverColor: "turn", turnHover: false, goTo: "off", piWindows: "inline" };
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ ...baseline, ...saved }));
   '

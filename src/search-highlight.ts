@@ -18,7 +18,7 @@ const normalize = (text: string, lettersOnly: boolean): string => text.normalize
 interface Position { row: number; start: number; end: number }
 
 /** Presentation-only rows supplied by CompactMessage, never guessed from saved text. */
-export interface SearchClock { row: number; column: number; footerRow?: number }
+export interface SearchClock { row: number; column: number; headerEnd?: number; footerRow?: number }
 
 function locate(lines: readonly string[], hit: SearchHit, lettersOnly: boolean, clock?: SearchClock): { text: string; positions: Position[] } | undefined {
   const wanted = normalize(hit.text, lettersOnly);
@@ -26,7 +26,7 @@ function locate(lines: readonly string[], hit: SearchHit, lettersOnly: boolean, 
   let text = "";
   const positions: Position[] = [];
   for (const [row, line] of lines.entries()) {
-    if (clock?.footerRow === row) continue;
+    if (clock?.footerRow === row || (clock?.headerEnd !== undefined && row < clock.headerEnd)) continue;
     // Only the decorator knows where its clock starts. Saved trailing times remain text.
     const plain = stripTerminalSequences(clock?.row === row ? sliceByColumn(line, 0, clock.column) : line);
     for (const { segment, index } of graphemes.segment(plain)) {

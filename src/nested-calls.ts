@@ -1,20 +1,23 @@
 import type { ToolSummary } from "./content.ts";
+import type { RecordedUsage } from "./recorded-metrics.ts";
 
 type Start = { parentToolCallId?: string; toolCallId: string; toolName: string; args: unknown };
-type End = { toolCallId: string; isError: boolean };
-type SavedCall = { id: string; name: string; status: string; arguments?: unknown; error?: string };
-type SavedMessage = { role: string; toolCallId?: string; nestedCalls?: { calls: SavedCall[]; complete: boolean } };
+type End = { toolCallId: string; isError: boolean; durationMs?: number; result?: { usage?: RecordedUsage } };
+type SavedCall = { id: string; name: string; status: string; arguments?: unknown; error?: string; durationMs?: number };
+type SavedMessage = { role: string; toolCallId?: string; usage?: RecordedUsage; nestedCalls?: { calls: SavedCall[]; complete: boolean } };
 
 export interface NestedCall extends ToolSummary { id: string; parent: string; root: string; error?: string }
 
-/** Execution identities only. Native tools and extensions retain ownership of all result UI. */
+/** Execution metadata only. Native tools and extensions retain ownership of all result UI. */
 export class NestedCalls {
   private readonly calls = new Map<string, NestedCall>();
   private readonly roots = new Map<string, NestedCall[]>();
   private readonly incomplete = new Set<string>();
+  private readonly usageByRoot = new Map<string, { usage: RecordedUsage; inclusive: boolean }>();
   revision = 0;
 
   entries(root: string): readonly NestedCall[] { return this.roots.get(root) ?? []; }
+  rootUsage(id: string): { usage: RecordedUsage; inclusive: boolean } | undefined { return this.usageByRoot.get(id); }
   private put(call: NestedCall): void {
     const existing = this.calls.get(call.id);
     if (existing) { Object.assign(existing, call); return; }
@@ -37,25 +40,36 @@ export class NestedCalls {
     const call = this.calls.get(event.toolCallId);
     if (!call) return;
     call.status = event.isError ? "error" : "success";
+    call.durationMs = event.durationMs;
+    call.usage = event.result?.usage;
     this.revision++;
   }
-  absorb(message: SavedMessage): void {
-    if (message.role !== "toolResult" || !message.toolCallId || !Array.isArray(message.nestedCalls?.calls)) return;
+  absorb(message: SavedMessage): boolean {
+    if (message.role !== "toolResult" || !message.toolCallId) return false;
     const root = message.toolCallId;
-    const ids = new Set(message.nestedCalls.calls.map(call => call.id));
-    for (const record of message.nestedCalls.calls) {
+    const nested = message.nestedCalls;
+    const hasNested = Array.isArray(nested?.calls);
+    if (message.usage) this.usageByRoot.set(root, {
+      usage: message.usage, inclusive: hasNested && (nested.calls.length > 0 || !nested.complete),
+    });
+    if (!hasNested) return Boolean(message.usage);
+    const ids = new Set(nested.calls.map(call => call.id));
+    for (const record of nested.calls) {
       const existing = this.calls.get(record.id);
       // Pi records nested identities as <caller-id>/<ordinal>, including deeper calls.
       const parent = record.id.slice(0, record.id.lastIndexOf("/"));
       this.put({ id: record.id, root, parent: existing?.parent ?? (ids.has(parent) ? parent : root),
         name: record.name, args: record.arguments, error: record.error,
+        // Pi persists the nested wall time, including scheduling. Before it is written, use execute() time.
+        durationMs: record.durationMs ?? existing?.durationMs, usage: existing?.usage,
         status: record.status === "ok" ? "success" : record.status === "error" ? "error" : "unknown" });
     }
-    if (message.nestedCalls.complete) this.incomplete.delete(root); else this.incomplete.add(root);
+    if (nested.complete) this.incomplete.delete(root); else this.incomplete.add(root);
     this.revision++;
+    return true;
   }
   restore(branch: readonly { type: string; message?: unknown }[]): void {
-    this.calls.clear(); this.roots.clear(); this.incomplete.clear(); this.revision++;
+    this.calls.clear(); this.roots.clear(); this.incomplete.clear(); this.usageByRoot.clear(); this.revision++;
     for (const entry of branch) if (entry.type === "message" && entry.message && typeof entry.message === "object") this.absorb(entry.message as SavedMessage);
   }
 }

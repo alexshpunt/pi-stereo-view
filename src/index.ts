@@ -102,6 +102,10 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "Toolbar, panel and copy buttons as icons, such as [ ⌕ ], or as words, such as [Find].",
           currentValue: preferences.buttonStyle, values: ["icons", "text"],
         }, {
+          id: "showModelUsage", label: "Model usage",
+          description: "Show recorded tokens and cost for model responses and tools that report them.",
+          currentValue: preferences.showModelUsage ? "on" : "off", values: ["on", "off"],
+        }, {
           id: "compactTools", label: "Finished tool calls",
           description: "One line that opens the full card when clicked, or the full card. Search and copy always use the full text.",
           currentValue: preferences.compactTools ? "on" : "off", values: ["on", "off"],
@@ -121,6 +125,10 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "streamDelay", label: "Fold finished calls after",
           description: "How long a finished call stays full before it folds into one line or its merged group.",
           currentValue: `${preferences.streamDelay}s`, values: [...new Set([...DELAYS, preferences.streamDelay])].sort((a, b) => a - b).map(seconds => `${seconds}s`),
+        }, {
+          id: "showToolDurations", label: "Tool durations",
+          description: "Show the recorded time for each finished call in split history.",
+          currentValue: preferences.showToolDurations ? "on" : "off", values: ["on", "off"],
         }, {
           id: "height", label: "Conversation height in rows",
           description: "In the Rows layout, Conversation grows with its messages up to half the history, or keeps the height you dragged.",
@@ -184,7 +192,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         }
         // Each group's title shows above its first setting.
         const groups = new Map([["timestamps", "Blocks"], ["compactTools", "Activity tools"], ["height", "Layout"], ["turns", "Turns"]]);
-        const VISIBLE_SETTINGS = 22;
+        const visibleSettings = items.length;
         const apply = (id: string, shown: string): void => {
           const value = savedValue(id, shown);
           if (id === "turns" || id === "turnClock" || id === "turnBackground" || id === "turnSeparator") layout?.setTurnMark(id, value === "on");
@@ -201,6 +209,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           else if (id === "piWindows") layout?.setPiWindows(value as PiWindows);
           else if (id === "timestamps") layout?.setTimestamps(value === "on");
           else if (id === "copyButtons") layout?.setCopyButtons(value === "on");
+          else if (id === "showToolDurations" || id === "showModelUsage") layout?.setMetric(id, value === "on");
           else if (id === "buttonStyle") layout?.setButtonStyle(value === "text" ? "text" : "icons");
           else if (id === "compactTools") layout?.setCompactTools(value === "on");
           else if (id === "groupTools") layout?.setGroupTools(value === "on");
@@ -210,7 +219,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
           tui.requestRender();
         };
-        const list = new SettingsList(items, VISIBLE_SETTINGS, {
+        const list = new SettingsList(items, visibleSettings, {
           ...listTheme,
           label: (text, selected) => {
             const label = text.trim();
@@ -231,7 +240,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
               ui.theme.getBgAnsi(SETTINGS_BACKGROUND) + " " + listTheme.value(text, selected);
           },
         }, apply, () => done());
-        const steady = new SteadySettings(list, items, VISIBLE_SETTINGS, apply,
+        const steady = new SteadySettings(list, items, visibleSettings, apply,
           { titles: groups, style: text => ui.theme.bold(ui.theme.fg("accent", text)) });
         const content = new Container();
         content.addChild({
@@ -357,7 +366,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     ensureLayout();
   });
   pi.on("message_end", event => {
-    nested.absorb(event.message);
+    if (nested.absorb(event.message)) host?.requestRender();
     timestamps?.observe(event.message, true);
     layout?.refreshSearch();
   });
