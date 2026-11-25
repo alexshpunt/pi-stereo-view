@@ -6,7 +6,7 @@ import { defaults, loadPreferences, savePreferences, type Preferences } from "..
 
 const arrangement = {
   side: "right", chatWidth: 73, layout: "rows", chatHeight: 17,
-  showToolbar: true, showPaneHeaders: true,
+  showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16,
   showTimestamps: false, showCopyButtons: false, showToolDurations: true, showModelUsage: false, compactTools: true, groupTools: false, nestedTree: false, streamTools: true, streamDelay: 8, buttonStyle: "icons",
   turns: true, turnClock: false, turnStripe: "line", turnBackground: true, turnSeparator: true, turnClockMix: 20, turnStripeMix: 50,
   turnBackgroundMix: 3, turnHoverMix: 40, turnHoverColor: "#3b82f6", turnHover: false, goTo: "button", piWindows: "maximize",
@@ -82,7 +82,7 @@ test("shows the toolbar and pane headers when no visibility choices have been sa
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
-    const visible = { showToolbar: true, showPaneHeaders: true };
+    const visible = { showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16 };
     expect(await loadPreferences(file)).toMatchObject(visible);
     await writeFile(file, JSON.stringify({ side: "left", chatWidth: null }));
     expect(await loadPreferences(file)).toMatchObject(visible);
@@ -106,8 +106,12 @@ test("preserves Auto pane headers when preferences are reopened", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
-    await savePreferences(file, { ...defaults, showToolbar: false, showPaneHeaders: "auto" });
-    expect(await loadPreferences(file)).toMatchObject({ showToolbar: false, showPaneHeaders: "auto" });
+    const { autoPaneHeaderRows: _threshold, ...older } = arrangement;
+    await writeFile(file, JSON.stringify({ ...older, showPaneHeaders: "auto" }));
+    expect(await loadPreferences(file)).toMatchObject({ showPaneHeaders: "auto", autoPaneHeaderRows: 16 });
+    const options = { showToolbar: false, showPaneHeaders: "auto", autoPaneHeaderRows: 22 } as const;
+    await savePreferences(file, { ...defaults, ...options });
+    expect(await loadPreferences(file)).toMatchObject(options);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -121,7 +125,10 @@ test("restores a one-row Conversation height with pane headers hidden", async ()
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test.each([{ showToolbar: "off" }, { showPaneHeaders: null }])("rejects an invalid display visibility setting %o", async invalid => {
+test.each([
+  { showToolbar: "off" }, { showPaneHeaders: null }, { autoPaneHeaderRows: 0 },
+  { autoPaneHeaderRows: 1.5 }, { autoPaneHeaderRows: "16" },
+])("rejects an invalid display visibility setting %o", async invalid => {
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {

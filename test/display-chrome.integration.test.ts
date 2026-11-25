@@ -28,7 +28,8 @@ function seedHistory(cwd: string): string {
   return session.getSessionFile()!;
 }
 
-type Phase = "toggle" | "restart" | "auto-select" | "auto-columns" | "auto-rows" | "auto-controls";
+type Phase = "toggle" | "restart" | "auto-select" | "auto-columns" | "auto-rows" | "auto-controls" |
+  "auto-threshold-edit" | "auto-threshold-restart";
 type Frames = Record<string, string[]>;
 
 async function withDisplayChrome(check: (file: string, run: (phase: Phase) => Promise<Frames>) => Promise<void>): Promise<void> {
@@ -50,7 +51,7 @@ async function withDisplayChrome(check: (file: string, run: (phase: Phase) => Pr
         environment: {
           PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_TEST_SESSION: session, CHROME_PHASE: phase,
           // The earlier process already seeded the baseline. Do not rewrite preferences before resize-only runs.
-          ...(phase === "auto-columns" || phase === "auto-rows" ? { PI_TRANSCRIPT_TEST_DEFAULTS: "1" } : {}),
+          ...(["auto-columns", "auto-rows", "auto-threshold-restart"].includes(phase) ? { PI_TRANSCRIPT_TEST_DEFAULTS: "1" } : {}),
         },
         rawMode: false, tuiSize: { cols: 120, rows: 30 },
         extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/display-chrome-probe.ts")],
@@ -128,7 +129,7 @@ test("Auto survives restart and hides and restores pane headers as Columns and R
     const selected = await run("auto-select");
     expectHeaders(selected.autoSelected, true, "Auto selected in Settings");
     const saved = JSON.parse(await readFile(file, "utf8"));
-    expect(saved).toMatchObject({ layout: "columns", showToolbar: true, showPaneHeaders: "auto" });
+    expect(saved).toMatchObject({ layout: "columns", showToolbar: true, showPaneHeaders: "auto", autoPaneHeaderRows: 16 });
 
     for (const layout of ["columns", "rows"] as const) {
       if (layout === "rows") await writeFile(file, JSON.stringify({ ...saved, layout }));
@@ -148,6 +149,27 @@ test("Auto survives restart and hides and restores pane headers as Columns and R
     }
   });
 }, 120_000);
+
+test("editing the Auto threshold applies immediately and survives restart", async () => {
+  await withDisplayChrome(async (file, run) => {
+    // The launcher supplies the remaining defaults, as it would for a legacy file.
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    await writeFile(file, JSON.stringify({ ...saved, layout: "rows", showPaneHeaders: "auto" }));
+
+    const edited = await run("auto-threshold-edit");
+    expectHeaders(edited.customLiveBelow, false, "below the new threshold");
+    expectHeaders(edited.customLiveAt, true, "at the new threshold");
+    expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject({ showPaneHeaders: "auto", autoPaneHeaderRows: 22 });
+
+    const restarted = await run("auto-threshold-restart");
+    expectHeaders(restarted.customAt, true, "at the saved threshold");
+    expectHeaders(restarted.customBelow, false, "below the saved threshold");
+    expectHeaders(restarted.customAtWithoutToolbar, true, "hiding the toolbar frees one history row", false);
+    expectHeaders(restarted.headersDoNotFit, false, "the threshold does not override physical fit");
+    expect(rowDivider(restarted.headersDoNotFit)).toBeGreaterThanOrEqual(0);
+    expectHeaders(restarted.headersFit, true, "a low threshold shows headers as soon as they fit");
+  });
+}, 90_000);
 
 test("toolbar and slash command toggles use the current Auto visibility", async () => {
   await withDisplayChrome(async (file, run) => {
