@@ -436,7 +436,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     ensureLayout();
   };
   pi.registerCommand("stereo-view", {
-    description: "History: copy, settings, toolbar, headers, chrome, toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
+    description: "History: copy, settings, toolbar, headers, both, toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
     handler: async (args, ctx) => {
       if (ctx.mode !== "tui" || !layout) {
         ctx.ui.notify("pi-stereo-view layout is available only in interactive Pi.", "warning");
@@ -447,7 +447,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       else if (action === "settings") await openSettings(ctx.ui);
       else if (action === "toolbar") layout.setChrome({ showToolbar: !preferences.showToolbar });
       else if (action === "headers") layout.togglePaneHeaders();
-      else if (action === "chrome") layout.toggleChrome();
+      else if (action === "both") layout.toggleChrome();
       else if (action === "copy") {
         const blocks = layout.copyBlocks();
         if (!blocks.length) {
@@ -458,7 +458,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const choice = await ctx.ui.select("Copy a block from the active panel", blocks.map(block => block.label));
         blocks.find(block => block.label === choice)?.copy();
       } else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⌃/⌄ hides or restores pane headers, ⧉/Copy copies a block, ⇄/Go to or a click on a block's clock opens the same point in the other panel. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize. Use /stereo-view toolbar or /stereo-view headers to toggle either set of controls, or /stereo-view chrome to toggle both.", "info");
+        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⌃/⌄ hides or restores pane headers, ⧉/Copy copies a block, ⇄/Go to or a click on a block's clock opens the same point in the other panel. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize. Use /stereo-view toolbar or /stereo-view headers to toggle either set of controls, or /stereo-view both to toggle both.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);
@@ -468,7 +468,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       else if (action === "scroll" && (target === "chat" || target === "activity") && /^-?\d+$/.test(amount ?? "")) {
         layout.scroll(target, Number(amount));
       } else {
-        ctx.ui.notify("Use /stereo-view [copy|help|settings|toolbar|headers|chrome|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
+        ctx.ui.notify("Use /stereo-view [copy|help|settings|toolbar|headers|both|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
         return;
       }
       ensureLayout();

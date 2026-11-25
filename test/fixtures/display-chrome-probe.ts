@@ -139,18 +139,18 @@ export default function displayChromeProbe(pi: ExtensionAPI): void {
         await command("toolbar");
         await changeSetting("Show pane headers"); // Off -> Auto.
         await resizeHistory("shortAgain", 5);
-        await command("chrome");
-        await capture("chromeRestores");
+        await command("both");
+        await capture("bothRestores");
 
         await resize("wideAgain", originalRows);
         await changeSetting("Show pane headers", 2);
         await capture("autoVisibleAgain");
-        await command("chrome");
-        await capture("chromeHides");
+        await command("both");
+        await capture("bothHides");
         return;
       }
       if (phase === "restart") {
-        await command("chrome");
+        await command("both");
         await capture("restored");
         return;
       }
@@ -168,14 +168,14 @@ export default function displayChromeProbe(pi: ExtensionAPI): void {
 
       await changeSetting("Show toolbar");
       await capture("settingsToolbar");
-      await command("chrome");
+      await command("both");
       await capture("restored");
       await changeSetting("Show pane headers");
       await capture("settingsHeaders");
-      await command("chrome");
+      await command("both");
       await command("layout rows");
       await capture("rows");
-      await command("chrome");
+      await command("both");
       await capture("rowsHidden");
       const divider = frames.rowsHidden.findIndex(line => stripTerminalSequences(line).startsWith("═".repeat(120)));
       if (divider < 0) throw new Error("Missing horizontal divider with chrome hidden");

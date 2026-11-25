@@ -32,7 +32,8 @@ export default function wrappedControlsProbe(pi: ExtensionAPI): void {
       const buttons = narrow.slice(0, 4).flatMap((line, y) => Array.from(line.matchAll(/\[[^\[\]]+\]/g), match => ({
         x: visibleWidth(line.slice(0, match.index)) + 1, y, label: match[0],
       })));
-      if (buttons.length >= 4) await click(buttons[3].x, buttons[3].y);
+      const settings = buttons.find(button => button.label === "[≡]");
+      if (settings) await click(settings.x, settings.y);
       const menuOpened = tui.hasOverlay();
       if (menuOpened) await input("\x1b");
       await writeFile(path.join(ctx.cwd, "wrapped-controls.json"), JSON.stringify({ buttons, menuOpened, narrow }));
