@@ -79,7 +79,7 @@ pi --tui-mode fullscreen
 
 Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button labels** to `icons`. The choice survives restart. The toolbar uses icons when the text buttons would not fit in one row. Settings are grouped under **Blocks**, **Activity tools**, **Layout** and **Turns**.
 
-The toolbar chevron hides or restores pane headers. The toolbar and headers are on by default and saved independently. Under **Layout**, set **Show pane headers** to `auto` to hide them below **Auto header threshold (rows)**. The default is 16 rows of total history, excluding the toolbar and input dock, in both Columns and Rows. Press Enter on the threshold to change it. Headers stay hidden if they cannot fit. The chevron, `/stereo-view headers`, and `/stereo-view chrome` select an explicit `on` or `off`. Return to settings to re-enable Auto.
+The toolbar chevron hides or restores pane headers. The toolbar and headers are on by default and saved independently. Under **Layout**, set **Show pane headers** to `auto` to hide them below **Auto header threshold (rows)**. The default is 32 rows of total history, excluding the toolbar and input dock, in both Columns and Rows. Press Enter on the threshold to change it. Headers stay hidden if they cannot fit. The chevron, `/stereo-view headers`, and `/stereo-view chrome` select an explicit `on` or `off`. Return to settings to re-enable Auto.
 
 The split divider still resizes the panels, and `Ctrl+F` still searches the active panel without headers. Use `/stereo-view settings` to reopen settings without the toolbar.
 
