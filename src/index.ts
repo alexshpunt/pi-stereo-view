@@ -134,6 +134,14 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           description: "In the Rows layout, Conversation grows with its messages up to half the history, or keeps the height you dragged.",
           currentValue: preferences.chatHeight === null ? "auto" : "manual", values: ["auto", "manual"],
         }, {
+          id: "showToolbar", label: "Show toolbar",
+          description: "Show the controls above history. You can always reopen settings with /stereo-view settings.",
+          currentValue: preferences.showToolbar ? "on" : "off", values: ["on", "off"],
+        }, {
+          id: "showPaneHeaders", label: "Show pane headers",
+          description: "Show the titles and controls above each panel. Ctrl+F still searches when headers are off.",
+          currentValue: preferences.showPaneHeaders ? "on" : "off", values: ["on", "off"],
+        }, {
           id: "piWindows", label: "Pi pickers in split",
           description: "Pi's own pickers, such as the session tree or the model list, open full screen, in maximized Activity, or inside Activity.",
           currentValue: preferences.piWindows, values: [...PI_WINDOWS],
@@ -217,6 +225,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           else if (id === "streamTools") layout?.setStreamTools(value === "on");
           else if (id === "streamDelay") layout?.setStreamDelay(Number.parseInt(value, 10));
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
+          else if (id === "showToolbar" || id === "showPaneHeaders") layout?.setChrome({ [id]: value === "on" });
           tui.requestRender();
         };
         const list = new SettingsList(items, visibleSettings, {
@@ -409,7 +418,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     ensureLayout();
   };
   pi.registerCommand("stereo-view", {
-    description: "History: copy, settings, toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
+    description: "History: copy, settings, toolbar, headers, chrome, toggle, swap, layout <columns|rows>, zoom <chat|activity>, width, height, scroll",
     handler: async (args, ctx) => {
       if (ctx.mode !== "tui" || !layout) {
         ctx.ui.notify("pi-stereo-view layout is available only in interactive Pi.", "warning");
@@ -418,7 +427,12 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       const [action = "toggle", target, amount] = args.trim().split(/\s+/);
       if (action === "toggle" || action === "") toggle();
       else if (action === "settings") await openSettings(ctx.ui);
-      else if (action === "copy") {
+      else if (action === "toolbar") layout.setChrome({ showToolbar: !preferences.showToolbar });
+      else if (action === "headers") layout.setChrome({ showPaneHeaders: !preferences.showPaneHeaders });
+      else if (action === "chrome") {
+        const show = !preferences.showToolbar || !preferences.showPaneHeaders;
+        layout.setChrome({ showToolbar: show, showPaneHeaders: show });
+      } else if (action === "copy") {
         const blocks = layout.copyBlocks();
         if (!blocks.length) {
           ctx.ui.notify("No blocks to copy in the active split panel.", "info");
@@ -428,7 +442,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const choice = await ctx.ui.select("Copy a block from the active panel", blocks.map(block => block.label));
         blocks.find(block => block.label === choice)?.copy();
       } else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⧉/Copy copies a block, ⇄/Go to or a click on a block's clock opens the same point in the other panel. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize.", "info");
+        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⧉/Copy copies a block, ⇄/Go to or a click on a block's clock opens the same point in the other panel. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize. Use /stereo-view toolbar or /stereo-view headers to toggle either set of controls, or /stereo-view chrome to toggle both.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);
@@ -438,7 +452,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       else if (action === "scroll" && (target === "chat" || target === "activity") && /^-?\d+$/.test(amount ?? "")) {
         layout.scroll(target, Number(amount));
       } else {
-        ctx.ui.notify("Use /stereo-view [copy|help|settings|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
+        ctx.ui.notify("Use /stereo-view [copy|help|settings|toolbar|headers|chrome|toggle|swap|layout <columns|rows>|zoom <chat|activity>|width <columns>|height <rows|auto>|scroll <chat|activity> <lines>]", "warning");
         return;
       }
       ensureLayout();
