@@ -16,7 +16,8 @@ export interface Preferences {
   showTimestamps: boolean;
   showCopyButtons: boolean;
   showToolbar: boolean;
-  showPaneHeaders: boolean;
+  /** Explicit visibility stays boolean on disk; Auto is resolved by the layout each frame. */
+  showPaneHeaders: boolean | "auto";
   /** Annotate individual finished tools with their recorded execution duration. */
   showToolDurations: boolean;
   /** Annotate model responses and tool calls with the usage Pi recorded. */
@@ -140,7 +141,7 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       (chatHeight !== null && (typeof chatHeight !== "number" || !Number.isInteger(chatHeight) || chatHeight < 1 || chatHeight > 240)) ||
       typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean" || typeof compactTools !== "boolean" ||
       typeof showToolDurations !== "boolean" || typeof showModelUsage !== "boolean" ||
-      typeof showToolbar !== "boolean" || typeof showPaneHeaders !== "boolean" ||
+      typeof showToolbar !== "boolean" || (typeof showPaneHeaders !== "boolean" && showPaneHeaders !== "auto") ||
       typeof groupTools !== "boolean" || typeof nestedTree !== "boolean" ||
       typeof streamTools !== "boolean" || typeof streamDelay !== "number" || !Number.isInteger(streamDelay) || streamDelay < 1 || streamDelay > 300 ||
       (buttonStyle !== "icons" && buttonStyle !== "text") || typeof turns !== "boolean" || typeof turnClock !== "boolean" ||
