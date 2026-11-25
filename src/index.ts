@@ -3,10 +3,11 @@ import { copyToClipboard, getAgentDir, getSettingsListTheme, type ExtensionAPI, 
 import { backgroundAnsi, Box, Container, isKeyRelease, matchesKey, rgbColor, SettingsList, Text, type OverlayHandle, type SettingItem, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { SteadySettings } from "./steady-settings.ts";
 import { HexInput } from "./hex-input.ts";
+import { SettingInput, type SettingInputTheme } from "./setting-input.ts";
 import { parseHex } from "./turns.ts";
 import { TranscriptLayout } from "./layout.ts";
 import { TOOL_START_ENTRY, TranscriptTimestamps } from "./timestamps.ts";
-import { HOVER_COLORS, TURN_MIXES, TURN_STRIPES, GO_TO, PI_WINDOWS, defaults, loadPreferences, savePreferences, type TurnStripe, type GoTo, type PiWindows, type Preferences } from "./preferences.ts";
+import { HOVER_COLORS, TURN_MIXES, TURN_STRIPES, GO_TO, PI_WINDOWS, defaults, loadPreferences, savePreferences, validAutoPaneHeaderRows, type TurnStripe, type GoTo, type PiWindows, type Preferences } from "./preferences.ts";
 import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -82,6 +83,11 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const HOVER_LABEL = "  Highlight turn on hover";
         const SETTINGS_BACKGROUND = "customMessageBg";
         const listTheme = getSettingsListTheme();
+        const inputTheme: SettingInputTheme = {
+          title: text => ui.theme.bold(ui.theme.fg("accent", text)),
+          hint: text => ui.theme.fg("dim", text),
+          error: text => ui.theme.fg("error", text),
+        };
         // A saved mix outside the offered steps stays selectable until another is chosen.
         const mixSetting = (id: "turnClockMix" | "turnStripeMix" | "turnBackgroundMix" | "turnHoverMix", label: string, description: string) => ({
           id, label, description, currentValue: `${preferences[id]}%`,
@@ -143,6 +149,19 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           currentValue: preferences.showPaneHeaders === "auto" ? "auto" : preferences.showPaneHeaders ? "on" : "off",
           values: ["on", "off", "auto"],
         }, {
+          id: "autoPaneHeaderRows", label: "Auto header threshold (rows)",
+          description: "In Auto, show headers at this many history rows, not counting the toolbar or input area. Press Enter to edit.",
+          currentValue: String(preferences.autoPaneHeaderRows),
+          submenu: (current, done) => new SettingInput(current, inputTheme, {
+            title: "Auto header threshold (rows)",
+            hint: "Minimum history rows · Enter to keep · Esc to cancel",
+            error: "Enter a positive whole number of rows.",
+            normalize: input => {
+              const value = /^\d+$/.test(input.trim()) ? Number(input) : NaN;
+              return validAutoPaneHeaderRows(value) ? String(value) : undefined;
+            },
+          }, done),
+        }, {
           id: "piWindows", label: "Pi pickers in split",
           description: "Pi's own pickers, such as the session tree or the model list, open full screen, in maximized Activity, or inside Activity.",
           currentValue: preferences.piWindows, values: [...PI_WINDOWS],
@@ -185,11 +204,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           id: "turnHoverColor", label: "  Hover color",
           description: "Each turn in its own color, or every turn in one #rrggbb color. ←/→ pick a preset; Enter types any color.",
           currentValue: preferences.turnHoverColor, values: hoverColors(preferences.turnHoverColor),
-          submenu: (current, done) => new HexInput(current, {
-            title: text => ui.theme.bold(ui.theme.fg("accent", text)),
-            hint: text => ui.theme.fg("dim", text),
-            error: text => ui.theme.fg("error", text),
-          }, done),
+          submenu: (current, done) => new HexInput(current, inputTheme, done),
         }, {
           id: "goTo", label: "  Jump to other panel",
           description: "Open the same point of history in the other panel by clicking a block's clock, a Go to button, both or neither.",
@@ -228,6 +243,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
           else if (id === "showToolbar") layout?.setChrome({ showToolbar: value === "on" });
           else if (id === "showPaneHeaders") layout?.setChrome({ showPaneHeaders: value === "auto" ? value : value === "on" });
+          else if (id === "autoPaneHeaderRows") layout?.setChrome({ autoPaneHeaderRows: Number(value) });
           tui.requestRender();
         };
         const list = new SettingsList(items, visibleSettings, {

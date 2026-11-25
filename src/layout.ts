@@ -24,7 +24,6 @@ type NativeTui = TUI & {
 const MIN_CHAT = 24;
 const MIN_ACTIVITY = 40;
 const MIN_ROWS = 4;
-const AUTO_HISTORY_ROWS = 4;
 // The longest text labels plus the chevron and spaces between controls.
 const TOOLBAR_TEXT_WIDTH = 41;
 const TOOLBAR_ICON_WIDTH = 29;
@@ -484,27 +483,29 @@ export class TranscriptLayout {
       const activityWidth = this.zoom || this.preferences.layout === "rows" ? width : width - chatWidth - 1;
       const chatSearch = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
       const activitySearch = this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0;
-      if (this.preferences.showPaneHeaders === "auto") {
-        // Measure the space the headers would take, regardless of the previous frame's visibility.
-        const withHeader = (pane: Pane, label: ButtonStack, paneWidth: number, searchRows: number): number =>
-          AUTO_HISTORY_ROWS + searchRows + label.render(Math.max(1, paneWidth)).length + 1 + Number(hasTopBorder(pane));
-        const chat = withHeader("chat", chatLabel, chatWidth, chatSearch);
-        const activity = withHeader("activity", activityLabel, activityWidth, activitySearch);
-        const required = this.zoom ? (this.zoom === "chat" ? chat : activity) :
+      const requiredHistory = (chat: number, activity: number): number =>
+        this.zoom ? (this.zoom === "chat" ? chat : activity) :
           this.preferences.layout === "columns" ? Math.max(chat, activity) : chat + activity + 1;
-        this.autoPaneHeaders = historyHeight >= required;
+      const paneMinimum = (minimum: number, headerRows: number, searchRows: number): number =>
+        Math.max(minimum + searchRows, headerRows + 1);
+      if (this.preferences.showPaneHeaders === "auto") {
+        // A low threshold must not make the split fall back just because headers cannot fit.
+        const withHeader = (pane: Pane, label: ButtonStack, paneWidth: number, searchRows: number): number =>
+          paneMinimum(MIN_ROWS, searchRows + label.render(Math.max(1, paneWidth)).length + 1 + Number(hasTopBorder(pane)), searchRows);
+        this.autoPaneHeaders = historyHeight >= this.preferences.autoPaneHeaderRows &&
+          historyHeight >= requiredHistory(withHeader("chat", chatLabel, chatWidth, chatSearch),
+            withHeader("activity", activityLabel, activityWidth, activitySearch));
       }
       const minimum = this.minimumPaneHeight();
       this.automaticHeight = Math.max(minimum, Math.floor(historyHeight / 2));
       const chatHeaderRows = chatHeader.render(Math.max(1, chatWidth)).length;
       const activityHeaderRows = activityHeader.render(Math.max(1, activityWidth)).length;
       this.chatHeaderHeight = chatHeaderRows - chatSearch;
-      const chatMin = Math.max(minimum + chatSearch, chatHeaderRows + 1);
-      const activityMin = Math.max(minimum + activitySearch, activityHeaderRows + 1);
+      const chatMin = paneMinimum(minimum, chatHeaderRows, chatSearch);
+      const activityMin = paneMinimum(minimum, activityHeaderRows, activitySearch);
+      const minimumWidth = !this.zoom && this.preferences.layout === "columns" ? MIN_CHAT + MIN_ACTIVITY + 1 : MIN_CHAT;
       // A Pi window shown in combined history counts as not fitting: Pi's own history and dock take the screen.
-      const fits = !combinedWindow && (this.zoom ? width >= MIN_CHAT && historyHeight >= (this.zoom === "chat" ? chatMin : activityMin) :
-        this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= Math.max(chatMin, activityMin) :
-          width >= MIN_CHAT && historyHeight >= chatMin + activityMin + 1);
+      const fits = !combinedWindow && width >= minimumWidth && historyHeight >= requiredHistory(chatMin, activityMin);
       this.fallback = this.preferences.mode === "split" && !fits;
       projectSurface = candidate && fits;
       if (this.search && (this.fallback || this.failed || this.preferences.mode !== "split" ||
@@ -989,9 +990,9 @@ export class TranscriptLayout {
     this.changed();
   }
 
-  /** Show or hide either set of layout controls, or update both together. */
-  setChrome(visibility: Partial<Pick<Preferences, "showToolbar" | "showPaneHeaders">>): void {
-    Object.assign(this.preferences, visibility);
+  /** Change the visibility or Auto threshold of layout controls. */
+  setChrome(settings: Partial<Pick<Preferences, "showToolbar" | "showPaneHeaders" | "autoPaneHeaderRows">>): void {
+    Object.assign(this.preferences, settings);
     this.changed();
   }
 
