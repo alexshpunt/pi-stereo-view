@@ -18,6 +18,8 @@ export interface Preferences {
   showToolbar: boolean;
   /** Explicit visibility stays boolean on disk; Auto is resolved by the layout each frame. */
   showPaneHeaders: boolean | "auto";
+  /** Minimum history rows, excluding the toolbar and dock, needed to show headers in Auto. */
+  autoPaneHeaderRows: number;
   /** Annotate individual finished tools with their recorded execution duration. */
   showToolDurations: boolean;
   /** Annotate model responses and tool calls with the usage Pi recorded. */
@@ -79,7 +81,7 @@ export const PI_WINDOWS: readonly PiWindows[] = ["combined", "maximize", "inline
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null,
   showTimestamps: true, showCopyButtons: true, showToolDurations: false, showModelUsage: false,
-  showToolbar: true, showPaneHeaders: true,
+  showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16,
   compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
   // Strengths chosen on dark and light terminals; one gray hover reads as "this turn" without competing with turn hues.
   turns: true, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true,
@@ -93,6 +95,10 @@ const validHoverColor = (value: unknown): value is string => value === "turn" ||
 /** Mix choices offered in settings, in percent; saved files may hold any whole percent from 1 to 100. */
 export const TURN_MIXES: readonly number[] = [2, 5, 8, 10, 15, 20, 30, 50, 75, 100];
 const validMix = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 100;
+
+/** Whether a value can be saved as the Auto pane header threshold. */
+export const validAutoPaneHeaderRows = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 
 /** Read display preferences, retaining the first version's saved arrangement. */
 export async function loadPreferences(file: string): Promise<Preferences> {
@@ -112,6 +118,7 @@ export async function loadPreferences(file: string): Promise<Preferences> {
   const showCopyButtons = record.showCopyButtons === undefined ? defaults.showCopyButtons : record.showCopyButtons;
   const showToolbar = record.showToolbar === undefined ? defaults.showToolbar : record.showToolbar;
   const showPaneHeaders = record.showPaneHeaders === undefined ? defaults.showPaneHeaders : record.showPaneHeaders;
+  const autoPaneHeaderRows = record.autoPaneHeaderRows === undefined ? defaults.autoPaneHeaderRows : record.autoPaneHeaderRows;
   const showToolDurations = record.showToolDurations === undefined ? defaults.showToolDurations : record.showToolDurations;
   const showModelUsage = record.showModelUsage === undefined ? defaults.showModelUsage : record.showModelUsage;
   const compactTools = record.compactTools === undefined ? defaults.compactTools : record.compactTools;
@@ -142,7 +149,7 @@ export async function loadPreferences(file: string): Promise<Preferences> {
       typeof showTimestamps !== "boolean" || typeof showCopyButtons !== "boolean" || typeof compactTools !== "boolean" ||
       typeof showToolDurations !== "boolean" || typeof showModelUsage !== "boolean" ||
       typeof showToolbar !== "boolean" || (typeof showPaneHeaders !== "boolean" && showPaneHeaders !== "auto") ||
-      typeof groupTools !== "boolean" || typeof nestedTree !== "boolean" ||
+      !validAutoPaneHeaderRows(autoPaneHeaderRows) || typeof groupTools !== "boolean" || typeof nestedTree !== "boolean" ||
       typeof streamTools !== "boolean" || typeof streamDelay !== "number" || !Number.isInteger(streamDelay) || streamDelay < 1 || streamDelay > 300 ||
       (buttonStyle !== "icons" && buttonStyle !== "text") || typeof turns !== "boolean" || typeof turnClock !== "boolean" ||
       !TURN_STRIPES.includes(turnStripe as TurnStripe) || typeof turnBackground !== "boolean" || typeof turnSeparator !== "boolean" ||
@@ -151,7 +158,7 @@ export async function loadPreferences(file: string): Promise<Preferences> {
     throw new Error("Invalid pi-stereo-view preferences");
   }
   // Legacy files may contain mode/zoom. Every session starts with both panels visible.
-  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, showToolDurations, showModelUsage, showToolbar, showPaneHeaders, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
+  return { mode: "split", side: record.side, chatWidth: record.chatWidth, layout, chatHeight, zoom: null, showTimestamps, showCopyButtons, showToolDurations, showModelUsage, showToolbar, showPaneHeaders, autoPaneHeaderRows, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
     turns, turnClock, turnStripe: turnStripe as TurnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix,
     turnHoverColor: turnHoverColor.toLowerCase(), turnHover, goTo: goTo as GoTo, piWindows: piWindows as PiWindows };
 }
@@ -161,9 +168,9 @@ export async function savePreferences(file: string, preferences: Preferences): P
   await mkdir(path.dirname(file), { recursive: true });
   const temporary = file + "." + randomUUID() + ".tmp";
   try {
-    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, showToolDurations, showModelUsage, showToolbar, showPaneHeaders, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
+    const { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, showToolDurations, showModelUsage, showToolbar, showPaneHeaders, autoPaneHeaderRows, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
       turns, turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix, turnHoverColor, turnHover, goTo, piWindows } = preferences;
-    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, showToolDurations, showModelUsage, showToolbar, showPaneHeaders, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
+    const saved = { side, chatWidth, layout, chatHeight, showTimestamps, showCopyButtons, showToolDurations, showModelUsage, showToolbar, showPaneHeaders, autoPaneHeaderRows, compactTools, groupTools, nestedTree, streamTools, streamDelay, buttonStyle,
       turns, turnClock, turnStripe, turnBackground, turnSeparator, turnClockMix, turnStripeMix, turnBackgroundMix, turnHoverMix, turnHoverColor, turnHover, goTo, piWindows };
     await writeFile(temporary, JSON.stringify(saved, null, 2) + "\n", { mode: 0o600 });
     await rename(temporary, file);
