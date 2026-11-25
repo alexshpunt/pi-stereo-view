@@ -119,7 +119,7 @@ export default function buttonStyleProbe(pi: ExtensionAPI): void {
         await click("[Exit]", "Search:");
         await click("[Copy]", "[Copy]");
         for (let n = 0; n < 100 && copies.length === 0; n++) await setTimeout(10);
-        await clickButton(1);
+        await click("[Rows]");
         frames.rows = await capture();
         const width = process.stdout.columns;
         try {

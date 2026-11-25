@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
@@ -28,7 +28,10 @@ function seedHistory(cwd: string): string {
   return session.getSessionFile()!;
 }
 
-test("hiding toolbar and pane headers frees history rows and keeps keyboard controls available", async () => {
+type Phase = "toggle" | "restart" | "auto-select" | "auto-columns" | "auto-rows" | "auto-controls";
+type Frames = Record<string, string[]>;
+
+async function withDisplayChrome(check: (file: string, run: (phase: Phase) => Promise<Frames>) => Promise<void>): Promise<void> {
   await mkdir(path.resolve("tmp"), { recursive: true });
   const cwd = await mkdtemp(path.resolve("tmp/display-chrome-"));
   try {
@@ -39,12 +42,16 @@ test("hiding toolbar and pane headers frees history rows and keeps keyboard cont
     // Saved arrangement overrides. The launcher supplies the visible, icon-button baseline.
     await writeFile(file, JSON.stringify({ side: "left", chatWidth: 44, showTimestamps: false, showCopyButtons: false }));
     const session = seedHistory(cwd);
-    const run = async (phase: "toggle" | "restart"): Promise<Record<string, string[]>> => {
+    const run = async (phase: Phase): Promise<Frames> => {
       const name = `display-chrome-${phase}`;
       const result = await new PiIntegrationTest({
         testName: name, artifactsDir, cwd,
         piCommand: path.resolve("test/fixtures/pi-host.sh"), isolateUserResources: false,
-        environment: { PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_TEST_SESSION: session, CHROME_PHASE: phase },
+        environment: {
+          PI_CODING_AGENT_DIR: agent, PI_TRANSCRIPT_TEST_SESSION: session, CHROME_PHASE: phase,
+          // The earlier process already seeded the baseline. Do not rewrite preferences before resize-only runs.
+          ...(phase === "auto-columns" || phase === "auto-rows" ? { PI_TRANSCRIPT_TEST_DEFAULTS: "1" } : {}),
+        },
         rawMode: false, tuiSize: { cols: 120, rows: 30 },
         extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/display-chrome-probe.ts")],
         tools: [], conversation: [assistantMessage([text("Report saved.", { chunks: { kind: "fixed", size: Number.MAX_SAFE_INTEGER } })])],
@@ -54,8 +61,18 @@ test("hiding toolbar and pane headers frees history rows and keeps keyboard cont
       await writeFile(path.join(artifactsDir, name, "frames.json"), JSON.stringify(frames, null, 2));
       return Object.fromEntries(Object.entries(frames).map(([key, lines]) => [key, lines.map(stripTerminalSequences)]));
     };
-    const toolbar = (lines: string[]): boolean => lines.some(line => line.includes("[ ≡ ]"));
-    const headers = (lines: string[]): number => lines.join("\n").match(/\[ ↗ \]/gu)?.length ?? 0;
+    await check(file, run);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+}
+
+const toolbar = (lines: string[]): boolean => lines.some(line => line.includes("[ ≡ ]"));
+const headers = (lines: string[]): number => lines.join("\n").match(/\[ ↗ \]/gu)?.length ?? 0;
+const rowDivider = (frame: string[]): number => frame.findIndex(line => line.startsWith("═".repeat(120)));
+
+test("hiding toolbar and pane headers frees history rows and keeps keyboard controls available", async () => {
+  await withDisplayChrome(async (file, run) => {
     const rows = (lines: string[], marker: string): number => lines.filter(line => line.includes(marker)).length;
     const frames = await run("toggle");
     for (const [name, showToolbar, headerCount] of [
@@ -73,7 +90,6 @@ test("hiding toolbar and pane headers frees history rows and keeps keyboard cont
     }
     const stackRows = (frame: string[]): number => rows(frame, "REPORT ROW") + rows(frame, "WORK ROW");
     expect(stackRows(frames.rowsHidden) - stackRows(frames.rows)).toBe(6);
-    const rowDivider = (frame: string[]): number => frame.findIndex(line => line.startsWith("═".repeat(120)));
     expect(rowDivider(frames.rowsHidden)).toBeGreaterThan(2);
     expect(rowDivider(frames.rowsDragged)).toBe(2);
     expect(rows(frames.columnsHidden, "REPORT ROW 03")).toBe(0);
@@ -90,7 +106,61 @@ test("hiding toolbar and pane headers frees history rows and keeps keyboard cont
     expect(rowDivider(restarted.initial)).toBe(2);
     expect(toolbar(restarted.restored)).toBe(true);
     expect(headers(restarted.restored)).toBe(2);
-  } finally {
-    await rm(cwd, { recursive: true, force: true });
+  });
+}, 90_000);
+
+const chevron = (frame: string[], icon: "⌃" | "⌄"): number => frame.findIndex(line => line.includes(`[ ${icon} ]`));
+
+function expectHeaders(frame: string[], visible: boolean, name: string, showToolbar = true): void {
+  expect(toolbar(frame), name).toBe(showToolbar);
+  expect(headers(frame), name).toBe(visible ? 2 : 0);
+  if (showToolbar) {
+    const toolbarRow = frame.findIndex(line => line.includes("[ ≡ ]"));
+    expect(chevron(frame, visible ? "⌃" : "⌄"), name).toBe(toolbarRow);
+  } else {
+    expect(chevron(frame, "⌃"), name).toBe(-1);
+    expect(chevron(frame, "⌄"), name).toBe(-1);
   }
+}
+
+test("Auto survives restart and hides and restores pane headers as Columns and Rows resize", async () => {
+  await withDisplayChrome(async (file, run) => {
+    const selected = await run("auto-select");
+    expectHeaders(selected.autoSelected, true, "Auto selected in Settings");
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    expect(saved).toMatchObject({ layout: "columns", showToolbar: true, showPaneHeaders: "auto" });
+
+    for (const layout of ["columns", "rows"] as const) {
+      if (layout === "rows") await writeFile(file, JSON.stringify({ ...saved, layout }));
+      const contentsBefore = await readFile(file, "utf8");
+      const before = await stat(file, { bigint: true });
+      const frames = await run(`auto-${layout}`);
+      for (const [name, visible] of [
+        ["initial", true], ["shrunk", false], ["shortRepaint", false], ["grown", true], ["tallRepaint", true],
+      ] as const) {
+        expectHeaders(frames[name], visible, `${layout} ${name}`);
+        const split = layout === "rows" ? rowDivider(frames[name]) >= 0 : frames[name].some(line => line.includes("║"));
+        expect(split, `${layout} ${name} stays split`).toBe(true);
+      }
+      const after = await stat(file, { bigint: true });
+      expect(await readFile(file, "utf8")).toBe(contentsBefore);
+      expect([after.ino, after.mtimeNs]).toEqual([before.ino, before.mtimeNs]);
+    }
+  });
+}, 120_000);
+
+test("toolbar and slash command toggles use the current Auto visibility", async () => {
+  await withDisplayChrome(async (file, run) => {
+    await writeFile(file, JSON.stringify({ ...JSON.parse(await readFile(file, "utf8")), showPaneHeaders: "auto" }));
+    const frames = await run("auto-controls");
+    for (const [name, visible, showToolbar] of [
+      ["autoVisible", true, true], ["chevronHides", false, true],
+      ["autoHidden", false, true], ["chevronRestores", true, true], ["chevronPinnedOn", true, true],
+      ["shortWithToolbar", false, true], ["shortWithoutToolbar", false, false], ["commandRestores", true, false],
+      ["visibleWithoutToolbar", true, false], ["commandHides", false, false],
+      ["shortAgain", false, true], ["chromeRestores", true, true],
+      ["autoVisibleAgain", true, true], ["chromeHides", false, false],
+    ] as const) expectHeaders(frames[name], visible, name, showToolbar);
+    expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject({ showToolbar: false, showPaneHeaders: false });
+  });
 }, 90_000);

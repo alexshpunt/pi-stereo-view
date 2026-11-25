@@ -102,6 +102,15 @@ test.each([
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test("preserves Auto pane headers when preferences are reopened", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
+  const file = path.join(directory, "transcript.json");
+  try {
+    await savePreferences(file, { ...defaults, showToolbar: false, showPaneHeaders: "auto" });
+    expect(await loadPreferences(file)).toMatchObject({ showToolbar: false, showPaneHeaders: "auto" });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("restores a one-row Conversation height with pane headers hidden", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
