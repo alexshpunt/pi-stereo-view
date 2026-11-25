@@ -77,9 +77,11 @@ pi --tui-mode fullscreen
 
 ## Use it
 
-Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button labels** to `icons`. The choice survives restart. Settings are grouped under **Blocks**, **Activity tools**, **Layout** and **Turns**.
+Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button labels** to `icons`. The choice survives restart. The toolbar uses icons when the text buttons would not fit in one row. Settings are grouped under **Blocks**, **Activity tools**, **Layout** and **Turns**.
 
-Under **Layout**, turn off **Show toolbar** or **Show pane headers** to give history more room. Both are on by default and saved independently. The split divider still resizes the panels, and `Ctrl+F` still searches the active panel. Use `/stereo-view settings` to reopen settings without the toolbar.
+The toolbar chevron hides or restores pane headers. The toolbar and headers are on by default and saved independently. Under **Layout**, set **Show pane headers** to `auto` to hide them when the terminal is short and restore them as room returns. The chevron, `/stereo-view headers`, and `/stereo-view chrome` select an explicit `on` or `off`. Return to settings to re-enable Auto.
+
+The split divider still resizes the panels, and `Ctrl+F` still searches the active panel without headers. Use `/stereo-view settings` to reopen settings without the toolbar.
 
 | Icons | Text | Action |
 | --- | --- | --- |
@@ -88,6 +90,7 @@ Under **Layout**, turn off **Show toolbar** or **Show pane headers** to give his
 | `[ ↕ ]` / `[ ↔ ]` | `[Swap]` | Swap the panels. |
 | `[ ↗ ]` / `[ ↙ ]` | `[Maximize]` / `[Restore]` | Zoom a panel / restore the split. |
 | `[ ≡ ]` | `[Settings]` | Open display and Conversation height settings. |
+| `[ ⌃ ]` / `[ ⌄ ]` | `[⌃]` / `[⌄]` | Hide / restore pane headers. |
 | `[ ⌕ ]` | `[Find]` | Search this panel. |
 | `[ ⊟ ]` / `[ ⊞ ]` | `[Compact tools]` / `[Full tools]` | Show finished tool calls as one line / in full. |
 | `[ ⇄ ]` | `[Go to]` | Open the same moment in the other panel (when **Jump to other panel** includes the button). |
