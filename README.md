@@ -79,6 +79,8 @@ pi --tui-mode fullscreen
 
 Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button labels** to `icons`. The choice survives restart. Settings are grouped under **Blocks**, **Activity tools**, **Layout** and **Turns**.
 
+Under **Layout**, turn off **Show toolbar** or **Show pane headers** to give history more room. Both are on by default and saved independently. The split divider still resizes the panels, and `Ctrl+F` still searches the active panel. Use `/stereo-view settings` to reopen settings without the toolbar.
+
 | Icons | Text | Action |
 | --- | --- | --- |
 | `[ ▣ ]` / `[ ◫ ]` | `[Combine]` / `[Split]` | Turn split history off / on. |
@@ -227,15 +229,17 @@ The same controls are available without the mouse:
 | Zoom / restore Activity | `/stereo-view zoom activity` |
 | Copy a block from the active panel | `/stereo-view copy` |
 | Display settings | `/stereo-view settings` |
+| Toggle toolbar / pane headers | `/stereo-view toolbar` / `/stereo-view headers` |
+| Hide both controls if both are shown; otherwise show both | `/stereo-view chrome` |
 | Button legend | `/stereo-view help` |
 
 `Ctrl+Alt+T` toggles split, `Ctrl+Alt+S` swaps panels, and `Ctrl+Alt+Left/Right` resizes Conversation along the current split direction.
 
-Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active panel, marked with `●`. Clicking or scrolling a panel makes it active. `Ctrl+Alt+Up` or `Ctrl+Alt+Down` switches to the other panel; press either again to switch back.
+Keyboard scrolling (`PgUp`/`PgDn` and Pi's other scroll keys) moves the active panel. Its header shows a `●` when headers are visible. Clicking or scrolling a panel makes it active. `Ctrl+Alt+Up` or `Ctrl+Alt+Down` switches to the other panel; press either again to switch back.
 
 ## Settings and limits
 
-Your layout, panel order, sizes, compact Activity choice, turn marks, hover, Go to and Pi menu choices, timestamp and copy-button settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
+Your layout, panel order, sizes, compact Activity choice, turn marks, hover, Go to and Pi menu choices, timestamp, copy-button, toolbar and pane-header settings are saved automatically. Each new session opens both panels in that arrangement. Zooming one panel or turning split off is temporary and does not carry over to another session.
 
 - Tested with Pi 1.6.0. Requires Node.js 22.19 or newer.
 - Regular mode shows one combined history.
