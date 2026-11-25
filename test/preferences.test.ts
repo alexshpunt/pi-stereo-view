@@ -6,7 +6,7 @@ import { defaults, loadPreferences, savePreferences, type Preferences } from "..
 
 const arrangement = {
   side: "right", chatWidth: 73, layout: "rows", chatHeight: 17,
-  showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16,
+  showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 32,
   showTimestamps: false, showCopyButtons: false, showToolDurations: true, showModelUsage: false, compactTools: true, groupTools: false, nestedTree: false, streamTools: true, streamDelay: 8, buttonStyle: "icons",
   turns: true, turnClock: false, turnStripe: "line", turnBackground: true, turnSeparator: true, turnClockMix: 20, turnStripeMix: 50,
   turnBackgroundMix: 3, turnHoverMix: 40, turnHoverColor: "#3b82f6", turnHover: false, goTo: "button", piWindows: "maximize",
@@ -82,7 +82,7 @@ test("shows the toolbar and pane headers when no visibility choices have been sa
   const directory = await mkdtemp(path.join(tmpdir(), "stereo-preferences-"));
   const file = path.join(directory, "transcript.json");
   try {
-    const visible = { showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16 };
+    const visible = { showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 32 };
     expect(await loadPreferences(file)).toMatchObject(visible);
     await writeFile(file, JSON.stringify({ side: "left", chatWidth: null }));
     expect(await loadPreferences(file)).toMatchObject(visible);
@@ -108,8 +108,8 @@ test("preserves Auto pane headers when preferences are reopened", async () => {
   try {
     const { autoPaneHeaderRows: _threshold, ...older } = arrangement;
     await writeFile(file, JSON.stringify({ ...older, showPaneHeaders: "auto" }));
-    expect(await loadPreferences(file)).toMatchObject({ showPaneHeaders: "auto", autoPaneHeaderRows: 16 });
-    const options = { showToolbar: false, showPaneHeaders: "auto", autoPaneHeaderRows: 22 } as const;
+    expect(await loadPreferences(file)).toMatchObject({ showPaneHeaders: "auto", autoPaneHeaderRows: 32 });
+    const options = { showToolbar: false, showPaneHeaders: "auto", autoPaneHeaderRows: 16 } as const;
     await savePreferences(file, { ...defaults, ...options });
     expect(await loadPreferences(file)).toMatchObject(options);
   } finally { await rm(directory, { recursive: true, force: true }); }

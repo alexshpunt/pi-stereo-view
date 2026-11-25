@@ -80,9 +80,9 @@ export default function displayChromeProbe(pi: ExtensionAPI): void {
         return;
       }
       if (phase === "auto-columns" || phase === "auto-rows") {
-        await resizeHistory("shrunk", 15);
+        await resizeHistory("shrunk", 31);
         await capture("shortRepaint");
-        await resizeHistory("grown", 16);
+        await resizeHistory("grown", 32);
         await capture("tallRepaint");
         return;
       }
