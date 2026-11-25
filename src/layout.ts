@@ -24,6 +24,10 @@ type NativeTui = TUI & {
 const MIN_CHAT = 24;
 const MIN_ACTIVITY = 40;
 const MIN_ROWS = 4;
+const AUTO_HISTORY_ROWS = 4;
+// The longest text labels plus the chevron and spaces between controls.
+const TOOLBAR_TEXT_WIDTH = 41;
+const TOOLBAR_ICON_WIDTH = 29;
 const TOOLBAR_BUTTON_WIDTH = 6;
 
 /**
@@ -70,7 +74,7 @@ class ButtonStack extends VStack {
   private style: "icons" | "text" = "icons";
   private lastLayout = "";
 
-  constructor(private readonly items: StackChild[], private readonly controls: { index: number; icon: number }[],
+  constructor(private readonly items: StackChild[], private readonly controls: { index: number; icon: number; compactIcon?: number }[],
     private readonly titleLength?: number, private readonly fill?: Component) {
     super();
   }
@@ -94,8 +98,8 @@ class ButtonStack extends VStack {
         const control = this.controls.find(candidate => candidate.index === index);
         if (control) {
           entry.basis = this.style === "icons" ? control.icon : textWidth(index);
-          entry.minSize = entry.basis;
-          entry.shrink = 0;
+          entry.minSize = this.style === "icons" ? control.compactIcon ?? entry.basis : entry.basis;
+          entry.shrink = this.style === "icons" && control.compactIcon !== undefined ? 1 : 0;
         } else if (this.titleLength !== undefined) {
           entry.minSize = this.style === "icons" ? 1 : this.titleLength;
         }
@@ -240,6 +244,7 @@ export class TranscriptLayout {
   private fallback = false;
   /** How an open Pi window temporarily changes the side-by-side split; the saved layout and zoom stay unchanged. */
   private piWindow?: "combined" | "maximize";
+  private autoPaneHeaders = true;
   private automaticHeight = MIN_ROWS;
   private chatHeaderHeight = 0;
   private readonly rejectedRoots = new WeakSet<Component>();
@@ -295,9 +300,10 @@ export class TranscriptLayout {
     });
   }
 
-  private button(label: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color): Component {
-    const button = new MouseRegion(memoized(width => [width, this.theme(), this.preferences.buttonStyle, label(), enabled(), background?.()],
-      width => new Text(this.theme().style((this.preferences.buttonStyle === "icons" ? "[ " + label() + " ]" : "[" + label() + "]").padEnd(width), {
+  private button(label: () => string, action: () => void, enabled = (): boolean => true, background?: () => Color,
+    style = () => this.preferences.buttonStyle): Component {
+    const button = new MouseRegion(memoized(width => [width, this.theme(), style(), label(), enabled(), background?.()],
+      width => new Text(this.theme().style((style() === "icons" ? "[ " + label() + " ]" : "[" + label() + "]").padEnd(width), {
         fg: enabled() ? "accent" : "dim", bg: background?.(),
       }), 0, 0).render(width)), event => {
       if (event.button !== "left") return;
@@ -442,8 +448,10 @@ export class TranscriptLayout {
         { top: view.scrollTop, height: view.viewportHeight, following: view.isFollowingEnd } : undefined, () => this.host?.requestRender());
     }
     let historyHeight = 0;
-    let chatHeader: Component;
-    let activityHeader: Component;
+    const hasTopBorder = (pane: Pane): boolean =>
+      this.zoom !== null || this.preferences.layout === "columns" ||
+      pane === (this.preferences.side === "left" ? "chat" : "activity");
+    const toolbarStyle = () => host.terminal.columns < TOOLBAR_TEXT_WIDTH ? "icons" : this.preferences.buttonStyle;
     let projectSurface = false;
     // Every root entry asks in turn during one visibility pass; evaluate the projection once.
     let pass: { width: number; height: number; shown: boolean } | undefined;
@@ -464,19 +472,30 @@ export class TranscriptLayout {
       const candidate = !!projectedDock && (widgetsPresent() || dialogPresent()) && dockUnchanged() && !this.failed &&
         this.preferences.mode === "split" && this.zoom !== "chat" && !combinedWindow;
       projectDialog = candidate && dialogPresent();
+      toolbar.setStyle(toolbarStyle());
       const toolbarHeight = this.preferences.showToolbar ? toolbar.render(width).length : 0;
       historyHeight = Math.max(0, height - (candidate ? projectedDock : dock).render(width).length - toolbarHeight);
       const search = this.search;
       if (search && previousHeight !== historyHeight) queueMicrotask(() => {
         if (this.search === search) search.bar.reposition();
       });
-      const minimum = this.minimumPaneHeight();
-      this.automaticHeight = Math.max(minimum, Math.floor(historyHeight / 2));
       const chatWidth = this.zoom || this.preferences.layout === "rows" ? width : Math.min(width - MIN_ACTIVITY - 1,
         Math.max(MIN_CHAT, this.preferences.chatWidth ?? this.defaultWidth(width)));
       const activityWidth = this.zoom || this.preferences.layout === "rows" ? width : width - chatWidth - 1;
       const chatSearch = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
       const activitySearch = this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0;
+      if (this.preferences.showPaneHeaders === "auto") {
+        // Measure the space the headers would take, regardless of the previous frame's visibility.
+        const withHeader = (pane: Pane, label: ButtonStack, paneWidth: number, searchRows: number): number =>
+          AUTO_HISTORY_ROWS + searchRows + label.render(Math.max(1, paneWidth)).length + 1 + Number(hasTopBorder(pane));
+        const chat = withHeader("chat", chatLabel, chatWidth, chatSearch);
+        const activity = withHeader("activity", activityLabel, activityWidth, activitySearch);
+        const required = this.zoom ? (this.zoom === "chat" ? chat : activity) :
+          this.preferences.layout === "columns" ? Math.max(chat, activity) : chat + activity + 1;
+        this.autoPaneHeaders = historyHeight >= required;
+      }
+      const minimum = this.minimumPaneHeight();
+      this.automaticHeight = Math.max(minimum, Math.floor(historyHeight / 2));
       const chatHeaderRows = chatHeader.render(Math.max(1, chatWidth)).length;
       const activityHeaderRows = activityHeader.render(Math.max(1, activityWidth)).length;
       this.chatHeaderHeight = chatHeaderRows - chatSearch;
@@ -525,28 +544,31 @@ export class TranscriptLayout {
         return false;
       }
     };
-    const headers: ButtonStack[] = [];
+    const toolbarButton = (label: () => string, action: () => void, enabled?: () => boolean): Component =>
+      this.button(label, action, enabled, undefined, () => host.terminal.columns < TOOLBAR_ICON_WIDTH ? "text" : toolbarStyle());
     const toolbar = new ButtonStack([
-      { component: this.button(
-        () => this.preferences.mode === "combined" || this.fallback || this.failed ? (this.preferences.buttonStyle === "icons" ? "◫" : "Split") : (this.preferences.buttonStyle === "icons" ? "▣" : "Combine"),
+      toolbarButton(() => this.paneHeadersVisible ? "⌃" : "⌄", () => this.togglePaneHeaders()),
+      toolbarButton(
+        () => this.preferences.mode === "combined" || this.fallback || this.failed ? (toolbarStyle() === "icons" ? "◫" : "Split") : (toolbarStyle() === "icons" ? "▣" : "Combine"),
         () => this.toggle(), () => !this.fallback && !this.failed,
-      ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
-      { component: this.button(
-        () => this.preferences.layout === "columns" ? (this.preferences.buttonStyle === "icons" ? "▤" : "Rows") : (this.preferences.buttonStyle === "icons" ? "▥" : "Columns"),
+      ),
+      toolbarButton(
+        () => this.preferences.layout === "columns" ? (toolbarStyle() === "icons" ? "▤" : "Rows") : (toolbarStyle() === "icons" ? "▥" : "Columns"),
         () => this.setLayout(this.preferences.layout === "columns" ? "rows" : "columns"), () => !this.failed,
-      ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
-      { component: this.button(
-        () => this.preferences.buttonStyle === "icons" ? (this.preferences.layout === "columns" ? "↔" : "↕") : "Swap", () => this.swap(),
+      ),
+      toolbarButton(
+        () => toolbarStyle() === "icons" ? (this.preferences.layout === "columns" ? "↔" : "↕") : "Swap", () => this.swap(),
         () => this.preferences.mode === "split" && !this.zoom && !this.fallback && !this.failed,
-      ), basis: TOOLBAR_BUTTON_WIDTH + 1, minSize: TOOLBAR_BUTTON_WIDTH, shrink: 1 },
-      { component: this.button(() => this.preferences.buttonStyle === "icons" ? "≡" : "Settings", this.openSettings), basis: TOOLBAR_BUTTON_WIDTH, shrink: 0 },
+      ),
+      toolbarButton(() => toolbarStyle() === "icons" ? "≡" : "Settings", this.openSettings),
     ], [
-      { index: 0, icon: 6 },
-      { index: 1, icon: 6 },
-      { index: 2, icon: 6 },
-      { index: 3, icon: 5 },
+      { index: 0, icon: 6, compactIcon: 3 },
+      { index: 1, icon: 6, compactIcon: 3 },
+      { index: 2, icon: 6, compactIcon: 3 },
+      { index: 3, icon: 6, compactIcon: 3 },
+      { index: 4, icon: 5, compactIcon: 3 },
     ]);
-    const pane = (title: string, target: Pane, view: ScrollView): Component => {
+    const pane = (title: string, target: Pane, view: ScrollView) => {
       const hue = target === "chat" ? rgbColor(104, 158, 115) : rgbColor(107, 152, 190);
       let colors: { inputs: unknown[]; palette: { fill: Color; text: Color; border: Color } } | undefined;
       // Mixed colors keep their identity while the theme is unchanged, so memoized controls can compare them.
@@ -598,23 +620,19 @@ export class TranscriptLayout {
         { index: 2, icon: 5 },
       ], title.length, memoized(width => [width, this.theme(), palette()],
         width => [this.theme().style(" ".repeat(width), { bg: palette().fill })]));
-      headers.push(label);
       const header = new VStack([
-        { component: line, basis: 1, shrink: 0, visible: () =>
-          this.preferences.showPaneHeaders && (this.zoom !== null || this.preferences.layout === "columns" ||
-          (this.preferences.side === "left" ? target === "chat" : target === "activity")) },
-        { component: label, basis: "auto", shrink: 0, visible: () => this.preferences.showPaneHeaders },
-        { component: line, basis: 1, shrink: 0, visible: () => this.preferences.showPaneHeaders },
+        { component: line, basis: 1, shrink: 0, visible: () => this.paneHeadersVisible && hasTopBorder(target) },
+        { component: label, basis: "auto", shrink: 0, visible: () => this.paneHeadersVisible },
+        { component: line, basis: 1, shrink: 0, visible: () => this.paneHeadersVisible },
         { component: this.searchRows[target], basis: "auto", shrink: 0,
           visible: () => this.search?.pane === target },
       ]);
-      if (target === "chat") chatHeader = header;
-      else activityHeader = header;
-      return new TranscriptPane(header, view, () => historyHeight,
+      const component = new TranscriptPane(header, view, () => historyHeight,
         target === "activity" ? surfaceView : undefined, () => projectSurface && surfacePresent());
+      return { component, header, label };
     };
-    const activityPane = pane("Activity", "activity", this.activity);
-    const chatPane = pane("Conversation", "chat", this.chat);
+    const { component: activityPane, header: activityHeader, label: activityLabel } = pane("Activity", "activity", this.activity);
+    const { component: chatPane, header: chatHeader, label: chatLabel } = pane("Conversation", "chat", this.chat);
     const divider = (axis: "columns" | "rows"): Component => new MouseRegion(memoized(width => [width, host.terminal.rows, this.theme()],
       width => axis === "columns" ?
         Array.from({ length: host.terminal.rows }, () => this.theme().fg("dim", "║")) :
@@ -648,8 +666,8 @@ export class TranscriptLayout {
     const columns = new TranscriptColumns();
     const rows = new TranscriptRows();
     this.rebuild = (): void => {
-      toolbar.setStyle(this.preferences.buttonStyle);
-      for (const header of headers) header.setStyle(this.preferences.buttonStyle);
+      toolbar.setStyle(toolbarStyle());
+      for (const label of [chatLabel, activityLabel]) label.setStyle(this.preferences.buttonStyle);
       for (const [stack, axis] of [[columns, "columns"], [rows, "rows"]] as const) {
         stack.clear();
         const minimum = axis === "columns" ? MIN_CHAT : this.minimumPaneHeight();
@@ -977,6 +995,17 @@ export class TranscriptLayout {
     this.changed();
   }
 
+  /** Leave Auto and set an explicit choice opposite to the current visibility. */
+  togglePaneHeaders(): void {
+    this.setChrome({ showPaneHeaders: !this.paneHeadersVisible });
+  }
+
+  /** Hide both controls if both were shown, or restore both otherwise. */
+  toggleChrome(): void {
+    const show = !this.preferences.showToolbar || !this.paneHeadersVisible;
+    this.setChrome({ showToolbar: show, showPaneHeaders: show });
+  }
+
   /** Change the presentation of toolbar, header and copy controls. */
   setButtonStyle(style: "icons" | "text"): void {
     this.preferences.buttonStyle = style;
@@ -1022,8 +1051,13 @@ export class TranscriptLayout {
     this.changed(persist);
   }
 
+  private get paneHeadersVisible(): boolean {
+    const mode = this.preferences.showPaneHeaders;
+    return mode === "auto" ? this.autoPaneHeaders : mode;
+  }
+
   private minimumPaneHeight(): number {
-    return this.preferences.showPaneHeaders ? MIN_ROWS : 1;
+    return this.paneHeadersVisible ? MIN_ROWS : 1;
   }
 
   /** Set a manual maximum including any visible header, or null for automatic half-height. */

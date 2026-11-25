@@ -139,8 +139,9 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           currentValue: preferences.showToolbar ? "on" : "off", values: ["on", "off"],
         }, {
           id: "showPaneHeaders", label: "Show pane headers",
-          description: "Show the titles and controls above each panel. Ctrl+F still searches when headers are off.",
-          currentValue: preferences.showPaneHeaders ? "on" : "off", values: ["on", "off"],
+          description: "Auto hides the pane titles and controls when history is short. Ctrl+F still searches without headers.",
+          currentValue: preferences.showPaneHeaders === "auto" ? "auto" : preferences.showPaneHeaders ? "on" : "off",
+          values: ["on", "off", "auto"],
         }, {
           id: "piWindows", label: "Pi pickers in split",
           description: "Pi's own pickers, such as the session tree or the model list, open full screen, in maximized Activity, or inside Activity.",
@@ -225,7 +226,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           else if (id === "streamTools") layout?.setStreamTools(value === "on");
           else if (id === "streamDelay") layout?.setStreamDelay(Number.parseInt(value, 10));
           else if (id === "height") layout?.setAutomaticHeight(value === "auto");
-          else if (id === "showToolbar" || id === "showPaneHeaders") layout?.setChrome({ [id]: value === "on" });
+          else if (id === "showToolbar") layout?.setChrome({ showToolbar: value === "on" });
+          else if (id === "showPaneHeaders") layout?.setChrome({ showPaneHeaders: value === "auto" ? value : value === "on" });
           tui.requestRender();
         };
         const list = new SettingsList(items, visibleSettings, {
@@ -428,11 +430,9 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       if (action === "toggle" || action === "") toggle();
       else if (action === "settings") await openSettings(ctx.ui);
       else if (action === "toolbar") layout.setChrome({ showToolbar: !preferences.showToolbar });
-      else if (action === "headers") layout.setChrome({ showPaneHeaders: !preferences.showPaneHeaders });
-      else if (action === "chrome") {
-        const show = !preferences.showToolbar || !preferences.showPaneHeaders;
-        layout.setChrome({ showToolbar: show, showPaneHeaders: show });
-      } else if (action === "copy") {
+      else if (action === "headers") layout.togglePaneHeaders();
+      else if (action === "chrome") layout.toggleChrome();
+      else if (action === "copy") {
         const blocks = layout.copyBlocks();
         if (!blocks.length) {
           ctx.ui.notify("No blocks to copy in the active split panel.", "info");
@@ -442,7 +442,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         const choice = await ctx.ui.select("Copy a block from the active panel", blocks.map(block => block.label));
         blocks.find(block => block.label === choice)?.copy();
       } else if (action === "help") {
-        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⧉/Copy copies a block, ⇄/Go to or a click on a block's clock opens the same point in the other panel. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize. Use /stereo-view toolbar or /stereo-view headers to toggle either set of controls, or /stereo-view chrome to toggle both.", "info");
+        ctx.ui.notify("pi-stereo-view: choose icon or text buttons in /stereo-view settings. Buttons: ▣/Combine combines history, ◫/Split separates it, ▤/Rows and ▥/Columns change layout, ↕/↔/Swap exchanges panels, ↗/Maximize and ↙/Restore change panel size, ⌕/Find searches, ⊟/Compact tools and ⊞/Full tools toggle compact tools, ≡/Settings opens settings, ⌃/⌄ hides or restores pane headers, ⧉/Copy copies a block, ⇄/Go to or a click on a block's clock opens the same point in the other panel. /stereo-view copy chooses a block with the keyboard. Ctrl+F searches and PgUp/PgDn scroll the active panel; Ctrl+Alt+Up/Down switches it. Drag the ═ or ║ divider to resize. Use /stereo-view toolbar or /stereo-view headers to toggle either set of controls, or /stereo-view chrome to toggle both.", "info");
       } else if (action === "swap") layout.swap();
       else if (action === "width" && /^\d+$/.test(target ?? "")) layout.setWidth(Number(target));
       else if (action === "height" && target === "auto") layout.setHeight(null);
