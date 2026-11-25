@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { stripTerminalSequences, visibleWidth, type Container } from "@earendil-works/pi-tui";
 import { captureTui, type TestHost } from "./tui-host.ts";
 import { emittedFrame } from "./emitted-frame.ts";
 
@@ -23,23 +23,91 @@ export default function displayChromeProbe(pi: ExtensionAPI): void {
   };
   const mouse = (button: number, x: number, y: number, suffix = "M"): Promise<void> =>
     input(`\x1b[<${button};${x + 1};${y + 1}${suffix}`);
-  const changeSetting = async (label: "Show toolbar" | "Show pane headers"): Promise<void> => {
-    await command("settings");
-    await emittedFrame(tui, () => tui.requestRender(true));
+  const clickControl = async (label: string): Promise<void> => {
     const lines = tui.getScreenLines().map(stripTerminalSequences);
     const row = lines.findIndex(line => line.includes(label));
-    if (row < 0) throw new Error("Missing visibility setting: " + label);
+    if (row < 0) throw new Error("Missing control: " + label);
     const column = visibleWidth(lines[row].slice(0, lines[row].indexOf(label)));
     await mouse(0, column, row);
     await mouse(0, column, row, "m");
+  };
+  const changeSetting = async (label: "Show toolbar" | "Show pane headers", times = 1): Promise<void> => {
+    await command("settings");
+    await emittedFrame(tui, () => tui.requestRender(true));
+    await clickControl(label);
+    for (let click = 1; click < times; click++) await input("\r");
     await input("\x1b");
+  };
+
+  const resize = async (name: string, rows: number): Promise<void> => {
+    process.stdout.rows = rows;
+    process.stdout.emit("resize");
+    await capture(name);
+  };
+  // Set the viewport by history rows so unrelated changes to the native footer do not move the cutoff.
+  const resizeHistory = (name: string, height: number): Promise<void> => {
+    const dock = (tui as TestHost & { layoutRoot?: Container }).layoutRoot?.children.at(-1);
+    if (!dock) throw new Error("Missing native editor dock");
+    return resize(name, dock.render(tui.terminal.columns).length + 1 + height);
   };
 
   pi.on("session_start", async (_event, ctx) => { tui = await captureTui(ctx); });
   pi.on("agent_before_settle", async (_event, ctx) => {
     const phase = process.env.CHROME_PHASE;
+    const originalRows = process.stdout.rows;
     try {
       await capture("initial");
+      if (phase === "auto-select") {
+        await changeSetting("Show pane headers", 2);
+        await capture("autoSelected");
+        return;
+      }
+      if (phase === "auto-columns" || phase === "auto-rows") {
+        const minimum = phase === "auto-rows" ? 14 : 7;
+        await resizeHistory("shrunk", minimum - 1);
+        await capture("shortRepaint");
+        await resizeHistory("grown", minimum);
+        await capture("tallRepaint");
+        return;
+      }
+      if (phase === "auto-controls") {
+        await command("layout columns");
+        await capture("autoVisible");
+        await clickControl("[ ⌃ ]");
+        await capture("chevronHides");
+
+        await changeSetting("Show pane headers"); // Off -> Auto.
+        await resizeHistory("autoHidden", 5);
+        await clickControl("[ ⌄ ]");
+        await capture("chevronRestores");
+        await resizeHistory("chevronPinnedOn", 4);
+
+        await resize("roomForSettings", originalRows);
+        await changeSetting("Show pane headers", 2); // On -> Off -> Auto.
+        await resizeHistory("shortWithToolbar", 5);
+        await command("toolbar");
+        await capture("shortWithoutToolbar");
+        await command("headers");
+        await capture("commandRestores");
+
+        await resize("wideWithoutToolbar", originalRows);
+        await changeSetting("Show pane headers", 2);
+        await capture("visibleWithoutToolbar");
+        await command("headers");
+        await capture("commandHides");
+        await command("toolbar");
+        await changeSetting("Show pane headers"); // Off -> Auto.
+        await resizeHistory("shortAgain", 5);
+        await command("chrome");
+        await capture("chromeRestores");
+
+        await resize("wideAgain", originalRows);
+        await changeSetting("Show pane headers", 2);
+        await capture("autoVisibleAgain");
+        await command("chrome");
+        await capture("chromeHides");
+        return;
+      }
       if (phase === "restart") {
         await command("chrome");
         await capture("restored");
@@ -79,6 +147,10 @@ export default function displayChromeProbe(pi: ExtensionAPI): void {
       await command("toggle");
       await capture("split");
     } finally {
+      if (process.stdout.rows !== originalRows) {
+        process.stdout.rows = originalRows;
+        process.stdout.emit("resize");
+      }
       await writeFile(path.join(ctx.cwd, `display-chrome-${phase}.json`), JSON.stringify(frames));
     }
   });

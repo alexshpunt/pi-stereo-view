@@ -23,7 +23,7 @@ test("switches button presentation in settings, copies, fits narrow rows and sur
     const { frames, copies, compactStates, headerBackgrounds }: { frames: Record<string, string[]>; copies: string[]; compactStates: boolean[]; headerBackgrounds: string[] } = JSON.parse(await readFile(path.join(cwd, "style.json"), "utf8"));
     expect(frames.initial[0]).toContain("[ ≡ ]");
     expect(frames.menu.join("\n")).toContain("Button labels");
-    expect(frames.text[0]).toMatch(/^\[[A-Za-z]+\] \[[A-Za-z]+\] \[[A-Za-z]+\] \[[A-Za-z]+\]/);
+    expect(frames.text[0]).toMatch(/^\[⌃\](?: \[[A-Za-z]+\]){4}/);
     expect(frames.text.join("\n")).toContain("[Copy]");
     expect(frames.textSearch.join("\n")).toContain("[Go] [Exit]");
     expect(frames.textSearchNext.join("\n")).toContain("STYLE");
@@ -33,8 +33,8 @@ test("switches button presentation in settings, copies, fits narrow rows and sur
     expect(headerBackgrounds[1]).toBe(headerBackgrounds[0]);
     expect(copies).toHaveLength(1);
     expect(["STYLE USER", "STYLE ANSWER"]).toContain(copies[0]);
-    const firstBorder = frames.narrow.findIndex(line => line.includes("─"));
-    expect((frames.narrow.slice(0, firstBorder).join(" ").match(/\[[A-Za-z ]+\]/g) ?? [])).toHaveLength(4);
+    expect(frames.narrow[0].match(/\[([^\]]+)\]/g)).toEqual(["[⌃]", "[▣]", "[▥]", "[↕]", "[≡]"]);
+    expect(frames.narrow.findIndex(line => line.includes("─"))).toBe(1);
     const activity = frames.narrow.findIndex(line => line.includes("Activity"));
     expect((frames.narrow.slice(activity, activity + 4).join(" ").match(/\[[A-Za-z ]+\]/g) ?? [])).toHaveLength(3);
     expect(frames.narrow.some(line => line.includes("Conversation"))).toBe(true);
@@ -43,7 +43,7 @@ test("switches button presentation in settings, copies, fits narrow rows and sur
     expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8")).buttonStyle).toBe("text");
     expect((await run("button-style-restart", 2)).exitCode).toBe(0);
     const restarted = JSON.parse(await readFile(path.join(cwd, "style-restart.json"), "utf8"));
-    expect(restarted.frames.initial[0]).toMatch(/^\[[A-Za-z]+\] \[/);
+    expect(restarted.frames.initial[0]).toMatch(/^\[⌃\] \[[A-Za-z]+\] \[/);
     expect(restarted.frames.iconsRestored[0]).toContain("[ ≡ ]");
     expect(restarted.frames.iconsRestored.join("\n")).toContain("⧉");
     expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8")).buttonStyle).toBe("icons");
