@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.29 - 2026-11-25
+
+### Added
+
+- Hide or show the toolbar and pane headers independently in Stereo View settings. The toolbar chevron toggles both pane headers. Use `/stereo-view toolbar` or `/stereo-view headers` to toggle either, or `/stereo-view both` to toggle both.
+- Set **Show pane headers** to `auto` under **Layout** to hide the headers when there is less room for history. **Auto header threshold (rows)** defaults to 32 history rows, excluding the toolbar and input area, in both Columns and Rows. Press Enter on the threshold to change it. Pane headers stay on by default unless you choose `auto` or `off`.
+
 ## 0.1.28 - 2026-11-24
 
 ### Added
