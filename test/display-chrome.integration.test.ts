@@ -180,8 +180,8 @@ test("toolbar and slash command toggles use the current Auto visibility", async 
       ["autoHidden", false, true], ["chevronRestores", true, true], ["chevronPinnedOn", true, true],
       ["shortWithToolbar", false, true], ["shortWithoutToolbar", false, false], ["commandRestores", true, false],
       ["visibleWithoutToolbar", true, false], ["commandHides", false, false],
-      ["shortAgain", false, true], ["chromeRestores", true, true],
-      ["autoVisibleAgain", true, true], ["chromeHides", false, false],
+      ["shortAgain", false, true], ["bothRestores", true, true],
+      ["autoVisibleAgain", true, true], ["bothHides", false, false],
     ] as const) expectHeaders(frames[name], visible, name, showToolbar);
     expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject({ showToolbar: false, showPaneHeaders: false });
   });

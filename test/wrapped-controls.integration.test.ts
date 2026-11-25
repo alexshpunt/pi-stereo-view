@@ -19,7 +19,8 @@ test("keeps all toolbar buttons whole and clickable in a narrow terminal", async
     }).run("Question");
     expect(result.exitCode).toBe(0);
     const resultData = JSON.parse(await readFile(path.join(cwd, "wrapped-controls.json"), "utf8"));
-    expect(resultData.buttons, JSON.stringify(resultData.narrow.slice(0, 6))).toHaveLength(4);
+    expect(resultData.buttons.map((button: { label: string }) => button.label), JSON.stringify(resultData.narrow.slice(0, 6)))
+      .toEqual(["[⌃]", "[◫]", "[▤]", "[↔]", "[≡]"]);
     expect(resultData.menuOpened).toBe(true);
   } finally { await Promise.all([cwd, agent].map(directory => rm(directory, { recursive: true, force: true }))); }
 });
