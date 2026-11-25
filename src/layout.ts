@@ -241,6 +241,7 @@ export class TranscriptLayout {
   /** How an open Pi window temporarily changes the side-by-side split; the saved layout and zoom stay unchanged. */
   private piWindow?: "combined" | "maximize";
   private automaticHeight = MIN_ROWS;
+  private chatHeaderHeight = 0;
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
   private index?: NativeContentIndex;
@@ -463,19 +464,24 @@ export class TranscriptLayout {
       const candidate = !!projectedDock && (widgetsPresent() || dialogPresent()) && dockUnchanged() && !this.failed &&
         this.preferences.mode === "split" && this.zoom !== "chat" && !combinedWindow;
       projectDialog = candidate && dialogPresent();
-      historyHeight = Math.max(0, height - (candidate ? projectedDock : dock).render(width).length - toolbar.render(width).length);
+      const toolbarHeight = this.preferences.showToolbar ? toolbar.render(width).length : 0;
+      historyHeight = Math.max(0, height - (candidate ? projectedDock : dock).render(width).length - toolbarHeight);
       const search = this.search;
       if (search && previousHeight !== historyHeight) queueMicrotask(() => {
         if (this.search === search) search.bar.reposition();
       });
-      this.automaticHeight = Math.max(MIN_ROWS, Math.floor(historyHeight / 2));
+      const minimum = this.minimumPaneHeight();
+      this.automaticHeight = Math.max(minimum, Math.floor(historyHeight / 2));
       const chatWidth = this.zoom || this.preferences.layout === "rows" ? width : Math.min(width - MIN_ACTIVITY - 1,
         Math.max(MIN_CHAT, this.preferences.chatWidth ?? this.defaultWidth(width)));
       const activityWidth = this.zoom || this.preferences.layout === "rows" ? width : width - chatWidth - 1;
       const chatSearch = this.search?.pane === "chat" ? PANEL_SEARCH_ROWS : 0;
       const activitySearch = this.search?.pane === "activity" ? PANEL_SEARCH_ROWS : 0;
-      const chatMin = Math.max(MIN_ROWS + chatSearch, chatHeader.render(Math.max(1, chatWidth)).length + 1);
-      const activityMin = Math.max(MIN_ROWS + activitySearch, activityHeader.render(Math.max(1, activityWidth)).length + 1);
+      const chatHeaderRows = chatHeader.render(Math.max(1, chatWidth)).length;
+      const activityHeaderRows = activityHeader.render(Math.max(1, activityWidth)).length;
+      this.chatHeaderHeight = chatHeaderRows - chatSearch;
+      const chatMin = Math.max(minimum + chatSearch, chatHeaderRows + 1);
+      const activityMin = Math.max(minimum + activitySearch, activityHeaderRows + 1);
       // A Pi window shown in combined history counts as not fitting: Pi's own history and dock take the screen.
       const fits = !combinedWindow && (this.zoom ? width >= MIN_CHAT && historyHeight >= (this.zoom === "chat" ? chatMin : activityMin) :
         this.preferences.layout === "columns" ? width >= MIN_CHAT + MIN_ACTIVITY + 1 && historyHeight >= Math.max(chatMin, activityMin) :
@@ -595,10 +601,10 @@ export class TranscriptLayout {
       headers.push(label);
       const header = new VStack([
         { component: line, basis: 1, shrink: 0, visible: () =>
-          this.zoom !== null || this.preferences.layout === "columns" ||
-          (this.preferences.side === "left" ? target === "chat" : target === "activity") },
-        { component: label, basis: "auto", shrink: 0 },
-        { component: line, basis: 1, shrink: 0 },
+          this.preferences.showPaneHeaders && (this.zoom !== null || this.preferences.layout === "columns" ||
+          (this.preferences.side === "left" ? target === "chat" : target === "activity")) },
+        { component: label, basis: "auto", shrink: 0, visible: () => this.preferences.showPaneHeaders },
+        { component: line, basis: 1, shrink: 0, visible: () => this.preferences.showPaneHeaders },
         { component: this.searchRows[target], basis: "auto", shrink: 0,
           visible: () => this.search?.pane === target },
       ]);
@@ -646,7 +652,7 @@ export class TranscriptLayout {
       for (const header of headers) header.setStyle(this.preferences.buttonStyle);
       for (const [stack, axis] of [[columns, "columns"], [rows, "rows"]] as const) {
         stack.clear();
-        const minimum = axis === "columns" ? MIN_CHAT : MIN_ROWS;
+        const minimum = axis === "columns" ? MIN_CHAT : this.minimumPaneHeight();
         const chatEntry = {
           component: chatPane, basis: axis === "columns" ? this.preferences.chatWidth ?? MIN_CHAT : "auto" as const,
           maxSize: axis === "rows" ? this.preferences.chatHeight ?? undefined : undefined,
@@ -654,7 +660,7 @@ export class TranscriptLayout {
         };
         const activityEntry = {
           component: activityPane, basis: axis === "columns" ? 0 : "auto" as const,
-          grow: axis === "columns" ? 1 : 0, minSize: axis === "columns" ? MIN_ACTIVITY : MIN_ROWS,
+          grow: axis === "columns" ? 1 : 0, minSize: axis === "columns" ? MIN_ACTIVITY : minimum,
         };
         const first = this.preferences.side === "left" ? chatEntry : activityEntry;
         const second = this.preferences.side === "left" ? activityEntry : chatEntry;
@@ -667,7 +673,7 @@ export class TranscriptLayout {
     const surface = new SplitSurface(host, {
       model: () => {
         const zoom = this.zoom;
-        if (zoom) return { component: zoom === "chat" ? chatPane : activityPane, fill: false, minSize: MIN_ROWS };
+        if (zoom) return { component: zoom === "chat" ? chatPane : activityPane, fill: false, minSize: this.minimumPaneHeight() };
         return this.preferences.layout === "columns" ? { component: columns, fill: true, minSize: 1 } : { component: rows, fill: false, minSize: 1 };
       },
       height: () => historyHeight,
@@ -690,7 +696,7 @@ export class TranscriptLayout {
     this.surface = surface;
     const mounted = new TranscriptRoot([
       { component: toolbar, basis: "auto", shrink: 0, visible: () => {
-        // Root visibility is evaluated once at the start of each native layout pass.
+        // Start the frame on the first visibility check, even when the toolbar is hidden.
         pass = undefined;
         // An error here would reach Pi's render loop and end Pi; stop the split instead.
         try {
@@ -705,12 +711,12 @@ export class TranscriptLayout {
         } catch (error) {
           this.fail(error);
         }
-        return true;
+        return this.preferences.showToolbar;
       } },
       { component: {
         render: width => [this.theme().style("─".repeat(width), { fg: this.theme().colors.border })],
         invalidate() {},
-      }, basis: 1, shrink: 0, visible: viewport => !shown(viewport) },
+      }, basis: 1, shrink: 0, visible: viewport => this.preferences.showToolbar && !shown(viewport) },
       // The split paints as one full-width row block; the proxy gives Pi's keyboard scrolling the active panel.
       { component: surface, basis: "auto", minSize: 1, visible: viewport => shown(viewport) },
       { component: surface.proxy, basis: 0, shrink: 0, visible: viewport => shown(viewport) },
@@ -965,6 +971,12 @@ export class TranscriptLayout {
     this.changed();
   }
 
+  /** Show or hide either set of layout controls, or update both together. */
+  setChrome(visibility: Partial<Pick<Preferences, "showToolbar" | "showPaneHeaders">>): void {
+    Object.assign(this.preferences, visibility);
+    this.changed();
+  }
+
   /** Change the presentation of toolbar, header and copy controls. */
   setButtonStyle(style: "icons" | "text"): void {
     this.preferences.buttonStyle = style;
@@ -1010,15 +1022,19 @@ export class TranscriptLayout {
     this.changed(persist);
   }
 
-  /** Set a manual maximum including the header, or null for automatic half-height. */
+  private minimumPaneHeight(): number {
+    return this.preferences.showPaneHeaders ? MIN_ROWS : 1;
+  }
+
+  /** Set a manual maximum including any visible header, or null for automatic half-height. */
   setHeight(height: number | null, persist = true): void {
-    this.preferences.chatHeight = height === null ? null : Math.max(MIN_ROWS, Math.min(240, Math.trunc(height)));
+    this.preferences.chatHeight = height === null ? null : Math.max(this.minimumPaneHeight(), Math.min(240, Math.trunc(height)));
     this.changed(persist);
   }
 
   private currentHeight(): number {
     if (this.preferences.layout === "rows" && !this.zoom && this.chat?.viewportHeight) {
-      return this.chat.viewportHeight + (this.preferences.side === "left" ? 3 : 2);
+      return this.chat.viewportHeight + this.chatHeaderHeight;
     }
     return this.preferences.chatHeight ?? this.automaticHeight;
   }
