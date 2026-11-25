@@ -31,12 +31,29 @@ export default function displayChromeProbe(pi: ExtensionAPI): void {
     await mouse(0, column, row);
     await mouse(0, column, row, "m");
   };
-  const changeSetting = async (label: "Show toolbar" | "Show pane headers", times = 1): Promise<void> => {
+  const openSettings = async (): Promise<void> => {
     await command("settings");
     await emittedFrame(tui, () => tui.requestRender(true));
+  };
+  const changeSetting = async (label: "Show toolbar" | "Show pane headers", times = 1): Promise<void> => {
+    await openSettings();
     await clickControl(label);
     for (let click = 1; click < times; click++) await input("\r");
     await input("\x1b");
+  };
+  const openThreshold = async (): Promise<void> => {
+    await openSettings();
+    // Select the threshold directly below the header mode without cycling the mode.
+    const row = tui.getScreenLines().findIndex(line => stripTerminalSequences(line).includes("Show pane headers"));
+    if (row < 0) throw new Error("Missing pane headers setting");
+    await mouse(0, 60, row);
+    await input("\x1b[B");
+    await input("\r");
+  };
+  const enterThreshold = async (value: string): Promise<void> => {
+    await input("\x15");
+    for (const char of value) await input(char);
+    await input("\r");
   };
 
   const resize = async (name: string, rows: number): Promise<void> => {
@@ -63,11 +80,35 @@ export default function displayChromeProbe(pi: ExtensionAPI): void {
         return;
       }
       if (phase === "auto-columns" || phase === "auto-rows") {
-        const minimum = phase === "auto-rows" ? 14 : 7;
-        await resizeHistory("shrunk", minimum - 1);
+        await resizeHistory("shrunk", 15);
         await capture("shortRepaint");
-        await resizeHistory("grown", minimum);
+        await resizeHistory("grown", 16);
         await capture("tallRepaint");
+        return;
+      }
+      if (phase === "auto-threshold-edit") {
+        await openThreshold();
+        await enterThreshold("0");
+        await capture("invalidThreshold");
+        await enterThreshold("22");
+        await input("\x1b");
+        await resizeHistory("customLiveBelow", 21);
+        await resizeHistory("customLiveAt", 22);
+        return;
+      }
+      if (phase === "auto-threshold-restart") {
+        await resizeHistory("customAt", 22);
+        await resizeHistory("customBelow", 21);
+        await command("toolbar");
+        await capture("customAtWithoutToolbar");
+
+        await command("toolbar");
+        await resize("roomForThreshold", originalRows);
+        await openThreshold();
+        await enterThreshold("1");
+        await input("\x1b");
+        await resizeHistory("headersDoNotFit", 3);
+        await resizeHistory("headersFit", 9);
         return;
       }
       if (phase === "auto-controls") {
