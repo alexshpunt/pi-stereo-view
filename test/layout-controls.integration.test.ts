@@ -127,7 +127,7 @@ test.each(["chat", "activity"])("uses mouse buttons and both dividers without re
     expect(lines.slice(dockBorders[0]).some(line => line.includes("║"))).toBe(false);
   }
   expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({
-    side: "right", chatWidth: 44, layout: "rows", chatHeight: 4, showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16, showTimestamps: true, showCopyButtons: true, showToolDurations: false, showModelUsage: false, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
+    side: "right", chatWidth: 44, layout: "rows", chatHeight: 4, showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 32, showTimestamps: true, showCopyButtons: true, showToolDurations: false, showModelUsage: false, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
     turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 8, turnBackgroundMix: 5, turnHoverMix: 5, turnHoverColor: "turn", turnHover: false, goTo: "off", piWindows: "inline",
   });
   await run("expanded-panel-restart-" + zoom, false);
@@ -156,7 +156,7 @@ test("starts both panels in the saved arrangement after disabling split in anoth
     tools: [], conversation: [assistantMessage([text("ANSWER MARKER")])],
   }).run("USER MARKER");
   await run("save-combined-buttons");
-  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16, showToolDurations: false, showModelUsage: false, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 32, showToolDurations: false, showModelUsage: false, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
     turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 8, turnBackgroundMix: 5, turnHoverMix: 5, turnHoverColor: "turn", turnHover: false, goTo: "off", piWindows: "inline" });
   await run("restore-combined-buttons");
   const frames: { before: string[]; after: string[] } = JSON.parse(await readFile(path.join(cwd, "button-toggle.json"), "utf8"));
@@ -170,7 +170,7 @@ test("starts both panels in the saved arrangement after disabling split in anoth
   expect(clean(frames.after)).toContain("[ ◫ ]");
   expect(clean(frames.after)).toContain("USER MARKER");
   expect(clean(frames.after)).toContain("ANSWER MARKER");
-  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16, showToolDurations: false, showModelUsage: false, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
+  expect(JSON.parse(await readFile(path.join(agent, "transcript.json"), "utf8"))).toEqual({ ...saved, showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 32, showToolDurations: false, showModelUsage: false, compactTools: false, groupTools: false, nestedTree: true, streamTools: false, streamDelay: 5, buttonStyle: "icons",
     turns: false, turnClock: false, turnStripe: "off", turnBackground: false, turnSeparator: false, turnClockMix: 10, turnStripeMix: 8, turnBackgroundMix: 5, turnHoverMix: 5, turnHoverColor: "turn", turnHover: false, goTo: "off", piWindows: "inline" });
 });
 

@@ -53,7 +53,7 @@ async function withDisplayChrome(check: (file: string, run: (phase: Phase) => Pr
           // The earlier process already seeded the baseline. Do not rewrite preferences before resize-only runs.
           ...(["auto-columns", "auto-rows", "auto-threshold-restart"].includes(phase) ? { PI_TRANSCRIPT_TEST_DEFAULTS: "1" } : {}),
         },
-        rawMode: false, tuiSize: { cols: 120, rows: 30 },
+        rawMode: false, tuiSize: { cols: 120, rows: 44 },
         extensions: [path.resolve("src/index.ts"), path.resolve("test/fixtures/display-chrome-probe.ts")],
         tools: [], conversation: [assistantMessage([text("Report saved.", { chunks: { kind: "fixed", size: Number.MAX_SAFE_INTEGER } })])],
       }).run("Record the report.");
@@ -129,7 +129,7 @@ test("Auto survives restart and hides and restores pane headers as Columns and R
     const selected = await run("auto-select");
     expectHeaders(selected.autoSelected, true, "Auto selected in Settings");
     const saved = JSON.parse(await readFile(file, "utf8"));
-    expect(saved).toMatchObject({ layout: "columns", showToolbar: true, showPaneHeaders: "auto", autoPaneHeaderRows: 16 });
+    expect(saved).toMatchObject({ layout: "columns", showToolbar: true, showPaneHeaders: "auto", autoPaneHeaderRows: 32 });
 
     for (const layout of ["columns", "rows"] as const) {
       if (layout === "rows") await writeFile(file, JSON.stringify({ ...saved, layout }));
