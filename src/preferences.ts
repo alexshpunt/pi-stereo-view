@@ -81,7 +81,7 @@ export const PI_WINDOWS: readonly PiWindows[] = ["combined", "maximize", "inline
 export const defaults: Preferences = {
   mode: "split", side: "left", chatWidth: null, layout: "columns", chatHeight: null, zoom: null,
   showTimestamps: true, showCopyButtons: true, showToolDurations: false, showModelUsage: false,
-  showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 16,
+  showToolbar: true, showPaneHeaders: true, autoPaneHeaderRows: 32,
   compactTools: true, groupTools: true, nestedTree: true, streamTools: true, streamDelay: 5, buttonStyle: "text",
   // Strengths chosen on dark and light terminals; one gray hover reads as "this turn" without competing with turn hues.
   turns: true, turnClock: true, turnStripe: "block", turnBackground: false, turnSeparator: true,
