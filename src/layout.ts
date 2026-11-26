@@ -361,7 +361,8 @@ export class TranscriptLayout {
     const entries = Array.isArray(nativeDock.entries) ? nativeDock.entries.map(entry => ({ ...entry })) : [];
     const supportedDock = entries.length === 6 && entries.every((entry, i) => entry.component === nativeDock.children[i]) &&
       [2, 4].every(i => entries[i].component.constructor.name === "Container") &&
-      entries[3].minSize === 3;
+      // The input's slot keeps 3 rows; an extension that draws no input may release them (0).
+      (entries[3].minSize === 3 || entries[3].minSize === 0);
     const above = supportedDock ? entries[2].component as Container : undefined;
     const below = supportedDock ? entries[4].component as Container : undefined;
     const editorSlot = supportedDock && entries[3].component.constructor.name === "Container"
@@ -375,6 +376,16 @@ export class TranscriptLayout {
     let piWindowOpen = false;
     const projectedDock = supportedDock ? new VStack(entries.filter((_, i) => i !== 2 && i !== 4).map(entry =>
       entry.component === editorSlot ? { ...entry, visible: () => !projectDialog } : entry)) : undefined;
+    // The projected dock holds copies of the entries; keep the input slot's minimum in step with Pi's own,
+    // which an extension may lower while it draws no input.
+    const nativeEditorEntry = supportedDock ? nativeDock.entries[3] : undefined;
+    const projectedEditorEntry = projectedDock
+      ? (projectedDock as unknown as { entries: Array<{ component: Component; minSize?: number }> }).entries
+        .find(entry => entry.component === editorSlot)
+      : undefined;
+    const followEditorMinimum = (): void => {
+      if (nativeEditorEntry && projectedEditorEntry) projectedEditorEntry.minSize = nativeEditorEntry.minSize;
+    };
     // Preserve the original containers and Pi's above/editor/below order. Pi still owns their lifecycle.
     const surfaceTree = above && below ? new VStack([
       above, ...(editorSlot ? [{ component: editorSlot, visible: () => projectDialog }] : []), below,
@@ -385,6 +396,7 @@ export class TranscriptLayout {
     const dockUnchanged = (): boolean => supportedDock && nativeDock.entries.length === 6 &&
       nativeDock.entries.every((entry, i) => entry.component === nativeDock.children[i] &&
         Object.keys({ ...entry, ...entries[i] }).every(key =>
+          (i === 3 && key === "minSize") ||
           entry[key as keyof typeof entry] === entries[i][key as keyof typeof entry]));
     this.host = host;
     this.original = root;
@@ -463,6 +475,7 @@ export class TranscriptLayout {
       // Width-only stack rendering during external-editor handoff has no viewport height bound.
       height = Math.min(height, Math.max(1, host.terminal.rows));
       const previousHeight = historyHeight;
+      followEditorMinimum();
       piWindowOpen = showsPiWindow(editorSlot?.children.length === 1 ? editorSlot.children[0] : undefined, piWindowOpen);
       // A Pi window under half-width Activity would cut its wide lists; give it the full width until it closes.
       this.piWindow = this.preferences.mode === "split" && this.preferences.layout === "columns" && !this.preferences.zoom &&
