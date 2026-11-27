@@ -12,6 +12,7 @@ import { beforeFirstFrame } from "./startup.ts";
 import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
 import { ProblemReporter } from "./report.ts";
+import { startGuiBridge } from "./gui-bridge.ts";
 
 const DELAYS = [1, 2, 3, 5, 10, 30];
 /**
@@ -43,6 +44,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   const nested = new NestedCalls();
   const nativeEditor = observeNativeEditor();
   let unsubscribeInput: (() => void) | undefined;
+  let stopGuiBridge: (() => Promise<void>) | undefined;
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
   const file = path.join(getAgentDir(), "transcript.json");
@@ -374,6 +376,10 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       overlayOptions: { visible: () => false, nonCapturing: true },
       onHandle: () => finish(),
     });
+    if (!stopGuiBridge && process.env.HC_TERMINAL_ID && process.platform !== "win32") {
+      try { stopGuiBridge = await startGuiBridge(process.env.HC_TERMINAL_ID, () => layout?.guiIndex()); }
+      catch (error) { ctx.ui.notify("Native Stereo View is unavailable: " + String(error), "warning"); }
+    }
     unsubscribeInput = ctx.ui.onTerminalInput(data => {
       ensureLayout();
       const pane = layout?.searchPane();
@@ -419,6 +425,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   pi.on("session_tree", (_event, ctx) => { closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
   pi.on("session_compact", (_event, ctx) => { closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
   pi.on("session_shutdown", async () => {
+    await stopGuiBridge?.();
+    stopGuiBridge = undefined;
     releaseStartup();
     nativeEditor.dispose();
     closeSearch();

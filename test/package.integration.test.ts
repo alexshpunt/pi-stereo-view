@@ -25,7 +25,8 @@ test("ships only public runtime files and loads the installed archive in real Pi
     });
     const [archive]: { filename: string; files: { path: string }[] }[] = JSON.parse(packed.stdout);
     const paths = archive.files.map(file => file.path).sort();
-    expect(paths.filter(file => !/^(package\.json|README\.md|CHANGELOG\.md|LICENSE|src\/.+\.ts)$/.test(file))).toEqual([]);
+    expect(paths.filter(file => !/^(package\.json|README\.md|CHANGELOG\.md|LICENSE|src\/.+\.ts|herdr\/mods\/stereo-view\/.+)$/.test(file))).toEqual([]);
+    expect(paths).toContain("herdr/mods/stereo-view/main.js");
     expect(paths).toContain("LICENSE");
     expect(paths).toContain("CHANGELOG.md");
     expect(paths).toContain("src/index.ts");

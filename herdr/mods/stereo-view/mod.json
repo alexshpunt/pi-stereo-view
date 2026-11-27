@@ -1,0 +1,8 @@
+{
+  "place": "none",
+  "app": {
+    "id": "stereo-view",
+    "label": "Stereo View",
+    "when": [{ "label": "herdr.stereo.bridge" }]
+  }
+}

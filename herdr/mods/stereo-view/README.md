@@ -1,0 +1,9 @@
+# Stereo View for Herdr
+
+This experimental mod displays the Pi extension's Conversation and Activity projections in independently scrolling virtual lists. Pi's terminal stays open and owns input and dialogs. Use Terminal to return focus to it. Entry clicks, image escape sequences, OSC links and precise terminal-cell selection are not forwarded.
+
+Install the `stereo-view` mod folder under the Herdr app's `mods` folder. Open the Stereo View app for a running Pi terminal, or put it beside that terminal with `app.beside`. The mod expects `origin` (or `terminal`) to identify the Pi terminal. Its bridge label must carry version 1, the Pi PID and a socket path matching `/tmp/stereo-XXXXXX/s`, where each X is an ASCII letter or digit. The PID must still be the terminal's root or foreground process. The socket protocol is one UTF-8 JSON request terminated by a newline, followed by one UTF-8 JSON response terminated by a newline. Each page has at most 64 entries. The mod runs a fixed Node client on the terminal's machine; it does not execute a label-provided command or script. Node must be on that machine's PATH. The client limits a request to 4 KiB, a response to 4 MiB, and the connection to three seconds.
+
+The app requests the visible page and polls it for updates. Row heights are estimated until the page is loaded, and terminal width uses an approximate monospace cell width. An entry larger than the response limit cannot currently be displayed. On a missing bridge or transport error, the terminal remains available. The mod does not alter terminal state.
+
+`ansi.js` is copied from pi-agent-paste; its MIT license is in `ANSI-LICENSE`.

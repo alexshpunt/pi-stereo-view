@@ -29,6 +29,7 @@
   },
   "files": [
     "src",
+    "herdr/mods/stereo-view",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

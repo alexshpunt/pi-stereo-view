@@ -249,6 +249,8 @@ export class TranscriptLayout {
   private readonly rejectedRoots = new WeakSet<Component>();
   private rebuild = (): void => {};
   private index?: NativeContentIndex;
+  /** Live classified content for the experimental native view, while the layout is mounted. */
+  guiIndex(): NativeContentIndex | undefined { return this.index; }
   /** The turn under the pointer; a pointer move collects the turn its document reports. */
   private hoverAct?: number;
   private moving?: { turn: number };
