@@ -4,7 +4,11 @@ import { createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { GuiContent, type GuiPage } from "./gui-content.ts";
 import type { NativeContentIndex } from "./content.ts";
-import { parseGuiRequest } from "./gui-protocol.ts";
+import { parseGuiRequest, type GuiAction, type GuiSetting } from "./gui-protocol.ts";
+import type { TranscriptLayout } from "./layout.ts";
+
+type GuiControls = { state(): ReturnType<TranscriptLayout["guiState"]>; action(action: GuiAction): void;
+  setting(setting: GuiSetting): void; renderer(): ReturnType<TranscriptLayout["guiRenderer"]> };
 
 const LABEL = "herdr.stereo.bridge";
 const REQUEST_LIMIT = 4096;
@@ -29,7 +33,8 @@ function publishLabel(terminal: string, label: string): Promise<void> {
 
 /** Expose bounded pages from the live Pi process through a private Unix socket. */
 export async function startGuiBridge(terminal: string, index: () => NativeContentIndex | undefined,
-  publish: (terminal: string, label: string) => Promise<void> = publishLabel): Promise<() => Promise<void>> {
+  publish: (terminal: string, label: string) => Promise<void> = publishLabel,
+  controls?: () => GuiControls | undefined): Promise<() => Promise<void>> {
   if (process.platform === "win32") throw new Error("Native Windows bridge is not supported yet");
   const directory = await mkdtemp(join("/tmp", "stereo-"));
   const socketPath = join(directory, "s");
@@ -53,6 +58,28 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
         try {
           const parsed = parseGuiRequest(JSON.parse(request.slice(0, end)));
           if (!parsed) throw new Error("Invalid request");
+          if (parsed.op !== "page") {
+            const current = controls?.();
+            if (!current) throw new Error("Controls are unavailable");
+            if (parsed.op === "state") socket.end(JSON.stringify(current.state()) + "\n");
+            else if (parsed.op === "view") {
+              const renderer = current.renderer();
+              if (!renderer) throw new Error("History is unavailable");
+              const { pane, top, height, width, following } = parsed;
+              const output = JSON.stringify({ v: 1, ...renderer.page(pane, { top, height, width, following }) });
+              if (Buffer.byteLength(output) > RESPONSE_LIMIT) throw new Error("View is too large");
+              socket.end(output + "\n");
+            } else if (parsed.op === "mouse") {
+              const renderer = current.renderer();
+              if (!renderer) throw new Error("History is unavailable");
+              socket.end(JSON.stringify({ v: 1, ok: renderer.mouse(parsed.pane, parsed.frame, parsed.event) }) + "\n");
+            } else {
+              if (parsed.op === "action") current.action(parsed.action);
+              else current.setting({ key: parsed.key, value: parsed.value });
+              socket.end(JSON.stringify({ v: 1, ok: true }) + "\n");
+            }
+            return;
+          }
           const nextIndex = index();
           if (!nextIndex) throw new Error("History is unavailable");
           if (nextIndex !== currentIndex) { currentIndex = nextIndex; content = new GuiContent(nextIndex); }

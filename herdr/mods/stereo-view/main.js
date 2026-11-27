@@ -2,14 +2,12 @@ import { View, div } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, Scrollbar } from "gpui-base";
 import { checking, exec, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
 import { parseAnsi } from "./ansi.js";
-import { lineRange } from "./line-range.js";
+import { createSettingsPanel } from "./settings.js";
 
 const LABEL = "herdr.stereo.bridge";
 const LINE_HEIGHT = 17;
-const ESTIMATE = 34;
-const PAGE = 64;
+const PAGE = 256;
 const INTERVAL = 700;
-const MAX_CACHE = 512;
 // Fixed code, not a command or script read from the terminal label. The socket and
 // request are arguments and never interpolated into this source.
 const CLIENT = `const net=require('node:net');
@@ -52,65 +50,38 @@ function bridge() {
   return { socket: label.socket, machine: split < 0 ? undefined : address.slice(0, split), address };
 }
 
-/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], prefix: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, refreshCursor: number, lastSize: {width: number, height: number} | null}} */
+/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean}} */
 function paneState() {
-  return { total: null, revision: -1, items: new Map(), heights: [], prefix: [0], width: 80, height: 300,
-    handle: VirtualListScrollHandle.new(), fetching: false, error: null, initial: true, refreshCursor: 0, lastSize: null };
+  return { total: null, revision: -1, items: new Map(), heights: [], width: 80, height: 300,
+    handle: VirtualListScrollHandle.new(), fetching: false, error: null, initial: true, lastSize: null,
+    frameTop: 0, frameHeight: 0, pressed: false };
 }
 
-/** @param {ReturnType<typeof paneState>} state */
-function rebuild(state) {
-  state.heights.length = state.total ?? 0;
-  state.prefix = [0];
-  for (let i = 0; i < state.heights.length; i++) {
-    state.heights[i] ||= ESTIMATE;
-    state.prefix.push(state.prefix[i] + state.heights[i]);
-  }
-}
-
-/** @param {ReturnType<typeof paneState>} state @param {number} px */
-function itemAt(state, px) {
-  let lo = 0, hi = Math.max(0, state.prefix.length - 1);
-  while (lo < hi) { const mid = Math.floor((lo + hi + 1) / 2); if (state.prefix[mid] <= px) lo = mid; else hi = mid - 1; }
-  return Math.min(lo, Math.max(0, (state.total ?? 1) - 1));
-}
-
-/** @param {ReturnType<typeof paneState>} state */
-function visibleRange(state) {
-  const offset = state.handle.offset().y;
-  const viewport = state.handle.viewport_size().height || state.height;
-  return { first: itemAt(state, offset), last: itemAt(state, Math.max(offset, offset + viewport - 1)) };
-}
-
-/** Load missing visible rows first; rotate through loaded rows to pick up live updates. */
+/** Render the visible terminal rows, including one extra row for a partial scroll. */
 /** @param {ReturnType<typeof paneState>} state */
 function nextPage(state) {
-  if (!state.total) return { start: 0, count: 0 };
-  const { first, last } = visibleRange(state);
-  let start = first;
-  while (start <= last && state.items.has(start)) start++;
-  if (start > last) {
-    start = state.refreshCursor >= first && state.refreshCursor <= last ? state.refreshCursor : first;
-  }
-  return { start, count: Math.min(PAGE, last - start + 1) };
+  const offset = state.handle.offset().y;
+  const viewport = state.handle.viewport_size().height || state.height;
+  return { start: Math.max(0, Math.floor(offset / LINE_HEIGHT)),
+    count: Math.min(PAGE, Math.max(1, Math.ceil(viewport / LINE_HEIGHT) + 1)) };
 }
 
-/** Keep visible rows even if a very tall viewport needs more than MAX_CACHE entries. */
-/** @param {ReturnType<typeof paneState>} state */
-function trimCache(state) {
-  const { first, last } = visibleRange(state);
-  for (const index of state.items.keys()) {
-    if (state.items.size <= MAX_CACHE) break;
-    if (index < first || index > last) state.items.delete(index);
-  }
+/** @param {any} data @param {number} start @param {number} count @param {number} width */
+function validView(data, start, count, width) {
+  return data?.v === 1 && Number.isSafeInteger(data.frame) && data.frame > 0 &&
+    Number.isSafeInteger(data.total) && data.total >= 0 && data.total <= 1000000 &&
+    data.top === start && data.height === count && data.width === width &&
+    Number.isSafeInteger(data.scrollShift) && Array.isArray(data.lines) && data.lines.length <= count &&
+    (start >= data.total ? data.lines.length === 0 : start + data.lines.length <= data.total) &&
+    data.lines.every(/** @param {unknown} */ line => typeof line === "string");
 }
 
-/** @param {any} data @param {number} start @param {number} count */
-function validPage(data, start, count) {
-  return data?.v === 1 && Number.isSafeInteger(data.revision) && data.revision >= 0 &&
-    Number.isSafeInteger(data.total) && data.total >= 0 && data.total <= 1000000 && data.start === start &&
-    Array.isArray(data.entries) && data.entries.length <= count && (data.start >= data.total ? data.entries.length === 0 : data.start + data.entries.length <= data.total) &&
-    data.entries.every(/** @param {any} item */ item => item && typeof item.id === "string" && Array.isArray(item.lines) && item.lines.every((/** @type {unknown} */ line) => typeof line === "string"));
+/** Validate state received from the Pi process before using it to build controls. */
+function validState(value) {
+  return value?.v === 1 && (value.layout === "columns" || value.layout === "rows") &&
+    (value.side === "left" || value.side === "right") && (value.mode === "split" || value.mode === "combined") &&
+    (value.zoom === null || value.zoom === "chat" || value.zoom === "activity") &&
+    typeof value.showToolbar === "boolean" && typeof value.showHeaders === "boolean" && typeof value.compactTools === "boolean";
 }
 
 export default class StereoView extends View {
@@ -118,6 +89,12 @@ export default class StereoView extends View {
   init(_props, cx) {
     this.chat = paneState();
     this.activity = paneState();
+    this.combined = paneState();
+    this.viewState = null;
+    this.statePending = false;
+    this.stateGeneration = 0;
+    this.actions = [];
+    this.actionPending = false;
     // Until the first layout measures the monospace probe, use one em per cell.
     this.cellWidth = 12;
     this.available = false;
@@ -134,58 +111,145 @@ export default class StereoView extends View {
     if (!connection) { this.connection = undefined; cx.notify(); return; }
     if (this.connection !== connection.socket) {
       this.connection = connection.socket;
-      for (const state of [this.chat, this.activity]) {
-        state.total = null; state.revision = -1; state.items.clear(); state.heights = []; state.prefix = [0];
-        state.initial = true; state.error = null; state.refreshCursor = 0;
+      this.viewState = null;
+      this.stateGeneration++;
+      this.actions = [];
+      for (const state of [this.chat, this.activity, this.combined]) {
+        state.total = null; state.revision = -1; state.items.clear(); state.heights = [];
+        state.initial = true; state.error = null; state.pressed = false;
       }
     }
-    this.fetchPane("chat", this.chat, connection, cx);
-    this.fetchPane("activity", this.activity, connection, cx);
+    this.fetchState(connection, cx);
+    if (this.viewState?.mode === "combined") this.fetchPane("combined", this.combined, connection, cx);
+    else {
+      if (this.viewState?.zoom !== "activity") this.fetchPane("chat", this.chat, connection, cx);
+      if (this.viewState?.zoom !== "chat") this.fetchPane("activity", this.activity, connection, cx);
+    }
+  }
+
+  /** @param {{socket: string, machine?: string}} connection @param {any} cx */
+  fetchState(connection, cx) {
+    if (this.statePending || this.actionPending || this.actions.length) return;
+    this.statePending = true;
+    const generation = this.stateGeneration;
+    cx.spawn(async (/** @type {any} */ cx) => {
+      try {
+        const result = await exec("node", ["-e", CLIENT, connection.socket, JSON.stringify({ v: 1, op: "state" })], { on: connection.machine, timeout: 5000 });
+        if (result.code !== 0) throw new Error("Bridge unavailable");
+        const state = JSON.parse(result.stdout);
+        if (!validState(state)) throw new Error("Invalid bridge state");
+        if (bridge()?.socket !== connection.socket || generation !== this.stateGeneration) return;
+        this.viewState = state;
+        this.controlError = null;
+      } catch {
+        if (bridge()?.socket === connection.socket && generation === this.stateGeneration) this.controlError = "Could not read Stereo View controls.";
+      } finally {
+        this.statePending = false;
+        cx.notify();
+      }
+    });
+  }
+
+  /** Queue actions so rapid clicks cannot be reordered by separate bridge processes. */
+  /** @param {string} action @param {any} cx */
+  sendAction(action, cx) {
+    const connection = bridge();
+    if (!connection) return;
+    this.stateGeneration++;
+    this.actions.push({ request: { v: 1, op: "action", action }, connection });
+    this.drainActions(cx);
+  }
+
+  /** @param {string} key @param {unknown} value @param {any} cx */
+  sendSetting(key, value, cx) {
+    const connection = bridge();
+    if (!connection) return;
+    this.stateGeneration++;
+    this.actions.push({ request: { v: 1, op: "setting", key, value }, connection });
+    this.drainActions(cx);
+  }
+
+  /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {number} row @param {string} type @param {any} event @param {any} cx */
+  sendMouse(pane, state, row, type, event, cx) {
+    if (!event.local_position || state.revision < 1 || (type === "press" && state.fetching)) return;
+    const connection = bridge();
+    if (!connection) return;
+    const z = settings().zoom;
+    const zoom = typeof z === "number" && z > 0 ? z : 1;
+    const x = Math.floor((event.local_position.x / zoom - 8) / this.cellWidth);
+    const y = row - state.frameTop;
+    if (type === "press" && (x < 0 || x >= state.width || y < 0 || y >= state.frameHeight)) return;
+    if (x < -state.width || x >= state.width * 2 || y < -state.frameHeight || y >= state.frameHeight * 2) {
+      if (type === "release") state.pressed = false;
+      return;
+    }
+    if (type === "press") state.pressed = true;
+    else if (!state.pressed) return;
+    const input = { type, button: "left", x, y, shift: !!event.modifiers?.shift, ctrl: !!event.modifiers?.control,
+      alt: !!event.modifiers?.alt, clickCount: Math.max(1, Math.min(3, event.click_count || 1)) };
+    this.actions.push({ request: { v: 1, op: "mouse", pane, frame: state.revision, event: input }, connection });
+    if (type === "release") state.pressed = false;
+    this.drainActions(cx);
+  }
+
+  /** @param {any} cx */
+  drainActions(cx) {
+    if (this.actionPending || !this.actions.length) return;
+    const { request, connection } = this.actions.shift();
+    this.actionPending = true;
+    cx.spawn(async (/** @type {any} */ cx) => {
+      try {
+        if (bridge()?.socket !== connection.socket) return;
+        const result = await exec("node", ["-e", CLIENT, connection.socket, JSON.stringify(request)], { on: connection.machine, timeout: 5000 });
+        if (result.code !== 0) throw new Error("Bridge unavailable");
+        const reply = JSON.parse(result.stdout);
+        if (reply?.v !== 1 || reply.ok !== true) throw new Error("Action failed");
+        this.controlError = null;
+      } catch {
+        if (bridge()?.socket === connection.socket) this.controlError = "Could not change Stereo View controls.";
+      } finally {
+        this.actionPending = false;
+        if (this.actions.length) this.drainActions(cx);
+        else this.refresh(cx);
+        cx.notify();
+      }
+    });
   }
 
   /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {{socket: string, machine?: string, address: string}} connection @param {any} cx */
   fetchPane(pane, state, connection, cx) {
-    if (state.fetching) return;
+    if (state.fetching || state.pressed || this.actionPending || this.actions.length) return;
     const offset = state.handle.offset().y;
     const viewport = state.handle.viewport_size().height || state.height;
-    const atEnd = state.initial || offset + viewport >= state.handle.content_size().height - 2;
+    const following = state.initial || offset + viewport >= state.handle.content_size().height - 2;
     const { start, count } = nextPage(state);
     const width = state.width;
     state.fetching = true;
-    const request = JSON.stringify({ v: 1, op: "page", pane, start, count, width });
+    const request = JSON.stringify({ v: 1, op: "view", pane, top: start, height: count, width, following });
     cx.spawn(async (/** @type {any} */ cx) => {
       try {
         const result = await exec("node", ["-e", CLIENT, connection.socket, request], { on: connection.machine, timeout: 5000 });
         if (result.code !== 0) throw new Error("Bridge unavailable");
         const page = JSON.parse(result.stdout);
-        if (!validPage(page, start, count)) throw new Error("Invalid bridge response");
-        // A response belongs only to the connection and width it was requested for.
+        if (!validView(page, start, count, width)) throw new Error("Invalid bridge response");
         const now = bridge();
         if (!isShown() || !now || now.socket !== connection.socket || state.width !== width) return;
-        // The revision advances on every request, not only when content changes.
-        state.revision = page.revision;
-        state.refreshCursor = start + page.entries.length;
         const currentOffset = state.handle.offset().y;
         const currentViewport = state.handle.viewport_size().height || state.height;
         const stillAtEnd = currentOffset + currentViewport >= state.handle.content_size().height - 2;
-        let geometryChanged = state.total !== page.total;
-        if (state.total !== page.total) {
-          state.total = page.total;
-          for (const index of state.items.keys()) if (index >= page.total) state.items.delete(index);
-          rebuild(state);
+        const geometryChanged = state.total !== page.total;
+        state.total = page.total;
+        state.revision = page.frame;
+        state.frameTop = page.top;
+        state.frameHeight = page.height;
+        state.items.clear();
+        for (let i = 0; i < page.lines.length; i++) {
+          state.items.set(start + i, { id: `${page.frame}:${start + i}`, lines: [page.lines[i]] });
         }
-        for (let i = 0; i < page.entries.length; i++) {
-          const index = start + i;
-          const item = page.entries[i];
-          state.items.delete(index);
-          state.items.set(index, item);
-          const height = Math.max(1, item.lines.length) * LINE_HEIGHT + 8;
-          if (state.heights[index] !== height) geometryChanged = true;
-          state.heights[index] = height;
-        }
-        rebuild(state);
-        trimCache(state);
-        if (geometryChanged && (state.initial || (atEnd && stillAtEnd)) && state.total > 0) state.handle.scroll_to_bottom();
+        if (geometryChanged) state.heights = Array(page.total).fill(LINE_HEIGHT);
+        if (geometryChanged && (state.initial || (following && stillAtEnd)) && state.total > 0) state.handle.scroll_to_bottom();
+        else if (!following && page.scrollShift && state.total > 0)
+          state.handle.scroll_to_item(Math.max(0, Math.min(state.total - 1, start + page.scrollShift)));
         state.initial = false;
         state.error = null;
       } catch {
@@ -206,6 +270,7 @@ export default class StereoView extends View {
     this.cellWidth = measured;
     if (this.chat.lastSize) this.sizePane(this.chat, this.chat.lastSize, cx);
     if (this.activity.lastSize) this.sizePane(this.activity, this.activity.lastSize, cx);
+    if (this.combined.lastSize) this.sizePane(this.combined, this.combined.lastSize, cx);
   }
 
   /** @param {ReturnType<typeof paneState>} state @param {{width: number, height: number}} size @param {any} cx */
@@ -216,7 +281,7 @@ export default class StereoView extends View {
     const width = Math.max(10, Math.min(300, Math.floor((size.width / zoom - 24) / this.cellWidth)));
     const height = Math.max(1, Math.floor(size.height / zoom));
     if (width === state.width && height === state.height) return;
-    if (width !== state.width) { state.items.clear(); state.heights = []; rebuild(state); }
+    if (width !== state.width) state.items.clear();
     state.width = width;
     state.height = height;
     cx.notify();
@@ -233,24 +298,36 @@ export default class StereoView extends View {
     if (run.italic) el = el.italic();
     if (run.underline) el = el.underline();
     if (run.dim) el = el.opacity(0.65);
+    if (typeof run.link === "string" && /^https?:\/\/[^/\s?#]+/i.test(run.link)) {
+      el = el.cursor_pointer().on_click((_event, cx) => cx.open_url(run.link));
+    }
     return el.child(run.text);
   }
 
   /** @param {ReturnType<typeof paneState>} state @param {number} index @param {any} t */
   entry(state, index, t) {
     const item = state.items.get(index);
-    if (!item) return div().h(state.heights[index] || ESTIMATE).text_color(t.dim).child("Loading…");
-    const offset = state.handle.offset().y;
-    const viewport = state.handle.viewport_size().height || state.height;
-    const { first, last } = lineRange(item.lines.length, state.prefix[index] + 4, offset, viewport, LINE_HEIGHT);
-    const visible = item.lines.slice(first, last).map(line =>
-      h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap().children(parseAnsi(line
-        .replace(/\u001b_[\s\S]*?\u001b\\/g, "")
-        .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")).map(run => this.ansiRun(t, run))));
-    return v_flex().px(8).py(4).overflow_hidden()
-      .child(div().h(first * LINE_HEIGHT).flex_none())
-      .children(visible)
-      .child(div().h((item.lines.length - last) * LINE_HEIGHT).flex_none());
+    if (!item) return div().h(LINE_HEIGHT).flex_none();
+    const line = item.lines[0] ?? "";
+    const pane = state === this.chat ? "chat" : state === this.activity ? "activity" : "combined";
+    return h_flex().px(8).h(LINE_HEIGHT).flex_none().whitespace_nowrap().overflow_hidden()
+      .on_mouse_down("left", (event, cx) => this.sendMouse(pane, state, index, "press", event, cx))
+      .on_mouse_up("left", (event, cx) => this.sendMouse(pane, state, index, "release", event, cx))
+      .children(parseAnsi(line.replace(/\u001b_[\s\S]*?\u001b\\/g, "")).map(run => this.ansiRun(t, run)));
+  }
+
+  /** @param {string} action @param {string} label @param {any} t */
+  control(action, label, t) {
+    return div().id(`stereo-action-${action}`).px(6).py(3).cursor_pointer().text_color(t.foreground)
+      .hover(s => s.bg(t.hover)).on_click((_event, cx) => {
+        if (action === "settings") {
+          if (!this.viewState?.preferences) return;
+          this.settingsPanel = createSettingsPanel(this.viewState.preferences,
+            (key, value, next) => this.sendSetting(key, value, next),
+            next => { this.settingsPanel = undefined; next.notify(); });
+          cx.notify();
+        } else this.sendAction(action, cx);
+      }).child(label);
   }
 
   /** @param {string} name @param {string} title @param {ReturnType<typeof paneState>} state @param {any} t */
@@ -260,30 +337,67 @@ export default class StereoView extends View {
       index => `${name}-${index}`,
       range => Array.from({ length: range.end - range.start }, (_, n) => this.entry(state, range.start + n, t)))
       .h(state.height).track_scroll(state.handle);
-    return v_flex().flex_1().min_w(0).h_full().border_1().border_color(t.border)
-      .child(div().px(8).py(5).text_color(t.muted).child(title))
+    const heading = h_flex().items_center().justify_between().px(8).py(3)
+      .child(div().text_color(t.muted).child(title));
+    const actions = h_flex().items_center();
+    if (name === "activity") actions.child(this.control("compact", this.viewState?.compactTools ? "Full tools" : "Compact tools", t));
+    if (name !== "combined") actions.child(this.control(`zoom-${name}`, this.viewState?.zoom === name ? "Restore" : "Maximize", t));
+    heading.child(actions);
+    const panel = v_flex().flex_1().min_w(0).min_h(0).border_1().border_color(t.border);
+    if (name !== "combined" && this.viewState?.showHeaders !== false) panel.child(heading);
+    return panel
       .child(state.error ? div().px(8).text_color(t.muted).child(state.error) : div().h(0))
       .child(v_flex().id(`${id}-box`).relative().flex_1().min_h(0)
         .on_size_change((size, cx) => this.sizePane(state, size, cx))
+        .on_window_mouse_up("left", (event, cx) => {
+          if (!state.pressed || !event.local_position) return;
+          const z = settings().zoom;
+          const zoom = typeof z === "number" && z > 0 ? z : 1;
+          const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / LINE_HEIGHT);
+          this.sendMouse(name, state, row, "release", event, cx);
+        })
         .child(rows).child(Scrollbar.vertical(id).absolute().inset_0()));
   }
 
   render() {
     const t = theme();
     const address = terminalAddress();
+    if (this.settingsPanel && this.viewState?.preferences) return this.settingsPanel.render(this.viewState.preferences, t);
     const terminalPane = panes().find(p => p.terminal === address);
     const header = h_flex().items_center().justify_between().px(8).py(5)
       .child(div().text_color(t.foreground).child("Stereo View"));
+    if (this.viewState?.showToolbar === false) header.child(this.control("settings", "Settings", t));
     if (terminalPane) header.child(div().id("stereo-terminal").px(8).py(4).cursor_pointer().text_color(t.muted)
       .hover(s => s.bg(t.hover)).on_click(() => run("pane.focus", { terminal: address })).child("Terminal"));
+    const state = this.viewState;
+    const toolbar = h_flex().items_center().px(8)
+      .child(this.control("mode", state?.mode === "combined" ? "Split" : "Combine", t))
+      .child(this.control("layout", state?.layout === "rows" ? "Columns" : "Rows", t))
+      .child(this.control("swap", "Swap", t))
+      .child(this.control("settings", "Settings", t))
+      .child(this.control("headers", state?.showHeaders ? "Hide headers" : "Show headers", t));
+    let body;
+    if (!this.available) {
+      body = div().px(8).text_color(t.muted).child("Waiting for the Stereo View bridge. The terminal remains available.");
+    } else if (state?.mode === "combined") {
+      body = this.panel("combined", "History", this.combined, t);
+    } else {
+      const panels = {
+        chat: () => this.panel("chat", "Conversation", this.chat, t),
+        activity: () => this.panel("activity", "Activity", this.activity, t),
+      };
+      const container = state?.layout === "rows" ? v_flex() : h_flex();
+      body = container.flex_1().min_w(0).min_h(0).gap(4);
+      const order = state?.zoom ? [state.zoom] : state?.side === "right" ? ["activity", "chat"] : ["chat", "activity"];
+      for (const name of order) body.child(panels[name]());
+    }
     return v_flex().relative().size_full().min_h(0).bg(t.surface).text_size(12)
       .font_family(typeof settings().font_family === "string" ? /** @type {string} */ (settings().font_family) : "monospace")
       .child(div().id("stereo-cell-probe").absolute().top_0().left_0().opacity(0).whitespace_nowrap()
         .on_size_change((size, cx) => this.measureCell(size, cx)).child("MMMMMMMMMM"))
       .child(header)
-      .child(this.available ? h_flex().flex_1().min_h(0).gap(4)
-        .child(this.panel("chat", "Conversation", this.chat, t))
-        .child(this.panel("activity", "Activity", this.activity, t)) :
-        div().px(8).text_color(t.muted).child("Waiting for the Stereo View bridge. The terminal remains available."));
+      .child(state?.showToolbar !== false ? toolbar : div().h(0))
+      .child(this.controlError ? div().px(8).text_color(t.muted).child(this.controlError) : div().h(0))
+      .child(body);
   }
 }

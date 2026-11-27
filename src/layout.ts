@@ -5,6 +5,8 @@ import {
   type Color, type Component, type RgbColor, type ScrollViewOptions, type StackChild, type TUI, type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type DocumentTurns, type Pane } from "./native.ts";
+import { GuiDocuments } from "./gui-documents.ts";
+import { GuiCombinedDocument } from "./gui-combined.ts";
 import { parseHex, turnColor, pointerMotionAvailable, type TurnMix } from "./turns.ts";
 import { NativeContentIndex } from "./content.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -227,6 +229,13 @@ export class TranscriptLayout {
   private activity?: ScrollView;
   private chat?: ScrollView;
   private documents?: Record<Pane, NativeDocument>;
+  private guiDocuments?: GuiDocuments;
+  private guiFactory?: () => GuiDocuments;
+  guiRenderer(): GuiDocuments | undefined {
+    if (!this.guiDocuments && this.guiFactory) this.guiDocuments = this.guiFactory();
+    return this.guiDocuments;
+  }
+  invalidateGui(): void { this.guiDocuments?.invalidate(); }
   private surface?: SplitSurface;
   private disposeDocuments?: () => void;
   private activePane: Pane = "chat";
@@ -251,6 +260,42 @@ export class TranscriptLayout {
   private index?: NativeContentIndex;
   /** Live classified content for the experimental native view, while the layout is mounted. */
   guiIndex(): NativeContentIndex | undefined { return this.index; }
+  /** GUI controls share the same preferences and actions as the terminal layout. */
+  guiState() {
+    return {
+      v: 1 as const, layout: this.preferences.layout, side: this.preferences.side,
+      mode: this.preferences.mode, zoom: this.preferences.zoom,
+      showToolbar: this.preferences.showToolbar, showHeaders: this.paneHeadersVisible,
+      compactTools: this.preferences.compactTools,
+      preferences: { ...this.preferences },
+    };
+  }
+
+  guiAction(action: import("./gui-protocol.ts").GuiAction): void {
+    switch (action) {
+      case "swap": this.swap(); break;
+      case "layout": this.setLayout(this.preferences.layout === "columns" ? "rows" : "columns"); break;
+      case "mode": this.toggle(); break;
+      case "zoom-chat": this.maximize("chat"); break;
+      case "zoom-activity": this.maximize("activity"); break;
+      case "compact": this.setCompactTools(!this.preferences.compactTools); break;
+      case "settings": this.openSettings(); break;
+      case "headers": this.togglePaneHeaders(); break;
+    }
+  }
+  /** Apply a display setting already validated by the GUI protocol. */
+  guiSetting(setting: import("./gui-protocol.ts").GuiSetting): void {
+    if (setting.key === "chatWidth" && setting.value !== null) {
+      this.setWidth(setting.value as number);
+      return;
+    }
+    if (setting.key === "chatHeight") {
+      this.setHeight(setting.value as number | null);
+      return;
+    }
+    Object.assign(this.preferences, { [setting.key]: setting.value });
+    this.changed();
+  }
   /** The turn under the pointer; a pointer move collects the turn its document reports. */
   private hoverAct?: number;
   private moving?: { turn: number };
@@ -439,10 +484,31 @@ export class TranscriptLayout {
     const chatDocument = new NativeDocument(document, "chat", this.timestamps, this.theme, timestampGutter, showTimestamps,
       () => this.activate("chat"), false, index, this.copy, showCopyButtons, undefined, undefined, undefined, () => this.preferences.buttonStyle,
       undefined, turns, metrics);
+    // The GUI owns separate document caches and viewport geometry. Rendering it must not change
+    // terminal scroll positions or mouse hit testing.
+    this.guiFactory = () => {
+      const guiIndex = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree, metrics.usage);
+      const guiActivity = new NativeDocument(document, "activity", this.timestamps, this.theme, () => 0, showTimestamps,
+        () => this.activate("activity"), false, guiIndex, this.copy, showCopyButtons,
+        () => ({ compact: this.preferences.compactTools, group: this.preferences.groupTools }), this.getTools,
+        undefined, () => this.preferences.buttonStyle, {
+          enabled: () => this.preferences.streamTools, delay: () => this.preferences.streamDelay * 1000,
+          changed: () => this.guiDocuments?.invalidate("activity"),
+        }, turns, metrics);
+      const guiChat = new NativeDocument(document, "chat", this.timestamps, this.theme, () => 0, showTimestamps,
+        () => this.activate("chat"), false, guiIndex, this.copy, showCopyButtons, undefined, undefined, undefined,
+        () => this.preferences.buttonStyle, undefined, turns, metrics);
+      const combined = new GuiCombinedDocument(document, () => scroll.getContentWidth(Math.max(1, host.terminal.columns)));
+      return new GuiDocuments({ activity: guiActivity, chat: guiChat, combined }, () => this.timestamps.beginFrame(),
+        () => host.requestRender(), target => host.setFocus(target));
+    };
     this.documents = { activity: activityDocument, chat: chatDocument };
     this.disposeDocuments = () => {
       activityDocument.dispose();
       chatDocument.dispose();
+      this.guiDocuments?.dispose();
+      this.guiDocuments = undefined;
+      this.guiFactory = undefined;
     };
     // Combined history keeps the original native document, renderer and scroll state.
     const scrollOptions = {
@@ -950,6 +1016,7 @@ export class TranscriptLayout {
     this.host?.requestRender();
   }
   private changed(persist = true): void {
+    this.guiDocuments?.invalidate();
     this.searchShortcut.sync(Boolean(this.searchPane()));
     this.rebuild();
     this.host?.requestRender();

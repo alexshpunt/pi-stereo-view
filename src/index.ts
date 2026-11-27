@@ -382,7 +382,11 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     if (!stopGuiBridge && process.env.HC_TERMINAL_ID && process.platform !== "win32") {
       try {
         const terminal = process.env.HC_TERMINAL_ID;
-        stopGuiBridge = await startGuiBridge(terminal, () => layout?.guiIndex());
+        stopGuiBridge = await startGuiBridge(terminal, () => layout?.guiIndex(), undefined, () => {
+          const current = layout;
+          return current ? { state: () => current.guiState(), action: action => current.guiAction(action),
+            setting: setting => current.guiSetting(setting), renderer: () => current.guiRenderer() } : undefined;
+        });
         guiBridgeActive = true;
         // Give Herdr time to identify this Pi; never raise a background agent's tab.
         guiOpenTimer = setTimeout(() => {
@@ -401,28 +405,34 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     });
   });
   pi.on("message_start", event => {
+    layout?.invalidateGui();
     timestamps?.observe(event.message);
     layout?.refreshSearch();
   });
   pi.on("message_update", event => {
+    layout?.invalidateGui();
     timestamps?.observe(event.message);
     layout?.refreshSearch();
     ensureLayout();
   });
   pi.on("message_end", event => {
+    layout?.invalidateGui();
     if (nested.absorb(event.message)) host?.requestRender();
     timestamps?.observe(event.message, true);
     layout?.refreshSearch();
   });
   pi.on("tool_execution_update", () => {
+    layout?.invalidateGui();
     layout?.refreshSearch();
   });
   pi.on("tool_execution_end", event => {
+    layout?.invalidateGui();
     nested.end(event);
     layout?.refreshSearch();
     host?.requestRender();
   });
   pi.on("tool_execution_start", event => {
+    layout?.invalidateGui();
     if (event.parentToolCallId) {
       nested.start(event);
       layout?.refreshSearch();
@@ -433,8 +443,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
     pi.appendEntry(TOOL_START_ENTRY, { toolCallId: event.toolCallId, time: Date.now() });
     host?.requestRender();
   });
-  pi.on("session_tree", (_event, ctx) => { closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
-  pi.on("session_compact", (_event, ctx) => { closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
+  pi.on("session_tree", (_event, ctx) => { layout?.invalidateGui(); closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
+  pi.on("session_compact", (_event, ctx) => { layout?.invalidateGui(); closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
   pi.on("session_shutdown", async () => {
     guiBridgeActive = false;
     if (guiOpenTimer) clearTimeout(guiOpenTimer);

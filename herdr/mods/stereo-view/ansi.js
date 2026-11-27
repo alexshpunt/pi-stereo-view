@@ -1,6 +1,7 @@
 // ANSI text (what Pi's TUI draws) to styled runs for the app's own elements.
 //
-// A run is { text, fg, bg, bold, italic, underline, dim }. `fg` and `bg` are "#rrggbb", or { ansi: 0..15 } for a
+// A run is { text, fg, bg, bold, italic, underline, dim, link }. `link` is the OSC 8 target, if any.
+// `fg` and `bg` are "#rrggbb", or { ansi: 0..15 } for a
 // colour of the terminal palette, which the caller takes from the theme so it follows light and dark appearances.
 
 const XTERM_LEVELS = [0, 95, 135, 175, 215, 255];
@@ -59,27 +60,46 @@ function applySgr(style, params) {
 }
 
 /**
- * One line of ANSI text as runs. Colour sequences are applied; any other escape sequence is dropped; tabs
- * become spaces. Adjacent runs with the same style are joined.
+ * One line of ANSI text as runs. Colour sequences and OSC 8 links are applied; other escape sequences are dropped.
+ * Tabs become spaces. Adjacent runs with the same style and link are joined.
  */
 export function parseAnsi(line) {
   const runs = [];
   let style = { ...FRESH };
+  let link;
   let text = "";
   const flush = () => {
     if (text === "") return;
     const last = runs[runs.length - 1];
     const same =
-      last &&
+      last && last.link === link &&
       JSON.stringify([last.fg, last.bg, last.bold, last.italic, last.underline, last.dim, last.inverse]) ===
         JSON.stringify([style.fg, style.bg, style.bold, style.italic, style.underline, style.dim, style.inverse]);
     if (same) last.text += text;
-    else runs.push({ text, ...style });
+    else runs.push({ text, ...style, link });
     text = "";
   };
   const input = String(line).replace(/\t/g, "    ");
   for (let i = 0; i < input.length; i += 1) {
     const ch = input[i];
+    if (ch === "\u009d" || (ch === "\u001b" && input[i + 1] === "]")) {
+      const start = i + (ch === "\u009d" ? 1 : 2);
+      let end = start;
+      while (end < input.length && input[end] !== "\u0007" && input[end] !== "\u009c" &&
+        !(input[end] === "\u001b" && input[end + 1] === "\\")) end++;
+      // An incomplete control string is not visible text.
+      if (end === input.length) break;
+      const payload = input.slice(start, end);
+      if (payload.startsWith("8;")) {
+        const separator = payload.indexOf(";", 2);
+        if (separator !== -1) {
+          flush();
+          link = payload.slice(separator + 1) || undefined;
+        }
+      }
+      i = end + (input[end] === "\u001b" ? 1 : 0);
+      continue;
+    }
     if (ch !== "\u001b") {
       text += ch;
       continue;
