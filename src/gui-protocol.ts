@@ -16,7 +16,7 @@ export function parseGuiRequest(value: unknown): GuiPageRequest | undefined {
   const integer = (n: unknown, min: number, max: number): n is number =>
     typeof n === "number" && Number.isSafeInteger(n) && n >= min && n <= max;
   if (request.v !== 1 || request.op !== "page" || (request.pane !== "chat" && request.pane !== "activity") ||
-      !integer(request.start, 0, Number.MAX_SAFE_INTEGER) || !integer(request.count, 1, 64) ||
+      !integer(request.start, 0, Number.MAX_SAFE_INTEGER) || !integer(request.count, 0, 64) ||
       !integer(request.width, 10, 300)) return undefined;
   return { v: 1, op: "page", pane: request.pane, start: request.start, count: request.count, width: request.width };
 }

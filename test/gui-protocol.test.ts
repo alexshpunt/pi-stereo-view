@@ -6,12 +6,13 @@ test("accepts bounded pages for the two panes", () => {
     v: 1, op: "page", pane: "chat", start: 20, count: 32, width: 80,
   });
   expect(parseGuiRequest({ v: 1, op: "page", pane: "activity", start: 0, count: 1, width: 10 })?.pane).toBe("activity");
+  expect(parseGuiRequest({ v: 1, op: "page", pane: "chat", start: 0, count: 0, width: 80 })?.count).toBe(0);
 });
 
 test("rejects malformed or unbounded requests", () => {
   const valid = { v: 1, op: "page", pane: "chat", start: 0, count: 1, width: 80 };
   for (const invalid of [null, [], {}, { ...valid, pane: "other" }, { ...valid, start: -1 },
-    { ...valid, start: 0.5 }, { ...valid, count: 0 }, { ...valid, count: 65 },
+    { ...valid, start: 0.5 }, { ...valid, count: -1 }, { ...valid, count: 65 },
     { ...valid, width: 9 }, { ...valid, width: 301 }, { ...valid, v: 2 }, { ...valid, op: "execute" }]) {
     expect(parseGuiRequest(invalid)).toBeUndefined();
   }

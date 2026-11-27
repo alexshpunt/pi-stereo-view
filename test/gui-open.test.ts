@@ -11,7 +11,7 @@ describe("opening the experimental GUI", () => {
       return "{}";
     };
     expect(await openGuiForFocusedTerminal("t1", 42, run)).toBe(true);
-    expect(calls[2]).toEqual(["do", "app.open", JSON.stringify({ mod: "stereo-view", app: "stereo-view", for: "worker/t1" })]);
+    expect(calls[3]).toEqual(["do", "app.open", JSON.stringify({ mod: "stereo-view", app: "stereo-view", for: "worker/t1" })]);
   });
 
   it("does not move the user's focus for a background or different Pi", async () => {
@@ -27,6 +27,17 @@ describe("opening the experimental GUI", () => {
     }
   });
 
+  it("accepts a local terminal address and checks focus again before opening", async () => {
+    let statuses = 0;
+    const calls: string[][] = [];
+    const run = async (args: string[]) => {
+      calls.push(args);
+      if (args[0] === "status") return JSON.stringify({ agent: ++statuses === 1 ? "t1" : "t2" });
+      return JSON.stringify({ agents: [{ terminal: "t1", pid: 42, identityCurrent: true }] });
+    };
+    expect(await openGuiForFocusedTerminal("t1", 42, run)).toBe(false);
+    expect(calls).toEqual([["status"], ["do", "agent.list"], ["status"]]);
+  });
   it("keeps the terminal view when the app or matching identity is unavailable", async () => {
     expect(await openGuiForFocusedTerminal("t1", 42, async () => { throw new Error("unavailable"); })).toBe(false);
     const run = async (args: string[]) => args[0] === "status" ? JSON.stringify({ agent: "worker/t1" }) :

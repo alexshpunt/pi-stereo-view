@@ -2,13 +2,23 @@ import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
-import { GuiContent } from "./gui-content.ts";
+import { GuiContent, type GuiPage } from "./gui-content.ts";
 import type { NativeContentIndex } from "./content.ts";
 import { parseGuiRequest } from "./gui-protocol.ts";
 
 const LABEL = "herdr.stereo.bridge";
 const REQUEST_LIMIT = 4096;
 const RESPONSE_LIMIT = 3 * 1024 * 1024;
+/** A short page can be followed by another request; one oversized entry cannot. */
+export function encodeGuiPage(page: GuiPage, limit = RESPONSE_LIMIT): string {
+  let count = page.entries.length;
+  while (true) {
+    const output = JSON.stringify({ ...page, entries: page.entries.slice(0, count) });
+    if (Buffer.byteLength(output) <= limit) return output;
+    if (count <= 1) throw new Error("Entry is too large");
+    count = Math.max(1, Math.floor(count / 2));
+  }
+}
 function publishLabel(terminal: string, label: string): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile(process.env.HC_BIN || "hc", ["label", terminal, `${LABEL}=${label}`], { timeout: 4000, windowsHide: true }, error => {
@@ -47,8 +57,7 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
           if (!nextIndex) throw new Error("History is unavailable");
           if (nextIndex !== currentIndex) { currentIndex = nextIndex; content = new GuiContent(nextIndex); }
           const page = content!.page(parsed.pane, parsed.start, parsed.count, parsed.width);
-          const output = JSON.stringify(page);
-          if (Buffer.byteLength(output) > RESPONSE_LIMIT) throw new Error("Page is too large");
+          const output = encodeGuiPage(page);
           socket.end(output + "\n");
         } catch (error) {
           socket.end(JSON.stringify({ error: error instanceof Error ? error.message : "Request failed" }) + "\n");
