@@ -1,6 +1,6 @@
 {
   "place": "none",
-  "capabilities": { "clipboard": { "write": true } },
+  "capabilities": { "clipboard": { "write": true }, "fs": { "read": ["${pluginDir}/../../data/stereo-view"], "write": ["${pluginDir}/../../data/stereo-view"] } },
   "app": {
     "id": "stereo-view",
     "label": "Stereo View",

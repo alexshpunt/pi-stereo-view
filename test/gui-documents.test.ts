@@ -22,8 +22,16 @@ function setup() {
   const chat = new NativeDocument(source, "chat", timestamps, () => theme, () => 0, () => false);
   const activity = new NativeDocument(source, "activity", timestamps, () => theme, () => 0, () => false);
   const gui = new GuiDocuments({ chat, activity }, () => timestamps.beginFrame());
-  return { gui, item };
+  return { gui, item, history };
 }
+
+test("following requests include the latest rows even when output grows before the reply", () => {
+  const { gui, history } = setup();
+  for (let i = 0; i < 20; i++) history.addChild(new UserMessageComponent(`message ${i}`, 0, 0));
+  const page = gui.page("chat", { width: 30, top: 0, height: 5, following: true });
+  expect(page.top).toBe(page.total - page.height);
+  expect(page.lines.join("\n")).toContain("message 19");
+});
 
 test("projects native documents into bounded independent row viewports", () => {
   const { gui } = setup();

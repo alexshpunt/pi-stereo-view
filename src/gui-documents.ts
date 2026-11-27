@@ -2,6 +2,7 @@ import type { TuiMouseButton, TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { Pane } from "./content.ts";
 import type { NativeDocument, DocumentViewport } from "./native.ts";
 import { guiSelectionCells, type GuiSelectionRow } from "./gui-selection-cells.ts";
+import { GuiImages, type GuiImagePlacement } from "./gui-images.ts";
 type TuiMouseDispatchTarget = NonNullable<ReturnType<NativeDocument["handleMouse"]>>["target"];
 export type GuiPane = Pane | "combined";
 type GuiDocument = Pick<NativeDocument, "setViewport" | "beginFrame" | "render" | "takeScrollShift" | "handleMouse" | "dispose">;
@@ -17,6 +18,7 @@ export interface GuiDocumentPage {
   scrollShift: number;
   lines: readonly string[];
   selection: readonly GuiSelectionRow[];
+  images: readonly GuiImagePlacement[];
 }
 export interface GuiMouse {
   type: "press" | "release" | "move" | "drag" | "wheel";
@@ -44,6 +46,7 @@ export class GuiDocuments {
   private readonly viewports: Partial<Record<GuiPane, GuiViewport>> = {};
   private readonly gestures: Partial<Record<GuiPane, Gesture>> = {};
   private serial = 0;
+  private readonly images = new GuiImages();
   private disposed = false;
 
   constructor(private readonly documents: Record<Pane, GuiDocument> & { combined?: GuiDocument },
@@ -72,16 +75,29 @@ export class GuiDocuments {
     this.beforeFrame();
     const document = this.documents[pane];
     document.beginFrame();
-    const lines = document.render(view.width);
-    const visible = lines.slice(view.top, view.top + view.height);
+    let lines = document.render(view.width);
+    if (view.following) {
+      const tail = Math.max(0, lines.length - view.height);
+      if (view.top !== tail) {
+        view.top = tail;
+        document.beginFrame();
+        lines = document.render(view.width);
+      }
+    }
+    const extracted = this.images.page(lines, view.top, view.height);
+    const visible = extracted.lines;
     const frame: Frame = {
       frame: ++this.serial, top: view.top, width: view.width, height: view.height,
       total: lines.length, scrollShift: document.takeScrollShift(),
-      lines: visible, selection: visible.map(guiSelectionCells), viewport: view,
+      lines: visible, selection: visible.map(guiSelectionCells), images: extracted.images, viewport: view,
     };
     this.frames[pane] = frame;
     return { frame: frame.frame, top: frame.top, width: frame.width, height: frame.height,
-      total: frame.total, scrollShift: frame.scrollShift, lines: frame.lines, selection: frame.selection };
+      total: frame.total, scrollShift: frame.scrollShift, lines: frame.lines, selection: frame.selection, images: frame.images };
+  }
+
+  imageChunk(id: string, offset: number, length: number): { data: string; total: number } | undefined {
+    return this.images.chunk(id, offset, length);
   }
 
   /** Invalidates a geometry token and cancels any press before a document can change under it. */

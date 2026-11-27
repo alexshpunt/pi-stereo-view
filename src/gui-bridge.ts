@@ -63,6 +63,11 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
             const current = controls?.();
             if (!current) throw new Error("Controls are unavailable");
             if (parsed.op === "state") socket.end(JSON.stringify(current.state()) + "\n");
+            else if (parsed.op === "image") {
+              const chunk = current.renderer()?.imageChunk(parsed.id, parsed.offset, parsed.length);
+              if (!chunk) throw new Error("Image unavailable");
+              socket.end(JSON.stringify({ v: 1, ...chunk }) + "\n");
+            }
             else if (parsed.op === "view") {
               const renderer = current.renderer();
               if (!renderer) throw new Error("History is unavailable");

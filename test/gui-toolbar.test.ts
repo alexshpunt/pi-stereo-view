@@ -1,11 +1,15 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { expect, test } from "vitest";
+// @ts-expect-error The mod has no TypeScript declarations.
+import { parseAnsi } from "../herdr/mods/stereo-view/ansi.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
   const calls: any[] = [];
+  let total = 1;
   const pending: Promise<unknown>[] = [];
   class Element {
     name?: string;
@@ -35,7 +39,7 @@ function harness() {
     }
   }
   const el = (kind: string) => () => new Element(kind);
-  const ui = { View: class {}, div: el("div"), h_flex: el("horizontal"), v_flex: el("vertical"),
+  const ui = { View: class {}, div: el("div"), image: el("image"), h_flex: el("horizontal"), v_flex: el("vertical"),
     v_virtual_list: el("list"), VirtualListScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), viewport_size: () => ({ height: 300 }), content_size: () => ({ height: 0 }), scroll_to_bottom() {}, scroll_to_item() {} }) },
     Scrollbar: { vertical: el("scrollbar") } };
   const opened: string[] = [];
@@ -64,19 +68,20 @@ function harness() {
   const env = { checking: () => false, exec: async (_cmd: string, args: string[]) => {
     const request = JSON.parse(args[3]); calls.push(request);
     const data = request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
-      { v: 1, frame: 1, total: 1, top: request.top, width: request.width, height: request.height, scrollShift: 0,
-        lines: request.top === 0 ? ["native rendered row"] : [],
+      { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
+        images: [], lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
     return { code: 0, stdout: JSON.stringify(data) };
-  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom: 1 }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi: () => [], lineRange: () => ({ first: 0, last: 0 }) };
+  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom: 1 }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection };
+  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, Buffer, createHash,
+    appHome: () => "/tmp", mkdir: async () => {}, writeFile: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
   const flush = async () => { while (pending.length) await Promise.all(pending.splice(0)); };
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
-  return { view, cx, calls, state, flush, find, opened, copied };
+  return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; } };
 }
 
 test("loads the live layout and sends toolbar actions to the same bridge", async () => {
@@ -84,7 +89,7 @@ test("loads the live layout and sends toolbar actions to the same bridge", async
   h.view.init({}, h.cx);
   await h.flush();
   expect(h.calls).toContainEqual({ v: 1, op: "state" });
-  expect(h.calls).toContainEqual({ v: 1, op: "view", pane: "chat", top: 0, height: 19, width: 80, following: true });
+  expect(h.calls).toContainEqual({ v: 1, op: "view", pane: "chat", top: 0, height: 57, width: 80, following: true });
   expect(h.view.chat.items.get(0)?.lines).toEqual(["native rendered row"]);
   const button = h.find(h.view.render(), "stereo-action-swap");
   expect(button?.click).toBeTypeOf("function");
@@ -131,14 +136,38 @@ test("sends pane actions in click order", async () => {
     .toEqual(["layout", "compact", "zoom-activity", "headers", "mode"]);
 });
 
+test("keeps previously loaded history visible while a different viewport is refreshed", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.view.chat.items.set(80, { id: "prior", lines: ["previously visible"] });
+  h.setTotal(100);
+  h.view.chat.handle.content_size = () => ({ height: 1700 });
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(h.view.chat.items.get(80)?.lines).toEqual(["previously visible"]);
+});
+
+test("virtualized rows contain no event handlers", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  const row = h.view.entry(h.view.chat, 0, {});
+  expect(row.mouseDown).toBeUndefined();
+  expect(row.mouseUp).toBeUndefined();
+});
+
 test("opens HTTP links from styled terminal content without running other URL schemes", () => {
   const h = harness();
-  const link = h.view.ansiRun({}, { text: "link", link: "https://example.com/a" });
-  expect(link.click).toBeTypeOf("function");
-  link.click({}, h.cx);
+  h.view.init({}, h.cx);
+  const pane = h.view.chat;
+  pane.selectionRows.set(0, { cells: [{ text: "link", start: 0, end: 4 }], words: [] });
+  pane.items.set(0, { id: "0", lines: ["\u001b]8;;https://example.com/a\u001b\\link\u001b]8;;\u001b\\"] });
+  h.view.openLink(pane, 0, 1, h.cx);
   expect(h.opened).toEqual(["https://example.com/a"]);
-  const unsafe = h.view.ansiRun({}, { text: "bad", link: "file:///etc/passwd" });
-  expect(unsafe.click).toBeUndefined();
+  pane.items.set(0, { id: "0", lines: ["\u001b]8;;file:///etc/passwd\u001b\\link\u001b]8;;\u001b\\"] });
+  h.view.openLink(pane, 0, 1, h.cx);
+  expect(h.opened).toEqual(["https://example.com/a"]);
 });
 
 test("opens native settings and sends validated setting changes to the bridge", async () => {
@@ -158,10 +187,10 @@ test("forwards native document mouse events with the displayed frame", async () 
   const h = harness();
   h.view.init({}, h.cx);
   await h.flush();
-  const row = h.view.entry(h.view.chat, 0, {});
+  const box = h.find(h.view.render(), "stereo-chat-box")!;
   const event = { local_position: { x: 20, y: 3 }, modifiers: {}, click_count: 1 };
-  row.mouseDown(event, h.cx);
-  row.mouseUp(event, h.cx);
+  box.mouseDown!(event, h.cx);
+  box.windowUp!(event, h.cx);
   await h.flush();
   const mouse = h.calls.filter(call => call.op === "mouse");
   expect(mouse.map(call => call.event.type)).toEqual(["press", "release"]);
@@ -210,9 +239,8 @@ test("selects and copies text from a native rendered row", async () => {
   const h = harness();
   h.view.init({}, h.cx);
   await h.flush();
-  const row = h.view.entry(h.view.chat, 0, {});
   const box = h.find(h.view.render(), "stereo-chat-box")!;
-  row.mouseDown({ local_position: { x: 20, y: 3 }, modifiers: {}, click_count: 1 }, h.cx);
+  box.mouseDown!({ local_position: { x: 20, y: 3 }, modifiers: {}, click_count: 1 }, h.cx);
   box.windowMove!({ local_position: { x: 44, y: 3 }, modifiers: {} }, h.cx);
   box.windowUp!({ local_position: { x: 44, y: 3 }, modifiers: {}, click_count: 1 }, h.cx);
   await h.flush();
