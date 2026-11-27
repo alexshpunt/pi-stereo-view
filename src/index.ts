@@ -13,6 +13,7 @@ import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
 import { ProblemReporter } from "./report.ts";
 import { startGuiBridge } from "./gui-bridge.ts";
+import { openGuiForFocusedTerminal } from "./gui-open.ts";
 
 const DELAYS = [1, 2, 3, 5, 10, 30];
 /**
@@ -45,6 +46,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   const nativeEditor = observeNativeEditor();
   let unsubscribeInput: (() => void) | undefined;
   let stopGuiBridge: (() => Promise<void>) | undefined;
+  let guiOpenTimer: ReturnType<typeof setTimeout> | undefined;
+  let guiBridgeActive = false;
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
   const file = path.join(getAgentDir(), "transcript.json");
@@ -377,8 +380,16 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
       onHandle: () => finish(),
     });
     if (!stopGuiBridge && process.env.HC_TERMINAL_ID && process.platform !== "win32") {
-      try { stopGuiBridge = await startGuiBridge(process.env.HC_TERMINAL_ID, () => layout?.guiIndex()); }
-      catch (error) { ctx.ui.notify("Native Stereo View is unavailable: " + String(error), "warning"); }
+      try {
+        const terminal = process.env.HC_TERMINAL_ID;
+        stopGuiBridge = await startGuiBridge(terminal, () => layout?.guiIndex());
+        guiBridgeActive = true;
+        // Give Herdr time to identify this Pi; never raise a background agent's tab.
+        guiOpenTimer = setTimeout(() => {
+          void openGuiForFocusedTerminal(terminal, process.pid, undefined, () => guiBridgeActive);
+        }, 1000);
+        guiOpenTimer.unref();
+      } catch (error) { ctx.ui.notify("Native Stereo View is unavailable: " + String(error), "warning"); }
     }
     unsubscribeInput = ctx.ui.onTerminalInput(data => {
       ensureLayout();
@@ -425,6 +436,9 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   pi.on("session_tree", (_event, ctx) => { closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
   pi.on("session_compact", (_event, ctx) => { closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
   pi.on("session_shutdown", async () => {
+    guiBridgeActive = false;
+    if (guiOpenTimer) clearTimeout(guiOpenTimer);
+    guiOpenTimer = undefined;
     await stopGuiBridge?.();
     stopGuiBridge = undefined;
     releaseStartup();
