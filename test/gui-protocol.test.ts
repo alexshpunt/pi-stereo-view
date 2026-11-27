@@ -18,6 +18,16 @@ test("rejects malformed or unbounded requests", () => {
   }
 });
 
+test("limits dialog frames and input", () => {
+  expect(parseGuiRequest({ v: 1, op: "surface", width: 80 })).toEqual({ v: 1, op: "surface", width: 80 });
+  expect(parseGuiRequest({ v: 1, op: "surface", width: 301 })).toBeUndefined();
+  expect(parseGuiRequest({ v: 1, op: "surface-key", frame: 1, data: "\u001b[A" }))
+    .toEqual({ v: 1, op: "surface-key", frame: 1, data: "\u001b[A" });
+  expect(parseGuiRequest({ v: 1, op: "surface-key", frame: -1, data: "a" })).toBeUndefined();
+  expect(parseGuiRequest({ v: 1, op: "surface-key", frame: 1, data: "x".repeat(1025) })).toBeUndefined();
+  expect(parseGuiRequest({ v: 1, op: "surface-key", frame: 1, data: "\0" })).toBeUndefined();
+});
+
 test("accepts only known GUI controls", () => {
   expect(parseGuiRequest({ v: 1, op: "view", pane: "chat", top: 10, height: 20, width: 80, following: false }))
     .toEqual({ v: 1, op: "view", pane: "chat", top: 10, height: 20, width: 80, following: false });

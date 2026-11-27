@@ -4,6 +4,8 @@ import { expect, test } from "vitest";
 import { parseAnsi } from "../herdr/mods/stereo-view/ansi.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { createSelection } from "../herdr/mods/stereo-view/selection.js";
+// @ts-expect-error The mod has no TypeScript declarations.
+import { dialogKey } from "../herdr/mods/stereo-view/dialog-keys.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -12,6 +14,7 @@ function harness() {
   let jump: { serial: number; top: number } | undefined;
   let rows: string[] | undefined;
   let zoom = 1;
+  let surface = { active: false, frame: 1, lines: [] as string[] };
   const pending: Promise<unknown>[] = [];
   class Element {
     name?: string;
@@ -69,7 +72,7 @@ function harness() {
   });
   const env = { checking: () => false, exec: async (_cmd: string, args: string[]) => {
     const request = JSON.parse(args[3]); calls.push(request);
-    const data: any = request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
+    const data: any = request.op === "surface" ? { v: 1, ...surface } : request.op === "surface-key" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
       { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
         images: [], jump: request.pane === "activity" ? jump : undefined, lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
@@ -83,7 +86,7 @@ function harness() {
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection,
+  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, dialogKey,
     appHome: () => "/tmp", mkdir: async () => {}, writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -91,7 +94,8 @@ function harness() {
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
   return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
     setJump(value: { serial: number; top: number }) { jump = value; },
-    setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; } };
+    setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; },
+    setSurface(value: typeof surface) { surface = value; } };
 }
 
 test("loads the live layout and sends toolbar actions to the same bridge", async () => {
@@ -144,6 +148,28 @@ test("sends pane actions in click order", async () => {
   await h.flush();
   expect(h.calls.filter(call => call.op === "action").map(call => call.action))
     .toEqual(["layout", "compact", "zoom-activity", "headers", "mode"]);
+});
+
+test("shows Pi's active dialog and forwards keys until it closes", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.setSurface({ active: true, frame: 8, lines: ["question", "choice"] });
+  h.view.refresh(h.cx);
+  await h.flush();
+  const root = h.view.render();
+  expect(h.find(root, "stereo-surface")).toBeDefined();
+  root.keyDown!({ key: "down", modifiers: {} }, h.cx);
+  root.keyDown!({ key: "enter", modifiers: {} }, h.cx);
+  await h.flush();
+  expect(h.calls.filter(call => call.op === "surface-key")).toEqual([
+    { v: 1, op: "surface-key", frame: 8, data: "\x1b[B" },
+    { v: 1, op: "surface-key", frame: 8, data: "\r" },
+  ]);
+  h.setSurface({ active: false, frame: 9, lines: [] });
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(h.find(h.view.render(), "stereo-chat-box")).toBeDefined();
 });
 
 test("clicks the visible row at fractional app zoom after scrolling", async () => {

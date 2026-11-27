@@ -1,6 +1,6 @@
 # Stereo View for Herdr
 
-This experimental mod shows Pi's Conversation and Activity histories in independently scrolling native panels. Pi's terminal owns the editor and dialogs. Use Terminal to return to it. The panels follow new output until you scroll away; scrolling back to the end resumes following. The toolbar controls layout and panel settings. Find searches the corresponding panel.
+This experimental mod shows Pi's Conversation and Activity histories in independently scrolling native panels. Pi's terminal owns the editor and dialogs. Dialogs that replace Pi's editor also appear in this view and accept keyboard input; use Terminal for overlays and unsupported dialogs. The panels follow new output until you scroll away; scrolling back to the end resumes following. The toolbar controls layout and panel settings. Find searches the corresponding panel.
 
 The mod renders terminal image placements as native images. It fetches their data from the originating Pi in bounded chunks, verifies it locally and keeps decoded images in `data/stereo-view/images` under the Herdr app home. Node.js must be on the app host's PATH and on the Pi terminal machine's PATH. When an image cannot be loaded, its panel shows a placeholder; the terminal remains available.
 

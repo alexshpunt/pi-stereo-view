@@ -6,6 +6,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type DocumentTurns, type Pane } from "./native.ts";
 import { GuiDocuments } from "./gui-documents.ts";
+import { GuiSurface } from "./gui-surface.ts";
 import { GuiCombinedDocument } from "./gui-combined.ts";
 import { GuiHistorySearch } from "./gui-search.ts";
 import { parseHex, turnColor, pointerMotionAvailable, type TurnMix } from "./turns.ts";
@@ -233,6 +234,8 @@ export class TranscriptLayout {
   private guiDocuments?: GuiDocuments;
   private guiSearch?: GuiHistorySearch;
   private guiFactory?: () => GuiDocuments;
+  private guiDialog?: GuiSurface;
+  guiSurface(): GuiSurface | undefined { return this.guiDialog; }
   guiSearchModel(): GuiHistorySearch | undefined { this.guiRenderer(); return this.guiSearch; }
   guiRenderer(): GuiDocuments | undefined {
     if (!this.guiDocuments && this.guiFactory) this.guiDocuments = this.guiFactory();
@@ -422,6 +425,8 @@ export class TranscriptLayout {
       const editor = this.getEditor();
       return !!editor && !!editorSlot && editorSlot.children.length === 1 && editorSlot.children[0] !== editor;
     };
+    this.guiDialog = new GuiSurface(() => dialogPresent() ? editorSlot?.children[0] : undefined,
+      () => host.getFocusedComponent(), () => host.requestRender());
     // Updated once per frame, whatever the setting, so a chain of Pi's windows is followed through every swap.
     let piWindowOpen = false;
     const projectedDock = supportedDock ? new VStack(entries.filter((_, i) => i !== 2 && i !== 4).map(entry =>
@@ -535,6 +540,8 @@ export class TranscriptLayout {
       this.guiDocuments?.dispose();
       this.guiDocuments = undefined;
       this.guiFactory = undefined;
+      this.guiDialog?.dispose();
+      this.guiDialog = undefined;
     };
     // Combined history keeps the original native document, renderer and scroll state.
     const scrollOptions = {

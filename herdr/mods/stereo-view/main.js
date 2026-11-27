@@ -6,6 +6,7 @@ import { parseAnsi } from "./ansi.js";
 import { createSettingsPanel } from "./settings.js";
 import { createSearchBar } from "./search-bar.js";
 import { createSelection } from "./selection.js";
+import { dialogKey } from "./dialog-keys.js";
 
 const LABEL = "herdr.stereo.bridge";
 const LINE_HEIGHT = 17;
@@ -142,6 +143,8 @@ export default class StereoView extends View {
     this.viewState = null;
     this.statePending = false;
     this.stateGeneration = 0;
+    this.surface = null;
+    this.surfacePending = false;
     this.actions = [];
     this.actionPending = false;
     this.areaWidth = 800;
@@ -175,6 +178,7 @@ export default class StereoView extends View {
       this.connection = connection.socket;
       this.viewState = null;
       this.stateGeneration++;
+      this.surface = null;
       this.actions = [];
       for (const state of [this.chat, this.activity, this.combined]) {
         state.searchBar?.dispose(); state.searchBar = null; state.searchState = null;
@@ -185,6 +189,7 @@ export default class StereoView extends View {
       }
     }
     this.fetchState(connection, cx);
+    this.fetchSurface(connection, cx);
     if (this.viewState?.mode === "combined") this.fetchPane("combined", this.combined, connection, cx);
     else {
       if (this.viewState?.zoom !== "activity") this.fetchPane("chat", this.chat, connection, cx);
@@ -213,6 +218,40 @@ export default class StereoView extends View {
         cx.notify();
       }
     });
+  }
+
+  /** Read Pi's live dialog without replacing its owner in the terminal. */
+  /** @param {{socket: string, machine?: string}} connection @param {any} cx */
+  fetchSurface(connection, cx) {
+    if (this.surfacePending || this.actionPending || this.actions.length) return;
+    this.surfacePending = true;
+    const width = Math.max(10, Math.min(300, Math.floor((this.areaWidth - 32) / this.cellWidth)));
+    cx.spawn(async (/** @type {any} */ next) => {
+      try {
+        const request = JSON.stringify({ v: 1, op: "surface", width });
+        const result = await exec("node", ["-e", CLIENT, connection.socket, request], { on: connection.machine, timeout: 5000 });
+        if (result.code !== 0) throw new Error("Surface unavailable");
+        const surface = JSON.parse(result.stdout);
+        if (surface.v !== 1 || typeof surface.active !== "boolean" || !Number.isSafeInteger(surface.frame) ||
+            !Array.isArray(surface.lines) || surface.lines.length > 256 || !surface.lines.every(/** @param {unknown} */ line => typeof line === "string")) throw new Error("Invalid surface");
+        if (bridge()?.socket !== connection.socket || !isShown()) return;
+        const opening = surface.active && !this.surface?.active;
+        this.surface = surface;
+        if (opening) this.focus?.focus();
+      } catch {
+        // An unsupported or unavailable surface leaves the terminal as the fallback.
+        this.surface = null;
+      } finally { this.surfacePending = false; next.notify(); }
+    });
+  }
+
+  /** @param {any} event @param {any} cx */
+  sendSurfaceKey(event, cx) {
+    const data = dialogKey(event), connection = bridge();
+    if (!data || !connection || !this.surface?.active) return false;
+    this.actions.push({ request: { v: 1, op: "surface-key", frame: this.surface.frame, data }, connection });
+    this.drainActions(cx);
+    return true;
   }
 
   /** Queue actions so rapid clicks cannot be reordered by separate bridge processes. */
@@ -778,6 +817,17 @@ export default class StereoView extends View {
         .child(rows).child(Scrollbar.vertical(id).absolute().inset_0()));
   }
 
+  /** @param {any} t */
+  renderSurface(t) {
+    const body = v_flex().id("stereo-surface").flex_1().min_h(0).overflow_y_scroll().px(8).py(4)
+      .on_mouse_down("left", (_event, cx) => { this.focus?.focus(); cx.notify(); });
+    for (const line of this.surface.lines) {
+      body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+        .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
+    }
+    return body;
+  }
+
   render() {
     const t = theme();
     const address = terminalAddress();
@@ -798,6 +848,8 @@ export default class StereoView extends View {
     let body;
     if (!this.available) {
       body = div().px(8).text_color(t.muted).child("Waiting for the Stereo View bridge. The terminal remains available.");
+    } else if (this.surface?.active) {
+      body = this.renderSurface(t);
     } else if (state?.mode === "combined") {
       body = this.panel("combined", "History", this.combined, t);
     } else {
@@ -829,6 +881,9 @@ export default class StereoView extends View {
       .child(this.controlError ? div().px(8).text_color(t.muted).child(this.controlError) : div().h(0))
       .child(body);
     if (this.focus) root.track_focus(this.focus).on_key_down((event, cx) => {
+      if (this.focus.is_focused() && this.surface?.active && this.sendSurfaceKey(event, cx)) {
+        cx.stop_propagation(); return;
+      }
       const pane = this.viewState?.mode === "combined" ? this.combined : this.activePane === "chat" ? this.chat : this.activity;
       if (this.focus.is_focused() && event.modifiers?.control && event.key?.toLowerCase() === "c") {
         if (pane.selection.bounds()) {

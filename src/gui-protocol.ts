@@ -41,6 +41,7 @@ export type GuiSearchRequest = { v: 1; op: "search"; pane: Pane } & (
 export type GuiRequest = GuiPageRequest | GuiSearchRequest | { v: 1; op: "state" } | { v: 1; op: "action"; action: GuiAction } |
   ({ v: 1; op: "setting" } & GuiSetting) |
   { v: 1; op: "image"; id: string; offset: number; length: number } |
+  { v: 1; op: "surface"; width: number } | { v: 1; op: "surface-key"; frame: number; data: string } |
   { v: 1; op: "view"; pane: GuiPane; top: number; height: number; width: number; following: boolean } |
   { v: 1; op: "mouse"; pane: GuiPane; frame: number; event: GuiMouse };
 
@@ -59,6 +60,11 @@ export function parseGuiRequest(value: unknown): GuiRequest | undefined {
   }
   const integer = (n: unknown, min: number, max: number): n is number =>
     typeof n === "number" && Number.isSafeInteger(n) && n >= min && n <= max;
+  if (request.v === 1 && request.op === "surface" && integer(request.width, 10, 300))
+    return { v: 1, op: "surface", width: request.width };
+  if (request.v === 1 && request.op === "surface-key" && integer(request.frame, 1, Number.MAX_SAFE_INTEGER) &&
+      typeof request.data === "string" && request.data.length > 0 && request.data.length <= 1024 && !request.data.includes("\0"))
+    return { v: 1, op: "surface-key", frame: request.frame, data: request.data };
   if (request.v === 1 && request.op === "image" && typeof request.id === "string" && /^[a-f0-9]{64}$/.test(request.id) &&
       integer(request.offset, 0, 24 * 1024 * 1024) && integer(request.length, 1, 524288))
     return { v: 1, op: "image", id: request.id, offset: request.offset, length: request.length };
