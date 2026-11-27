@@ -2,6 +2,7 @@ import { View, div } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, Scrollbar } from "gpui-base";
 import { checking, exec, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
 import { parseAnsi } from "./ansi.js";
+import { lineRange } from "./line-range.js";
 
 const LABEL = "herdr.stereo.bridge";
 const LINE_HEIGHT = 17;
@@ -239,10 +240,17 @@ export default class StereoView extends View {
   entry(state, index, t) {
     const item = state.items.get(index);
     if (!item) return div().h(state.heights[index] || ESTIMATE).text_color(t.dim).child("Loading…");
-    return v_flex().px(8).py(4).overflow_hidden().children(item.lines.map(line =>
+    const offset = state.handle.offset().y;
+    const viewport = state.handle.viewport_size().height || state.height;
+    const { first, last } = lineRange(item.lines.length, state.prefix[index] + 4, offset, viewport, LINE_HEIGHT);
+    const visible = item.lines.slice(first, last).map(line =>
       h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap().children(parseAnsi(line
         .replace(/\u001b_[\s\S]*?\u001b\\/g, "")
-        .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")).map(run => this.ansiRun(t, run)))));
+        .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")).map(run => this.ansiRun(t, run))));
+    return v_flex().px(8).py(4).overflow_hidden()
+      .child(div().h(first * LINE_HEIGHT).flex_none())
+      .children(visible)
+      .child(div().h((item.lines.length - last) * LINE_HEIGHT).flex_none());
   }
 
   /** @param {string} name @param {string} title @param {ReturnType<typeof paneState>} state @param {any} t */
