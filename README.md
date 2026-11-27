@@ -81,8 +81,6 @@ The experimental branch includes a Herdr mod in `herdr/mods/stereo-view`. Copy t
 
 The mod shows Pi-rendered text and colors; entry buttons, links, images and selection are not forwarded. Use the terminal for those interactions. It fetches visible pages rather than eagerly drawing the full history, including within long entries. An individual entry over 3 MiB cannot currently be displayed in the native view. The bridge requires a Unix socket and Node on the terminal's machine; native Windows Pi is not supported. Automatic opening also requires the app command to be reachable from that machine. See the [mod README](herdr/mods/stereo-view/README.md) for the protocol and other limits.
 
-One isolated Linux Herdr check used a real 1.4 MB session file with 761 records; its active, compacted branch had 9 Conversation and 146 Activity entries. Twenty 64-entry requests per panel took 0.48 ms median / 4.09 ms p95 for Conversation and 0.99 ms median / 1.97 ms p95 for Activity on the test machine. These are local bridge round trips, not a benchmark of streaming, GUI frame rate or larger histories.
-
 ## Use it
 
 Click the toolbar and the buttons in each panel's header. Buttons use text labels by default. To use icons instead, open **Stereo View settings** with `[Settings]` or `/stereo-view settings`, then set **Button labels** to `icons`. The choice survives restart. The toolbar uses icons when the text buttons would not fit in one row. Settings are grouped under **Blocks**, **Activity tools**, **Layout** and **Turns**.
