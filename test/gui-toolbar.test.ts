@@ -9,6 +9,7 @@ import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 function harness() {
   const calls: any[] = [];
   let total = 1;
+  let jump: { serial: number; top: number } | undefined;
   const pending: Promise<unknown>[] = [];
   class Element {
     name?: string;
@@ -68,7 +69,7 @@ function harness() {
     const request = JSON.parse(args[3]); calls.push(request);
     const data = request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
       { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
-        images: [], lines: request.top === 0 ? ["native rendered row"] : [],
+        images: [], jump: request.pane === "activity" ? jump : undefined, lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
     return { code: 0, stdout: JSON.stringify(data) };
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom: 1 }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
@@ -80,7 +81,8 @@ function harness() {
   const view = new StereoView();
   const flush = async () => { while (pending.length) await Promise.all(pending.splice(0)); };
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
-  return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; } };
+  return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
+    setJump(value: { serial: number; top: number }) { jump = value; } };
 }
 
 test("loads the live layout and sends toolbar actions to the same bridge", async () => {
@@ -133,6 +135,23 @@ test("sends pane actions in click order", async () => {
   await h.flush();
   expect(h.calls.filter(call => call.op === "action").map(call => call.action))
     .toEqual(["layout", "compact", "zoom-activity", "headers", "mode"]);
+});
+
+test("moves to a requested position in the other panel only once", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.setTotal(100);
+  h.setJump({ serial: 1, top: 35 });
+  const positions: number[] = [];
+  h.view.activity.handle.scroll_to_item = (index: number) => positions.push(index);
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(positions).toEqual([35]);
+  expect(h.view.activity.following).toBe(false);
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(positions).toEqual([35]);
 });
 
 test("keeps following new output until the user scrolls away", async () => {

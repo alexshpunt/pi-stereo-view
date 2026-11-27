@@ -1,11 +1,12 @@
-import type { TuiMouseButton, TuiMouseEvent } from "@earendil-works/pi-tui";
+import type { Component, TuiMouseButton, TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { Pane } from "./content.ts";
 import type { NativeDocument, DocumentViewport } from "./native.ts";
 import { guiSelectionCells, type GuiSelectionRow } from "./gui-selection-cells.ts";
 import { GuiImages, type GuiImagePlacement } from "./gui-images.ts";
 type TuiMouseDispatchTarget = NonNullable<ReturnType<NativeDocument["handleMouse"]>>["target"];
 export type GuiPane = Pane | "combined";
-type GuiDocument = Pick<NativeDocument, "setViewport" | "beginFrame" | "render" | "takeScrollShift" | "handleMouse" | "dispose">;
+type GuiDocument = Pick<NativeDocument, "setViewport" | "beginFrame" | "render" | "takeScrollShift" | "handleMouse" | "dispose"> &
+  Partial<Pick<NativeDocument, "locate">>;
 
 export interface GuiViewport extends DocumentViewport { width: number }
 export interface GuiDocumentPage {
@@ -19,6 +20,7 @@ export interface GuiDocumentPage {
   lines: readonly string[];
   selection: readonly GuiSelectionRow[];
   images: readonly GuiImagePlacement[];
+  jump?: { serial: number; top: number };
 }
 export interface GuiMouse {
   type: "press" | "release" | "move" | "drag" | "wheel";
@@ -47,6 +49,9 @@ export class GuiDocuments {
   private readonly gestures: Partial<Record<GuiPane, Gesture>> = {};
   private serial = 0;
   private readonly images = new GuiImages();
+  private jumpSerial = 0;
+  private pendingJump?: { pane: Pane; source: Component; serial: number };
+  private readonly jumps: Partial<Record<Pane, { serial: number; top: number; at: number }>> = {};
   private disposed = false;
 
   constructor(private readonly documents: Record<Pane, GuiDocument> & { combined?: GuiDocument },
@@ -59,6 +64,13 @@ export class GuiDocuments {
         this.requestRender();
       });
     }
+  }
+
+  /** Resolve the target when the destination GUI panel next supplies its width. */
+  requestJump(pane: Pane, source: Component): void {
+    this.pendingJump = { pane, source, serial: ++this.jumpSerial };
+    this.invalidate(pane);
+    this.requestRender();
   }
 
   page(pane: GuiPane, viewport: GuiViewport): GuiDocumentPage {
@@ -76,6 +88,14 @@ export class GuiDocuments {
     const document = this.documents[pane];
     document.beginFrame();
     let lines = document.render(view.width);
+    if (this.pendingJump?.pane === pane) {
+      const request = this.pendingJump;
+      this.pendingJump = undefined;
+      const row = document.locate?.(request.source);
+      if (row !== undefined) this.jumps[pane] = { serial: request.serial, top: Math.max(0, row - 1), at: Date.now() };
+      document.beginFrame();
+      lines = document.render(view.width);
+    }
     if (view.following) {
       // Native layout can change its row count when the viewport moves. Converge on
       // the tail before publishing a frame, but bound work for live components.
@@ -87,16 +107,20 @@ export class GuiDocuments {
         lines = document.render(view.width);
       }
     }
+    const jump = pane === "combined" ? undefined : this.jumps[pane];
+    if (jump && Date.now() - jump.at > 5000 && pane !== "combined") delete this.jumps[pane];
     const extracted = this.images.page(lines, view.top, view.height);
     const visible = extracted.lines;
     const frame: Frame = {
       frame: ++this.serial, top: view.top, width: view.width, height: view.height,
       total: lines.length, scrollShift: document.takeScrollShift(),
       lines: visible, selection: visible.map(guiSelectionCells), images: extracted.images, viewport: view,
+      ...(pane === "combined" ? {} : { jump: this.jumps[pane] }),
     };
     this.frames[pane] = frame;
     return { frame: frame.frame, top: frame.top, width: frame.width, height: frame.height,
-      total: frame.total, scrollShift: frame.scrollShift, lines: frame.lines, selection: frame.selection, images: frame.images };
+      total: frame.total, scrollShift: frame.scrollShift, lines: frame.lines, selection: frame.selection, images: frame.images,
+      ...(frame.jump ? { jump: frame.jump } : {}) };
   }
 
   imageChunk(id: string, offset: number, length: number): { data: string; total: number } | undefined {

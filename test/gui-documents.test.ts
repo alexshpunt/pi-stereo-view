@@ -33,6 +33,20 @@ test("following requests include the latest rows even when output grows before t
   expect(page.lines.join("\n")).toContain("message 19");
 });
 
+test("exposes a jump to the target row in the GUI pane's own geometry", () => {
+  const { gui, history } = setup();
+  for (let i = 0; i < 15; i++) history.addChild(new UserMessageComponent(`message ${i}`, 0, 0));
+  const target = new UserMessageComponent("jump destination", 0, 0);
+  history.addChild(target);
+  gui.page("chat", { width: 30, top: 0, height: 5, following: false });
+  gui.requestJump("chat", target);
+  const page = gui.page("chat", { width: 30, top: 0, height: 5, following: false });
+  expect(page.jump?.top).toBeGreaterThan(0);
+  const destination = gui.page("chat", { width: 30, top: page.jump!.top, height: 5, following: false });
+  expect(destination.lines.join("\n")).toContain("jump destination");
+  expect(destination.jump).toEqual(page.jump);
+});
+
 test("projects native documents into bounded independent row viewports", () => {
   const { gui } = setup();
   const chat = gui.page("chat", { width: 30, top: 0, height: 5, following: false });

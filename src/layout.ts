@@ -491,16 +491,26 @@ export class TranscriptLayout {
     // terminal scroll positions or mouse hit testing.
     this.guiFactory = () => {
       const guiIndex = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree, metrics.usage);
+      const guiTurns: DocumentTurns = {
+        ...turns,
+        jump: (from, source) => {
+          const target = guiIndex.counterpart(source, from);
+          if (!target) return;
+          const pane: Pane = from === "chat" ? "activity" : "chat";
+          if (this.preferences.zoom) { this.preferences.zoom = null; this.changed(false); }
+          this.guiDocuments?.requestJump(pane, target);
+        },
+      };
       const guiActivity = new NativeDocument(document, "activity", this.timestamps, this.theme, () => 0, showTimestamps,
         () => this.activate("activity"), false, guiIndex, this.copy, showCopyButtons,
         () => ({ compact: this.preferences.compactTools, group: this.preferences.groupTools }), this.getTools,
         undefined, () => this.preferences.buttonStyle, {
           enabled: () => this.preferences.streamTools, delay: () => this.preferences.streamDelay * 1000,
           changed: () => this.guiDocuments?.invalidate("activity"),
-        }, turns, metrics);
+        }, guiTurns, metrics);
       const guiChat = new NativeDocument(document, "chat", this.timestamps, this.theme, () => 0, showTimestamps,
         () => this.activate("chat"), false, guiIndex, this.copy, showCopyButtons, undefined, undefined, undefined,
-        () => this.preferences.buttonStyle, undefined, turns, metrics);
+        () => this.preferences.buttonStyle, undefined, guiTurns, metrics);
       this.guiSearch = new GuiHistorySearch({ chat: guiChat, activity: guiActivity }, pane => {
         this.guiDocuments?.invalidate(pane);
         host.requestRender();

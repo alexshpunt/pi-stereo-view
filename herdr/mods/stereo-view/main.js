@@ -60,13 +60,13 @@ function bridge() {
   return { socket: label.socket, machine: split < 0 ? undefined : address.slice(0, split), address };
 }
 
-/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[]}} */
+/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number}} */
 function paneState() {
   const selectionRows = new Map();
   return { total: null, revision: -1, items: new Map(), heights: [], width: 80, height: 300,
     handle: VirtualListScrollHandle.new(), fetching: false, error: null, initial: true, lastSize: null,
     frameTop: 0, frameHeight: 0, pressed: false, following: true, searchState: null, searchBar: null,
-    selectionRows, selection: createSelection(index => selectionRows.get(index)), selecting: false, pressPoint: null, images: [] };
+    selectionRows, selection: createSelection(index => selectionRows.get(index)), selecting: false, pressPoint: null, images: [], jumpSerial: 0 };
 }
 
 /** Render the visible terminal rows, including one extra row for a partial scroll. */
@@ -170,7 +170,7 @@ export default class StereoView extends View {
         state.searchBar?.dispose(); state.searchBar = null; state.searchState = null;
         state.selection.clear(); state.selectionRows.clear(); state.selecting = false;
         state.total = null; state.revision = -1; state.items.clear(); state.heights = [];
-        state.initial = true; state.following = true; state.error = null; state.pressed = false; state.images = [];
+        state.initial = true; state.following = true; state.error = null; state.pressed = false; state.images = []; state.jumpSerial = 0;
       }
     }
     this.fetchState(connection, cx);
@@ -360,6 +360,13 @@ export default class StereoView extends View {
         state.revision = page.frame;
         state.frameTop = page.top;
         state.frameHeight = page.height;
+        if (Number.isSafeInteger(page.jump?.serial) && page.jump.serial > state.jumpSerial &&
+            Number.isSafeInteger(page.jump.top) && page.jump.top >= 0 && page.jump.top < page.total) {
+          state.jumpSerial = page.jump.serial;
+          state.following = false;
+          state.handle.scroll_to_item(page.jump.top);
+          if (pane === "chat" || pane === "activity") this.activePane = pane;
+        }
         state.images = state.images.filter(placement => placement.row + placement.rows <= page.top || placement.row >= page.top + page.height);
         state.images.push(...page.images);
         if (state.images.length > 512) state.images.splice(0, state.images.length - 512);
