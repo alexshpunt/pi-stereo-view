@@ -11,6 +11,7 @@ function harness() {
   let total = 1;
   let jump: { serial: number; top: number } | undefined;
   let rows: string[] | undefined;
+  let zoom = 1;
   const pending: Promise<unknown>[] = [];
   class Element {
     name?: string;
@@ -79,7 +80,7 @@ function harness() {
       })) });
     }
     return { code: 0, stdout: JSON.stringify(data) };
-  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom: 1 }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
+  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
   const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection,
@@ -90,7 +91,7 @@ function harness() {
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
   return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
     setJump(value: { serial: number; top: number }) { jump = value; },
-    setRows(value: string[]) { rows = value; total = value.length; } };
+    setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; } };
 }
 
 test("loads the live layout and sends toolbar actions to the same bridge", async () => {
@@ -143,6 +144,21 @@ test("sends pane actions in click order", async () => {
   await h.flush();
   expect(h.calls.filter(call => call.op === "action").map(call => call.action))
     .toEqual(["layout", "compact", "zoom-activity", "headers", "mode"]);
+});
+
+test("clicks the visible row at fractional app zoom after scrolling", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.setZoom(1.1);
+  h.view.chat.handle.offset = () => ({ y: 1582.73 });
+  h.view.chat.frameTop = 0; h.view.chat.frameHeight = 256;
+  const panel = h.find(h.view.render(), "stereo-chat-box")!;
+  panel.mouseDown!({ local_position: { x: 100, y: 149 }, click_count: 1 }, h.cx);
+  const press = h.calls.filter(call => call.op === "mouse" && call.event.type === "press").at(-1);
+  expect(press.event.y).toBe(99);
+  panel.windowUp!({ local_position: { x: 100, y: 149 }, click_count: 1 }, h.cx);
+  await h.flush();
 });
 
 test("hovering and leaving a panel sends pointer motion without selecting", async () => {
