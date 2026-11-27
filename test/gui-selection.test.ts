@@ -76,3 +76,36 @@ test("does not select a click and reports missing rows instead of copying partia
   select.clear();
   expect(select.bounds()).toBeUndefined();
 });
+
+test("copies unloaded rows in bounded pages without omitting text", async () => {
+  const all = Array.from({ length: 600 }, (_, index) => row(`row ${index}`));
+  const cache = new Map([[0, all[0]], [599, all[599]]]);
+  const select = createSelection((index: number) => cache.get(index));
+  select.start({ row: 0, col: 0 }, "character");
+  select.extend({ row: 599, col: 6 });
+  const calls: number[] = [];
+  const text = await select.readText(async (start: number, count: number) => {
+    calls.push(count);
+    return all.slice(start, start + count);
+  });
+  expect(text).toBe(all.map(value => value.cells.map(cell => cell.text).join("")).join("\n"));
+  expect(calls.length).toBeGreaterThan(1);
+  expect(Math.max(...calls)).toBeLessThanOrEqual(256);
+});
+
+test("rejects an incomplete page rather than copying partial selection", async () => {
+  const all = [row("first"), row("missing"), row("last")];
+  const select = createSelection((index: number) => index === 1 ? undefined : all[index]);
+  select.start({ row: 0, col: 0 }, "character");
+  select.extend({ row: 2, col: 3 });
+  await expect(select.readText(async () => [])).rejects.toThrow();
+});
+
+test("cancels copying when the selection changes while a page loads", async () => {
+  const all = [row("first"), row("missing"), row("last")];
+  const select = createSelection((index: number) => index === 1 ? undefined : all[index]);
+  select.start({ row: 0, col: 0 }, "character");
+  select.extend({ row: 2, col: 3 });
+  const copy = select.readText(async () => { select.clear(); return all; });
+  await expect(copy).rejects.toThrow();
+});

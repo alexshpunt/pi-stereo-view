@@ -60,13 +60,14 @@ function bridge() {
   return { socket: label.socket, machine: split < 0 ? undefined : address.slice(0, split), address };
 }
 
-/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number}} */
+/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number, copying: boolean, selectionOnly: boolean, autoScroll: number, autoScrollTimer: boolean, selectionFocus: {row: number, col: number} | null}} */
 function paneState() {
   const selectionRows = new Map();
   return { total: null, revision: -1, items: new Map(), heights: [], width: 80, height: 300,
     handle: VirtualListScrollHandle.new(), fetching: false, error: null, initial: true, lastSize: null,
     frameTop: 0, frameHeight: 0, pressed: false, following: true, searchState: null, searchBar: null,
-    selectionRows, selection: createSelection(index => selectionRows.get(index)), selecting: false, pressPoint: null, images: [], jumpSerial: 0 };
+    selectionRows, selection: createSelection(index => selectionRows.get(index)), selecting: false, pressPoint: null, images: [], jumpSerial: 0,
+    copying: false, selectionOnly: false, autoScroll: 0, autoScrollTimer: false, selectionFocus: null };
 }
 
 /** Render the visible terminal rows, including one extra row for a partial scroll. */
@@ -138,6 +139,9 @@ export default class StereoView extends View {
     this.actions = [];
     this.actionPending = false;
     this.areaWidth = 800;
+    this.hoverPane = null;
+    this.hoverKey = "";
+    this.hoverAt = 0;
     this.imagePaths = new Map();
     this.imagePending = new Set();
     this.imageQueue = [];
@@ -171,6 +175,7 @@ export default class StereoView extends View {
         state.selection.clear(); state.selectionRows.clear(); state.selecting = false;
         state.total = null; state.revision = -1; state.items.clear(); state.heights = [];
         state.initial = true; state.following = true; state.error = null; state.pressed = false; state.images = []; state.jumpSerial = 0;
+        state.selectionOnly = false; state.autoScroll = 0; state.selectionFocus = null;
       }
     }
     this.fetchState(connection, cx);
@@ -273,6 +278,7 @@ export default class StereoView extends View {
     if (type === "press") {
       state.pressed = true;
       state.selecting = true;
+      state.selectionOnly = false; state.autoScroll = 0; state.selectionFocus = null;
       state.pressPoint = { row, col: x, moved: false };
       const count = Math.max(1, Math.min(3, event.click_count || 1));
       state.selection.start({ row, col: x }, count === 3 ? "line" : count === 2 ? "word" : "character");
@@ -293,6 +299,89 @@ export default class StereoView extends View {
     this.actions.push({ request: { v: 1, op: "mouse", pane, frame: state.revision, event: input }, connection });
     if (type === "release") state.pressed = false;
     this.drainActions(cx);
+  }
+
+  /** Send bounded pointer motion without taking keyboard focus or starting a selection. */
+  /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {any} event @param {any} cx */
+  sendHover(pane, state, event, cx) {
+    if (pane === "combined" || !this.viewState?.preferences?.turns || !this.viewState.preferences.turnHover || !event.local_position) return;
+    const z = settings().zoom;
+    const zoom = typeof z === "number" && z > 0 ? z : 1;
+    const px = event.local_position.x / zoom, py = event.local_position.y / zoom;
+    const inside = px >= 0 && px < (state.lastSize?.width ?? 0) / zoom && py >= 0 && py < (state.handle.viewport_size().height || state.height);
+    if (!inside && this.hoverPane !== pane) return;
+    if (state.pressed || state.fetching || state.revision < 1) return;
+    const x = inside ? Math.floor((px - 8) / this.cellWidth) : -1;
+    const y = inside ? Math.floor((state.handle.offset().y + py) / LINE_HEIGHT) - state.frameTop : -1;
+    if (inside && (x < 0 || x >= state.width || y < 0 || y >= state.frameHeight)) return;
+    const key = `${pane}:${x}:${y}`;
+    if (this.hoverKey === key || (inside && Date.now() - this.hoverAt < 100)) return;
+    const connection = bridge(); if (!connection) return;
+    this.hoverPane = inside ? pane : null;
+    this.hoverKey = key; this.hoverAt = Date.now();
+    this.actions = this.actions.filter(item => !(item.request.op === "mouse" && item.request.event.type === "move"));
+    this.actions.push({ request: { v: 1, op: "mouse", pane, frame: state.revision,
+      event: { type: "move", button: "none", x, y } }, connection });
+    this.drainActions(cx);
+  }
+
+  /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {any} cx */
+  scrollSelection(pane, state, cx) {
+    if (state.autoScrollTimer || !state.autoScroll || !state.pressed) return;
+    state.autoScrollTimer = true;
+    cx.timer.after(70, (/** @type {any} */ next) => {
+      state.autoScrollTimer = false;
+      if (!state.pressed || !state.selectionOnly || !state.autoScroll || !state.total) return;
+      const viewport = state.handle.viewport_size().height || state.height;
+      const visible = Math.max(1, Math.floor(viewport / LINE_HEIGHT));
+      const top = Math.max(0, Math.floor(state.handle.offset().y / LINE_HEIGHT));
+      const nextTop = Math.max(0, Math.min(Math.max(0, state.total - visible), top + state.autoScroll * 3));
+      state.following = false;
+      state.handle.scroll_to_item(nextTop);
+      const row = Math.min(state.total - 1, state.autoScroll > 0 ? nextTop + visible - 1 : nextTop);
+      state.selectionFocus = { row, col: state.selectionFocus?.col ?? 0 };
+      if (state.selectionRows.has(row)) state.selection.extend(state.selectionFocus);
+      const connection = bridge();
+      if (connection) this.fetchPane(pane, state, connection, next);
+      next.notify();
+      if (nextTop !== top) this.scrollSelection(pane, state, next);
+    });
+  }
+
+  /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {any} cx */
+  copySelection(pane, state, cx) {
+    const connection = bridge();
+    const bounds = state.selection.bounds();
+    if (!connection || !bounds || state.copying) return;
+    const cached = state.selection.text();
+    if (cached) {
+      try { cx.write_to_clipboard(cached); this.controlError = null; }
+      catch { this.controlError = "Could not copy the selection. Try again."; cx.notify(); }
+      return;
+    }
+    state.copying = true;
+    const width = state.width;
+    cx.spawn(async (/** @type {any} */ next) => {
+      try {
+        // Let an already-running view finish before making the first copy page.
+        for (let attempt = 0; state.fetching && attempt < 120; attempt++)
+          await new Promise(resolve => next.timer.after(50, resolve));
+        if (state.fetching || state.pressed || this.actionPending || this.actions.length) throw new Error("Panel is busy");
+        const text = await state.selection.readText(async (/** @type {number} */ top, /** @type {number} */ height) => {
+          if (bridge()?.socket !== connection.socket || state.width !== width) throw new Error("Panel changed");
+          const request = JSON.stringify({ v: 1, op: "view", pane, top, height, width, following: false });
+          const result = await exec("node", ["-e", CLIENT, connection.socket, request], { on: connection.machine, timeout: 5000 });
+          if (result.code !== 0) throw new Error("Bridge unavailable");
+          const page = JSON.parse(result.stdout);
+          if (!validView(page, top, height, width, false) || page.lines.length !== height || page.scrollShift ||
+              page.total <= bounds.end.row) throw new Error("History changed while copying");
+          return page.selection;
+        });
+        if (text) next.write_to_clipboard(text);
+        this.controlError = null;
+      } catch { this.controlError = "Could not copy the selection. Try again."; }
+      finally { state.copying = false; this.refresh(next); next.notify(); }
+    });
   }
 
   /** @param {any} cx */
@@ -333,7 +422,7 @@ export default class StereoView extends View {
 
   /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {{socket: string, machine?: string, address: string}} connection @param {any} cx */
   fetchPane(pane, state, connection, cx) {
-    if (state.fetching || state.pressed || this.actionPending || this.actions.length) return;
+    if (state.fetching || state.copying || (state.pressed && !state.selectionOnly) || this.actionPending || this.actions.length) return;
     const following = state.following;
     const { start, count } = nextPage(state);
     const width = state.width;
@@ -377,16 +466,24 @@ export default class StereoView extends View {
           state.items.delete(index);
           state.items.set(index, { id: `${page.frame}:${index}`, lines: [page.lines[i]] });
         }
+        if (state.selectionFocus && state.selectionRows.has(state.selectionFocus.row)) {
+          state.selection.extend(state.selectionFocus);
+          if (!state.pressed || !state.selectionOnly) state.selectionFocus = null;
+        }
         for (const index of state.items.keys()) {
           if (index >= page.total || (index >= page.top + page.lines.length && index < page.top + count)) {
-            state.items.delete(index); state.selectionRows.delete(index);
+            state.items.delete(index);
+            if (!state.selection.endpoints().includes(index) || index >= page.total) state.selectionRows.delete(index);
           }
         }
         while (state.items.size > 1024) {
           const oldest = state.items.keys().next().value;
           if (oldest === undefined) break;
           state.items.delete(oldest);
-          if (!state.selection.bounds()) state.selectionRows.delete(oldest);
+          if (!state.selection.endpoints().includes(oldest)) state.selectionRows.delete(oldest);
+        }
+        for (const index of state.selectionRows.keys()) {
+          if (!state.items.has(index) && !state.selection.endpoints().includes(index)) state.selectionRows.delete(index);
         }
         if (geometryChanged && following && state.following && state.total > 0) state.handle.scroll_to_bottom();
         else if (!following && page.scrollShift && state.total > 0)
@@ -636,14 +733,37 @@ export default class StereoView extends View {
           this.sendMouse(name, state, row, "press", event, cx);
         })
         .on_window_mouse_move((event, cx) => {
-          if (!state.pressed || !event.local_position) return;
+          if (!state.pressed) { this.sendHover(name, state, event, cx); return; }
+          if (!event.local_position) return;
           const z = settings().zoom;
           const zoom = typeof z === "number" && z > 0 ? z : 1;
-          const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / LINE_HEIGHT);
-          this.sendMouse(name, state, row, "drag", event, cx);
+          const y = event.local_position.y / zoom;
+          const viewport = state.handle.viewport_size().height || state.height;
+          const row = Math.floor((state.handle.offset().y + y) / LINE_HEIGHT);
+          const direction = y < 0 ? -1 : y >= viewport ? 1 : 0;
+          if (direction && !state.selectionOnly) {
+            // End the native gesture as a drag before paging invalidates its frame.
+            this.sendMouse(name, state, row, "drag", event, cx);
+            this.sendMouse(name, state, row, "release", event, cx);
+            state.pressed = true;
+            state.selectionOnly = true;
+          }
+          if (!state.selectionOnly) { this.sendMouse(name, state, row, "drag", event, cx); return; }
+          const col = Math.max(0, Math.floor((event.local_position.x / zoom - 8) / this.cellWidth));
+          state.autoScroll = direction;
+          state.selectionFocus = { row: Math.max(0, Math.min((state.total ?? 1) - 1, row)), col };
+          if (state.selectionRows.has(state.selectionFocus.row)) state.selection.extend(state.selectionFocus);
+          if (direction) this.scrollSelection(name, state, cx);
+          cx.notify();
         })
         .on_window_mouse_up("left", (event, cx) => {
           if (!state.pressed || !event.local_position) return;
+          state.autoScroll = 0;
+          if (state.selectionOnly) {
+            state.pressed = false; state.selectionOnly = false; state.selecting = false;
+            const connection = bridge(); if (connection) this.fetchPane(name, state, connection, cx);
+            cx.notify(); return;
+          }
           const z = settings().zoom;
           const zoom = typeof z === "number" && z > 0 ? z : 1;
           const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / LINE_HEIGHT);
@@ -705,10 +825,9 @@ export default class StereoView extends View {
     if (this.focus) root.track_focus(this.focus).on_key_down((event, cx) => {
       const pane = this.viewState?.mode === "combined" ? this.combined : this.activePane === "chat" ? this.chat : this.activity;
       if (this.focus.is_focused() && event.modifiers?.control && event.key?.toLowerCase() === "c") {
-        const text = pane.selection.text();
-        if (text) {
-          try { cx.write_to_clipboard(text); }
-          catch { this.controlError = "Could not copy the selection."; cx.notify(); }
+        if (pane.selection.bounds()) {
+          const name = this.viewState?.mode === "combined" ? "combined" : this.activePane;
+          this.copySelection(name, pane, cx);
           cx.stop_propagation();
         }
         return;

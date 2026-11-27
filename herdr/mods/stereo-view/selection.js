@@ -26,6 +26,14 @@ export function createSelection(getRow) {
   /** @type {Point | undefined} */ let focus;
   /** @type {"character" | "word" | "line"} */ let mode = "character";
   /** @type {{start: Point, end: Point} | undefined} */ let initial;
+  let generation = 0;
+
+  /** @param {Row} row @param {number} index @param {{start: Point, end: Point}} range */
+  function selectedText(row, index, range) {
+    const start = index === range.start.row ? range.start.col : 0;
+    const end = index === range.end.row ? range.end.col : width(row);
+    return row.cells.filter(cell => cell.end > start && cell.start < end).map(cell => cell.text).join("").trimEnd();
+  }
 
   /** @param {Point} point */
   function unit(point) {
@@ -61,6 +69,7 @@ export function createSelection(getRow) {
   return {
     /** @param {Point} point @param {"character" | "word" | "line"} granularity */
     start(point, granularity) {
+      generation++;
       anchor = { ...point }; focus = { ...point }; mode = granularity; initial = undefined;
       if (mode !== "character") {
         const range = unit(point);
@@ -71,15 +80,47 @@ export function createSelection(getRow) {
     /** @param {Point} point */
     extend(point) {
       if (!anchor) return;
+      generation++;
       if (mode === "character" || !initial) { focus = { ...point }; return; }
       const range = unit(point);
       if (!range) return;
       if (compare(range.start, initial.start) < 0) { anchor = initial.end; focus = range.start; }
       else { anchor = initial.start; focus = range.end; }
     },
-    clear() { anchor = undefined; focus = undefined; initial = undefined; },
+    clear() { generation++; anchor = undefined; focus = undefined; initial = undefined; },
     bounds,
     columns,
+    endpoints() { return [anchor?.row, focus?.row]; },
+    /** Read missing rows in bounded pages. Reject if the selection changes while loading. */
+    /** @param {(start: number, count: number) => Promise<Row[]>} load */
+    async readText(load) {
+      const range = bounds();
+      if (!range) return undefined;
+      const current = generation;
+      const result = [];
+      for (let first = range.start.row; first <= range.end.row; first += 256) {
+        const count = Math.min(256, range.end.row - first + 1);
+        let page;
+        for (let index = first; index < first + count; index++) {
+          if (!getRow(index)) { page = await load(first, count); break; }
+        }
+        if (generation !== current) throw new Error("Selection changed while copying");
+        if (page && page.length !== count) throw new Error("Incomplete selection page");
+        if (page) for (const endpoint of [range.start.row, range.end.row]) {
+          if (endpoint < first || endpoint >= first + count) continue;
+          const expected = getRow(endpoint);
+          if (!expected || JSON.stringify(page[endpoint - first]) !== JSON.stringify(expected))
+            throw new Error("History changed while copying");
+        }
+        for (let offset = 0; offset < count; offset++) {
+          const index = first + offset;
+          const row = page ? page[offset] : getRow(index);
+          if (!row) throw new Error("Incomplete selection page");
+          result.push(selectedText(row, index, range));
+        }
+      }
+      return result.join("\n") || undefined;
+    },
     text() {
       const range = bounds();
       if (!range) return undefined;
@@ -87,9 +128,7 @@ export function createSelection(getRow) {
       for (let index = range.start.row; index <= range.end.row; index++) {
         const row = getRow(index);
         if (!row) return undefined;
-        const start = index === range.start.row ? range.start.col : 0;
-        const end = index === range.end.row ? range.end.col : width(row);
-        result.push(row.cells.filter(cell => cell.end > start && cell.start < end).map(cell => cell.text).join("").trimEnd());
+        result.push(selectedText(row, index, range));
       }
       const text = result.join("\n");
       return text || undefined;

@@ -145,12 +145,14 @@ export class GuiDocuments {
         (input.wheelDelta !== undefined && (!Number.isFinite(input.wheelDelta) || Math.abs(input.wheelDelta) > 10000)) ||
         (input.clickCount !== undefined && ![1, 2, 3].includes(input.clickCount))) return false;
     const outside = input.x < 0 || input.x >= frame.width || input.y < 0 || input.y >= frame.height || frame.top + input.y >= frame.total;
+    // A sentinel move clears hover without treating arbitrary outside coordinates as hits.
+    const leave = !gesture && input.type === "move" && input.button === "none" && input.x === -1 && input.y === -1;
     // Captured drags and releases may leave the pane; keep their coordinates bounded.
-    if (outside && (!gesture || (input.type !== "drag" && input.type !== "move" && input.type !== "release") ||
+    if (outside && !leave && (!gesture || (input.type !== "drag" && input.type !== "move" && input.type !== "release") ||
         input.x < -frame.width || input.x >= frame.width * 2 || input.y < -frame.height || input.y >= frame.height * 2)) return false;
     const event: TuiMouseEvent = {
-      type: input.type, button: input.button, x: input.x, y: frame.top + input.y,
-      screenX: input.x, screenY: frame.top + input.y, width: frame.width, height: frame.total,
+      type: input.type, button: input.button, x: input.x, y: leave ? -1 : frame.top + input.y,
+      screenX: input.x, screenY: leave ? -1 : frame.top + input.y, width: frame.width, height: frame.total,
       shift: input.shift === true, alt: input.alt === true, ctrl: input.ctrl === true,
       ...(input.wheelDelta === undefined ? {} : { wheelDelta: input.wheelDelta }),
     };

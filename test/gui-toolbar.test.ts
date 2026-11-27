@@ -10,6 +10,7 @@ function harness() {
   const calls: any[] = [];
   let total = 1;
   let jump: { serial: number; top: number } | undefined;
+  let rows: string[] | undefined;
   const pending: Promise<unknown>[] = [];
   class Element {
     name?: string;
@@ -67,10 +68,16 @@ function harness() {
   });
   const env = { checking: () => false, exec: async (_cmd: string, args: string[]) => {
     const request = JSON.parse(args[3]); calls.push(request);
-    const data = request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
+    const data: any = request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
       { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
         images: [], jump: request.pane === "activity" ? jump : undefined, lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
+    if (request.op === "view" && rows) {
+      const page = rows.slice(data.top, data.top + data.height);
+      Object.assign(data, { lines: page, selection: page.map(line => ({
+        cells: Array.from(line, (text, start) => ({ text, start, end: start + 1 })), words: [],
+      })) });
+    }
     return { code: 0, stdout: JSON.stringify(data) };
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom: 1 }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
@@ -82,7 +89,8 @@ function harness() {
   const flush = async () => { while (pending.length) await Promise.all(pending.splice(0)); };
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
   return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
-    setJump(value: { serial: number; top: number }) { jump = value; } };
+    setJump(value: { serial: number; top: number }) { jump = value; },
+    setRows(value: string[]) { rows = value; total = value.length; } };
 }
 
 test("loads the live layout and sends toolbar actions to the same bridge", async () => {
@@ -137,6 +145,22 @@ test("sends pane actions in click order", async () => {
     .toEqual(["layout", "compact", "zoom-activity", "headers", "mode"]);
 });
 
+test("hovering and leaving a panel sends pointer motion without selecting", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  Object.assign((h.state as any).preferences, { turns: true, turnHover: true });
+  Object.assign(h.view.viewState.preferences, { turns: true, turnHover: true });
+  h.view.chat.lastSize = { width: 400, height: 300 };
+  h.view.sendHover("chat", h.view.chat, { local_position: { x: 20, y: 5 } }, h.cx);
+  await h.flush();
+  h.view.sendHover("chat", h.view.chat, { local_position: { x: -1, y: 5 } }, h.cx);
+  await h.flush();
+  const moves = h.calls.filter(call => call.op === "mouse").map(call => call.event);
+  expect(moves).toEqual([{ type: "move", button: "none", x: 1, y: 0 }, { type: "move", button: "none", x: -1, y: -1 }]);
+  expect(h.view.chat.pressed).toBe(false);
+});
+
 test("moves to a requested position in the other panel only once", async () => {
   const h = harness();
   h.view.init({}, h.cx);
@@ -152,6 +176,51 @@ test("moves to a requested position in the other panel only once", async () => {
   h.view.refresh(h.cx);
   await h.flush();
   expect(positions).toEqual([35]);
+});
+
+test("copies a selection spanning uncached history through the bridge", async () => {
+  const h = harness();
+  const rows = Array.from({ length: 600 }, (_, index) => `row ${index}`);
+  h.setRows(rows);
+  h.view.init({}, h.cx);
+  await h.flush();
+  const first = rows[0];
+  h.view.chat.selectionRows.set(0, { cells: Array.from(first, (text, start) => ({ text, start, end: start + 1 })), words: [] });
+  h.view.chat.selection.start({ row: 0, col: 0 }, "character");
+  h.view.chat.selection.extend({ row: 599, col: 6 });
+  h.view.activePane = "chat";
+  h.view.render().keyDown({ key: "c", modifiers: { control: true } }, h.cx);
+  await h.flush();
+  expect(h.copied).toEqual([rows.join("\n")]);
+  expect(h.calls.some(call => call.op === "view" && call.pane === "chat" && !call.following && call.height === 256)).toBe(true);
+});
+
+test("dragging outside a panel scrolls while retaining the selection", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.setTotal(100);
+  h.view.chat.total = 100;
+  let offset = 0;
+  h.view.chat.handle.offset = () => ({ y: offset });
+  h.view.chat.handle.viewport_size = () => ({ height: 34 });
+  h.view.chat.handle.scroll_to_item = (index: number) => { offset = index * 17; };
+  const timers: (() => void)[] = [];
+  (h.cx.timer as any).after = (_delay: number, callback: (cx: any) => void) => timers.push(() => callback(h.cx));
+  const panel = h.find(h.view.render(), "stereo-chat-box")!;
+  panel.mouseDown!({ local_position: { x: 15, y: 8 }, click_count: 1 }, h.cx);
+  await h.flush();
+  panel.windowMove!({ local_position: { x: 15, y: 36 }, click_count: 1 }, h.cx);
+  await h.flush();
+  expect(timers.length).toBe(1);
+  timers.shift()!();
+  expect(offset).toBeGreaterThan(0);
+  expect(h.view.chat.following).toBe(false);
+  panel.windowUp!({ local_position: { x: 15, y: 36 }, click_count: 1 }, h.cx);
+  await h.flush();
+  const stopped = offset;
+  timers.shift()?.();
+  expect(offset).toBe(stopped);
 });
 
 test("keeps following new output until the user scrolls away", async () => {

@@ -491,8 +491,15 @@ export class TranscriptLayout {
     // terminal scroll positions or mouse hit testing.
     this.guiFactory = () => {
       const guiIndex = new NativeContentIndex(document, this.nested, () => this.preferences.nestedTree, metrics.usage);
+      let guiHovered = 0;
       const guiTurns: DocumentTurns = {
         ...turns,
+        hovered: () => on() && this.preferences.turnHover && guiHovered ? guiHovered : undefined,
+        hover: turn => {
+          if (guiHovered === turn) return;
+          guiHovered = turn;
+          host.requestRender();
+        },
         jump: (from, source) => {
           const target = guiIndex.counterpart(source, from);
           if (!target) return;
