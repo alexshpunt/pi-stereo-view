@@ -385,7 +385,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
         stopGuiBridge = await startGuiBridge(terminal, () => layout?.guiIndex(), undefined, () => {
           const current = layout;
           return current ? { state: () => current.guiState(), action: action => current.guiAction(action),
-            setting: setting => current.guiSetting(setting), renderer: () => current.guiRenderer() } : undefined;
+            setting: setting => current.guiSetting(setting), renderer: () => current.guiRenderer(),
+            search: () => current.guiSearchModel() } : undefined;
         });
         guiBridgeActive = true;
         // Give Herdr time to identify this Pi; never raise a background agent's tab.

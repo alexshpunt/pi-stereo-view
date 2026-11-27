@@ -5,6 +5,7 @@ import { NativeContentIndex } from "../src/content.ts";
 import { defaults } from "../src/preferences.ts";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { GuiDocuments } from "../src/gui-documents.ts";
+import { GuiHistorySearch } from "../src/gui-search.ts";
 import { NativeDocument } from "../src/native.ts";
 import { TranscriptTimestamps } from "../src/timestamps.ts";
 import { startGuiBridge } from "../src/gui-bridge.ts";
@@ -48,7 +49,7 @@ test("the private bridge serves controls and rejects unknown actions", async () 
   const stop = await startGuiBridge("terminal", () => undefined, async (_terminal, label) => {
     socketPath = JSON.parse(label).socket;
   }, () => ({ state: () => state, action: action => { actions.push(action); },
-    setting: setting => { actions.push(`${setting.key}:${setting.value}`); }, renderer: () => undefined }));
+    setting: setting => { actions.push(`${setting.key}:${setting.value}`); }, renderer: () => undefined, search: () => undefined }));
   const request = (payload: unknown): Promise<any> => new Promise((resolve, reject) => {
     const socket = connect(socketPath);
     let reply = "";
@@ -83,12 +84,14 @@ test("the bridge serves native viewport rows and sends clicks only to their disp
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
   const theme = { fg: (_name: string, value: string) => value } as Theme;
   const doc = (pane: "chat" | "activity") => new NativeDocument(root, pane, timestamps, () => theme, () => 0, () => false);
-  const gui = new GuiDocuments({ chat: doc("chat"), activity: doc("activity") }, () => timestamps.beginFrame());
+  const documents = { chat: doc("chat"), activity: doc("activity") };
+  const gui = new GuiDocuments(documents, () => timestamps.beginFrame());
+  const search = new GuiHistorySearch(documents, pane => gui.invalidate(pane));
   let socketPath = "";
   const state = { v: 1 as const, layout: "columns" as const, side: "left" as const, mode: "split" as const,
     zoom: null, showToolbar: true, showHeaders: true, compactTools: true, preferences: { ...defaults } };
   const stop = await startGuiBridge("terminal", () => undefined, async (_terminal, label) => { socketPath = JSON.parse(label).socket; },
-    () => ({ state: () => state, action: () => {}, setting: () => {}, renderer: () => gui }));
+    () => ({ state: () => state, action: () => {}, setting: () => {}, renderer: () => gui, search: () => search }));
   const request = (payload: unknown): Promise<any> => new Promise((resolve, reject) => {
     const socket = connect(socketPath);
     let reply = "";
@@ -106,5 +109,10 @@ test("the bridge serves native viewport rows and sends clicks only to their disp
     expect(await request({ v: 1, op: "mouse", pane: "chat", frame: page.frame, event: { ...event, type: "release" } })).toEqual({ v: 1, ok: true });
     expect(text.events).toEqual(["press", "release", "click"]);
     expect(await request({ v: 1, op: "mouse", pane: "chat", frame: page.frame, event: { ...event, type: "press" } })).toEqual({ v: 1, ok: false });
+    expect((await request({ v: 1, op: "search", pane: "chat", action: "open", top: 0, height: 10, following: false })).open).toBe(true);
+    const found = await request({ v: 1, op: "search", pane: "chat", action: "query", query: "native" });
+    expect(found.count).toBe(1);
+    expect(found.current).toBe(1);
+    expect((await request({ v: 1, op: "search", pane: "chat", action: "close" })).restored).toEqual({ top: 0, following: false });
   } finally { await stop(); gui.dispose(); }
 });

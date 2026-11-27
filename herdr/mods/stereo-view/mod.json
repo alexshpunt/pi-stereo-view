@@ -1,5 +1,6 @@
 {
   "place": "none",
+  "capabilities": { "clipboard": { "write": true } },
   "app": {
     "id": "stereo-view",
     "label": "Stereo View",

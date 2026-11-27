@@ -8,7 +8,8 @@ import { parseGuiRequest, type GuiAction, type GuiSetting } from "./gui-protocol
 import type { TranscriptLayout } from "./layout.ts";
 
 type GuiControls = { state(): ReturnType<TranscriptLayout["guiState"]>; action(action: GuiAction): void;
-  setting(setting: GuiSetting): void; renderer(): ReturnType<TranscriptLayout["guiRenderer"]> };
+  setting(setting: GuiSetting): void; renderer(): ReturnType<TranscriptLayout["guiRenderer"]>;
+  search(): ReturnType<TranscriptLayout["guiSearchModel"]> };
 
 const LABEL = "herdr.stereo.bridge";
 const REQUEST_LIMIT = 4096;
@@ -66,9 +67,25 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
               const renderer = current.renderer();
               if (!renderer) throw new Error("History is unavailable");
               const { pane, top, height, width, following } = parsed;
-              const output = JSON.stringify({ v: 1, ...renderer.page(pane, { top, height, width, following }) });
+              const search = pane === "combined" ? undefined : current.search();
+              if (search && pane !== "combined") void search.refresh(pane);
+              const output = JSON.stringify({ v: 1, ...renderer.page(pane, { top, height, width, following }),
+                ...(search && pane !== "combined" ? { search: search.state(pane) } : {}) });
               if (Buffer.byteLength(output) > RESPONSE_LIMIT) throw new Error("View is too large");
               socket.end(output + "\n");
+            } else if (parsed.op === "search") {
+              const search = current.search();
+              if (!search) throw new Error("Search is unavailable");
+              const pane = parsed.pane;
+              const reply = (result: unknown): void => { if (!socket.destroyed) socket.end(JSON.stringify({ v: 1, ...result as object }) + "\n"); };
+              if (parsed.action === "query") {
+                void search.query(pane, parsed.query).then(reply, error => {
+                  if (!socket.destroyed) socket.end(JSON.stringify({ error: error instanceof Error ? error.message : "Search failed" }) + "\n");
+                });
+              } else if (parsed.action === "open") reply(search.open(pane, parsed));
+              else if (parsed.action === "close") reply({ ...search.state(pane), restored: search.close(pane), open: false });
+              else if (parsed.action === "next" || parsed.action === "previous") reply(search.step(pane, parsed.action === "next" ? 1 : -1));
+              else reply(search.state(pane));
             } else if (parsed.op === "mouse") {
               const renderer = current.renderer();
               if (!renderer) throw new Error("History is unavailable");

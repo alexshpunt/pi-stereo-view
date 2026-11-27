@@ -35,7 +35,10 @@ export interface GuiPageRequest {
 
 export const GUI_ACTIONS = ["swap", "layout", "mode", "zoom-chat", "zoom-activity", "compact", "settings", "headers"] as const;
 export type GuiAction = typeof GUI_ACTIONS[number];
-export type GuiRequest = GuiPageRequest | { v: 1; op: "state" } | { v: 1; op: "action"; action: GuiAction } |
+export type GuiSearchRequest = { v: 1; op: "search"; pane: Pane } & (
+  { action: "open"; top: number; height: number; following: boolean } |
+  { action: "query"; query: string } | { action: "next" | "previous" | "close" | "state" });
+export type GuiRequest = GuiPageRequest | GuiSearchRequest | { v: 1; op: "state" } | { v: 1; op: "action"; action: GuiAction } |
   ({ v: 1; op: "setting" } & GuiSetting) |
   { v: 1; op: "view"; pane: GuiPane; top: number; height: number; width: number; following: boolean } |
   { v: 1; op: "mouse"; pane: GuiPane; frame: number; event: GuiMouse };
@@ -55,6 +58,17 @@ export function parseGuiRequest(value: unknown): GuiRequest | undefined {
   }
   const integer = (n: unknown, min: number, max: number): n is number =>
     typeof n === "number" && Number.isSafeInteger(n) && n >= min && n <= max;
+  if (request.v === 1 && request.op === "search" && (request.pane === "chat" || request.pane === "activity")) {
+    const pane = request.pane;
+    if (request.action === "query" && typeof request.query === "string" && request.query.length <= 2048)
+      return { v: 1, op: "search", pane, action: "query", query: request.query };
+    if (request.action === "open" && integer(request.top, 0, Number.MAX_SAFE_INTEGER - 512) &&
+        integer(request.height, 1, 256) && typeof request.following === "boolean")
+      return { v: 1, op: "search", pane, action: "open", top: request.top, height: request.height, following: request.following };
+    if (request.action === "next" || request.action === "previous" || request.action === "close" || request.action === "state")
+      return { v: 1, op: "search", pane, action: request.action };
+    return undefined;
+  }
   if (request.v === 1 && request.op === "mouse" && (request.pane === "chat" || request.pane === "activity" || request.pane === "combined") &&
       integer(request.frame, 1, Number.MAX_SAFE_INTEGER) && request.event && typeof request.event === "object" && !Array.isArray(request.event)) {
     const e = request.event as Record<string, unknown>;

@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
+// @ts-expect-error The mod has no TypeScript declarations.
+import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -11,6 +13,9 @@ function harness() {
     click?: (...args: any[]) => void;
     mouseDown?: (...args: any[]) => void;
     mouseUp?: (...args: any[]) => void;
+    windowMove?: (...args: any[]) => void;
+    windowUp?: (...args: any[]) => void;
+    keyDown?: (...args: any[]) => void;
     constructor(readonly kind: string) {
       return new Proxy(this, { get(target, prop, receiver) {
         if (prop in target) return (target as any)[prop];
@@ -21,6 +26,9 @@ function harness() {
           if (prop === "on_click") target.click = args[0];
           if (prop === "on_mouse_down") target.mouseDown = args[1];
           if (prop === "on_mouse_up") target.mouseUp = args[1];
+          if (prop === "on_window_mouse_move") target.windowMove = args[0];
+          if (prop === "on_window_mouse_up") target.windowUp = args[1];
+          if (prop === "on_key_down") target.keyDown = args[0];
           return receiver;
         };
       } });
@@ -28,10 +36,13 @@ function harness() {
   }
   const el = (kind: string) => () => new Element(kind);
   const ui = { View: class {}, div: el("div"), h_flex: el("horizontal"), v_flex: el("vertical"),
-    v_virtual_list: el("list"), VirtualListScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), viewport_size: () => ({ height: 300 }), content_size: () => ({ height: 0 }), scroll_to_bottom() {} }) },
+    v_virtual_list: el("list"), VirtualListScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), viewport_size: () => ({ height: 300 }), content_size: () => ({ height: 0 }), scroll_to_bottom() {}, scroll_to_item() {} }) },
     Scrollbar: { vertical: el("scrollbar") } };
   const opened: string[] = [];
-  const cx = { notify() {}, open_url(url: string) { opened.push(url); }, timer: { every() {} }, spawn(fn: (cx: any) => Promise<unknown>) { pending.push(fn(cx)); } };
+  const copied: string[] = [];
+  const cx = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {}, is_focused: () => true, release() {} }),
+    write_to_clipboard(text: string) { copied.push(text); },
+    open_url(url: string) { opened.push(url); }, timer: { every() {} }, spawn(fn: (cx: any) => Promise<unknown>) { pending.push(fn(cx)); } };
   const terminal = { address: "m/t", state: "live", pid: 1, labels: { "herdr.stereo.bridge": JSON.stringify({ v: 1, pid: 1, socket: "/tmp/stereo-ABC123/s" }) } };
   const state = { v: 1, layout: "columns", side: "left", mode: "split", zoom: null, showToolbar: true, showHeaders: true, compactTools: true };
   Object.assign(state, { preferences: { compactTools: true } });
@@ -43,21 +54,29 @@ function harness() {
         .child(done.id("setting-close").on_click((_event: unknown, cx: unknown) => close(cx)));
     },
   });
+  const createSearchBar = (_pane: string, actions: any) => ({
+    render: () => {
+      const panel: any = new Element("search"), button: any = new Element("button");
+      return panel.id("search-bar").child(button.id("search-query").on_click((_event: unknown, next: unknown) => actions.query("hello", next)));
+    },
+    focus() {}, dispose() {},
+  });
   const env = { checking: () => false, exec: async (_cmd: string, args: string[]) => {
     const request = JSON.parse(args[3]); calls.push(request);
-    const data = request.op === "state" ? state : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
+    const data = request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
       { v: 1, frame: 1, total: 1, top: request.top, width: request.width, height: request.height, scrollShift: 0,
-        lines: request.top === 0 ? ["native rendered row"] : [] };
+        lines: request.top === 0 ? ["native rendered row"] : [],
+        selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
     return { code: 0, stdout: JSON.stringify(data) };
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom: 1 }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi: () => [], lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, createSettingsPanel };
+  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
   const flush = async () => { while (pending.length) await Promise.all(pending.splice(0)); };
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
-  return { view, cx, calls, state, flush, find, opened };
+  return { view, cx, calls, state, flush, find, opened, copied };
 }
 
 test("loads the live layout and sends toolbar actions to the same bridge", async () => {
@@ -147,4 +166,56 @@ test("forwards native document mouse events with the displayed frame", async () 
   const mouse = h.calls.filter(call => call.op === "mouse");
   expect(mouse.map(call => call.event.type)).toEqual(["press", "release"]);
   expect(mouse[0]).toMatchObject({ pane: "chat", frame: 1, event: { x: 1, y: 0, button: "left" } });
+});
+
+test("uses the saved conversation size and a 20 percent default in columns", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.view.areaWidth = 1600;
+  h.view.cellWidth = 10;
+  expect(h.view.chatExtent()).toBe(320);
+  h.view.viewState.preferences.chatWidth = 40;
+  expect(h.view.chatExtent()).toBe(416);
+});
+
+test("resizing the divider persists the new conversation width", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.view.areaWidth = 1600;
+  h.view.cellWidth = 10;
+  const bar = h.view.divider({});
+  bar.mouseDown({ position: { x: 320, y: 0 } }, h.cx);
+  bar.windowMove({ position: { x: 420, y: 0 } }, h.cx);
+  bar.windowUp({}, h.cx);
+  await h.flush();
+  expect(h.calls).toContainEqual({ v: 1, op: "setting", key: "chatWidth", value: 40 });
+});
+
+test("opens a panel search and sends its query through the bridge", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.find(h.view.render(), "stereo-action-find-chat")!.click!({}, h.cx);
+  await h.flush();
+  expect(h.calls).toContainEqual({ v: 1, op: "search", pane: "chat", action: "open", top: 0, height: 19, following: true });
+  h.find(h.view.render(), "search-query")!.click!({}, h.cx);
+  await h.flush();
+  expect(h.calls).toContainEqual({ v: 1, op: "search", pane: "chat", action: "query", query: "hello" });
+  expect(h.view.chat.searchState.count).toBe(1);
+});
+
+test("selects and copies text from a native rendered row", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  const row = h.view.entry(h.view.chat, 0, {});
+  const box = h.find(h.view.render(), "stereo-chat-box")!;
+  row.mouseDown({ local_position: { x: 20, y: 3 }, modifiers: {}, click_count: 1 }, h.cx);
+  box.windowMove!({ local_position: { x: 44, y: 3 }, modifiers: {} }, h.cx);
+  box.windowUp!({ local_position: { x: 44, y: 3 }, modifiers: {}, click_count: 1 }, h.cx);
+  await h.flush();
+  h.view.render().keyDown({ key: "c", modifiers: { control: true } }, h.cx);
+  expect(h.copied).toEqual(["ati"]);
 });

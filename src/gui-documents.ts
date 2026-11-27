@@ -1,6 +1,7 @@
 import type { TuiMouseButton, TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { Pane } from "./content.ts";
 import type { NativeDocument, DocumentViewport } from "./native.ts";
+import { guiSelectionCells, type GuiSelectionRow } from "./gui-selection-cells.ts";
 type TuiMouseDispatchTarget = NonNullable<ReturnType<NativeDocument["handleMouse"]>>["target"];
 export type GuiPane = Pane | "combined";
 type GuiDocument = Pick<NativeDocument, "setViewport" | "beginFrame" | "render" | "takeScrollShift" | "handleMouse" | "dispose">;
@@ -15,6 +16,7 @@ export interface GuiDocumentPage {
   /** How far the content above this viewport moved during this render. */
   scrollShift: number;
   lines: readonly string[];
+  selection: readonly GuiSelectionRow[];
 }
 export interface GuiMouse {
   type: "press" | "release" | "move" | "drag" | "wheel";
@@ -71,14 +73,15 @@ export class GuiDocuments {
     const document = this.documents[pane];
     document.beginFrame();
     const lines = document.render(view.width);
+    const visible = lines.slice(view.top, view.top + view.height);
     const frame: Frame = {
       frame: ++this.serial, top: view.top, width: view.width, height: view.height,
       total: lines.length, scrollShift: document.takeScrollShift(),
-      lines: lines.slice(view.top, view.top + view.height), viewport: view,
+      lines: visible, selection: visible.map(guiSelectionCells), viewport: view,
     };
     this.frames[pane] = frame;
     return { frame: frame.frame, top: frame.top, width: frame.width, height: frame.height,
-      total: frame.total, scrollShift: frame.scrollShift, lines: frame.lines };
+      total: frame.total, scrollShift: frame.scrollShift, lines: frame.lines, selection: frame.selection };
   }
 
   /** Invalidates a geometry token and cancels any press before a document can change under it. */

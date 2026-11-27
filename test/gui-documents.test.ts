@@ -29,6 +29,8 @@ test("projects native documents into bounded independent row viewports", () => {
   const { gui } = setup();
   const chat = gui.page("chat", { width: 30, top: 0, height: 5, following: false });
   expect(chat.lines.join("\n")).toContain("hello");
+  const row = chat.lines.findIndex(line => line.includes("hello"));
+  expect(chat.selection[row].cells.map(cell => cell.text).join("")).toContain("hello");
   expect(chat.lines.length).toBeLessThanOrEqual(5);
   const activity = gui.page("activity", { width: 20, top: 0, height: 3, following: false });
   expect(activity.lines.join("\n")).not.toContain("hello");

@@ -7,6 +7,7 @@ import {
 import { NativeDocument, type DocumentTurns, type Pane } from "./native.ts";
 import { GuiDocuments } from "./gui-documents.ts";
 import { GuiCombinedDocument } from "./gui-combined.ts";
+import { GuiHistorySearch } from "./gui-search.ts";
 import { parseHex, turnColor, pointerMotionAvailable, type TurnMix } from "./turns.ts";
 import { NativeContentIndex } from "./content.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -230,12 +231,14 @@ export class TranscriptLayout {
   private chat?: ScrollView;
   private documents?: Record<Pane, NativeDocument>;
   private guiDocuments?: GuiDocuments;
+  private guiSearch?: GuiHistorySearch;
   private guiFactory?: () => GuiDocuments;
+  guiSearchModel(): GuiHistorySearch | undefined { this.guiRenderer(); return this.guiSearch; }
   guiRenderer(): GuiDocuments | undefined {
     if (!this.guiDocuments && this.guiFactory) this.guiDocuments = this.guiFactory();
     return this.guiDocuments;
   }
-  invalidateGui(): void { this.guiDocuments?.invalidate(); }
+  invalidateGui(): void { this.guiDocuments?.invalidate(); this.guiSearch?.markDirty(); }
   private surface?: SplitSurface;
   private disposeDocuments?: () => void;
   private activePane: Pane = "chat";
@@ -498,6 +501,10 @@ export class TranscriptLayout {
       const guiChat = new NativeDocument(document, "chat", this.timestamps, this.theme, () => 0, showTimestamps,
         () => this.activate("chat"), false, guiIndex, this.copy, showCopyButtons, undefined, undefined, undefined,
         () => this.preferences.buttonStyle, undefined, turns, metrics);
+      this.guiSearch = new GuiHistorySearch({ chat: guiChat, activity: guiActivity }, pane => {
+        this.guiDocuments?.invalidate(pane);
+        host.requestRender();
+      });
       const combined = new GuiCombinedDocument(document, () => scroll.getContentWidth(Math.max(1, host.terminal.columns)));
       return new GuiDocuments({ activity: guiActivity, chat: guiChat, combined }, () => this.timestamps.beginFrame(),
         () => host.requestRender(), target => host.setFocus(target));
@@ -506,6 +513,8 @@ export class TranscriptLayout {
     this.disposeDocuments = () => {
       activityDocument.dispose();
       chatDocument.dispose();
+      this.guiSearch?.dispose();
+      this.guiSearch = undefined;
       this.guiDocuments?.dispose();
       this.guiDocuments = undefined;
       this.guiFactory = undefined;

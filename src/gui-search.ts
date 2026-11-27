@@ -69,6 +69,14 @@ export class GuiHistorySearch {
     }
   }
 
+  /** Refresh an open query only when its history has changed. */
+  async refresh(pane: Pane): Promise<GuiSearchState> {
+    const session = this.sessions[pane];
+    if (session && session.query.trim() && !session.index && !session.pending)
+      return this.query(pane, session.query);
+    return this.state(pane);
+  }
+
   /** Set or refresh a query. Literal and Boolean terms and explicit regex use the TUI matcher. */
   async query(pane: Pane, query: string): Promise<GuiSearchState> {
     const session = this.sessions[pane];

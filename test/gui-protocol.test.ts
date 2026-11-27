@@ -30,6 +30,9 @@ test("accepts only known GUI controls", () => {
   expect(parseGuiRequest({ v: 1, op: "setting", key: "turnHoverMix", value: 999 })).toBeUndefined();
   expect(parseGuiRequest({ v: 1, op: "setting", key: "chatWidth", value: 45 })).toEqual({ v: 1, op: "setting", key: "chatWidth", value: 45 });
   expect(parseGuiRequest({ v: 1, op: "setting", key: "chatWidth", value: 2 })).toBeUndefined();
+  expect(parseGuiRequest({ v: 1, op: "search", pane: "chat", action: "query", query: "hello" })).toEqual({ v: 1, op: "search", pane: "chat", action: "query", query: "hello" });
+  expect(parseGuiRequest({ v: 1, op: "search", pane: "combined", action: "query", query: "hello" })).toBeUndefined();
+  expect(parseGuiRequest({ v: 1, op: "search", pane: "chat", action: "query", query: "x".repeat(3000) })).toBeUndefined();
   expect(parseGuiRequest({ v: 1, op: "setting", key: "__proto__", value: true })).toBeUndefined();
   expect(parseGuiRequest({ v: 1, op: "setting", key: "showToolbar", value: "yes" })).toBeUndefined();
   expect(parseGuiRequest({ v: 1, op: "state" })).toEqual({ v: 1, op: "state" });

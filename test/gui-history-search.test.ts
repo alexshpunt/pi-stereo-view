@@ -79,6 +79,19 @@ test("invalid search queries report errors and later valid queries recover", asy
   } finally { search.dispose(); chat.document.dispose(); activity.document.dispose(); }
 });
 
+test("refreshes an open search after its history changes", async () => {
+  const chat = documentFor(new UserMessageComponent("ready now", 0, 0)), activity = documentFor();
+  const search = new GuiHistorySearch({ chat: chat.document, activity: activity.document });
+  try {
+    search.open("chat", { top: 0, height: 4, following: false });
+    expect((await search.query("chat", "ready")).count).toBe(1);
+    chat.history.addChild(new UserMessageComponent("ready again", 0, 0));
+    search.markDirty("chat");
+    await search.refresh("chat");
+    expect(search.state("chat").count).toBe(2);
+  } finally { search.dispose(); chat.document.dispose(); activity.document.dispose(); }
+});
+
 test("newer searches cancel in-flight regex and history refresh drops removed results", async () => {
   const item = new UserMessageComponent("ready now", 0, 0);
   const chat = documentFor(item), activity = documentFor();
