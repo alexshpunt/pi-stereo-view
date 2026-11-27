@@ -38,6 +38,17 @@ describe("opening the experimental GUI", () => {
     expect(await openGuiForFocusedTerminal("t1", 42, run)).toBe(false);
     expect(calls).toEqual([["status"], ["do", "agent.list"], ["status"]]);
   });
+  it("opens for a focused local Pi even without optional session identity metadata", async () => {
+    const calls: string[][] = [];
+    const run = async (args: string[]) => {
+      calls.push(args);
+      if (args[0] === "status") return JSON.stringify({ agent: "t1", tab: "tab1" });
+      if (args[1] === "agent.list") return JSON.stringify({ agents: [{ terminal: "t1", pid: 42, identityCurrent: false }] });
+      return "{}";
+    };
+    expect(await openGuiForFocusedTerminal("t1", 42, run)).toBe(true);
+    expect(calls.at(-1)?.[1]).toBe("app.open");
+  });
   it("keeps the terminal view when the app or matching identity is unavailable", async () => {
     expect(await openGuiForFocusedTerminal("t1", 42, async () => { throw new Error("unavailable"); })).toBe(false);
     const run = async (args: string[]) => args[0] === "status" ? JSON.stringify({ agent: "worker/t1" }) :

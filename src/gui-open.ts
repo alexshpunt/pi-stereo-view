@@ -15,8 +15,8 @@ export async function openGuiForFocusedTerminal(terminal: string, pid: number, r
     const status = JSON.parse(await run(["status"]));
     if (typeof status.agent !== "string" || (status.agent !== terminal && !status.agent.endsWith(`/${terminal}`))) return false;
     const list = JSON.parse(await run(["do", "agent.list"]));
-    if (!Array.isArray(list.agents) || !list.agents.some((agent: { terminal?: unknown; pid?: unknown; identityCurrent?: unknown }) =>
-      agent.terminal === status.agent && agent.pid === pid && agent.identityCurrent === true)) return false;
+    if (!Array.isArray(list.agents) || !list.agents.some((agent: { terminal?: unknown; pid?: unknown }) =>
+      agent.terminal === status.agent && agent.pid === pid)) return false;
     const latest = JSON.parse(await run(["status"]));
     if (!stillRunning() || latest.agent !== status.agent || latest.tab !== status.tab) return false;
     await run(["do", "app.open", JSON.stringify({ mod: "stereo-view", app: "stereo-view", for: status.agent })]);
