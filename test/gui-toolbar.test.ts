@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import { expect, test } from "vitest";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { parseAnsi } from "../herdr/mods/stereo-view/ansi.js";
@@ -75,8 +74,8 @@ function harness() {
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom: 1 }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, Buffer, createHash,
-    appHome: () => "/tmp", mkdir: async () => {}, writeFile: async () => {} };
+  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection,
+    appHome: () => "/tmp", mkdir: async () => {}, writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
   const flush = async () => { while (pending.length) await Promise.all(pending.splice(0)); };
@@ -136,12 +135,30 @@ test("sends pane actions in click order", async () => {
     .toEqual(["layout", "compact", "zoom-activity", "headers", "mode"]);
 });
 
+test("keeps following new output until the user scrolls away", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  let moves = 0;
+  h.view.activity.handle.scroll_to_bottom = () => { moves++; };
+  h.setTotal(100);
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(moves).toBe(1);
+  h.view.activity.following = false;
+  h.setTotal(120);
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(moves).toBe(1);
+});
+
 test("keeps previously loaded history visible while a different viewport is refreshed", async () => {
   const h = harness();
   h.view.init({}, h.cx);
   await h.flush();
   h.view.chat.items.set(80, { id: "prior", lines: ["previously visible"] });
   h.setTotal(100);
+  h.view.chat.following = false;
   h.view.chat.handle.content_size = () => ({ height: 1700 });
   h.view.refresh(h.cx);
   await h.flush();

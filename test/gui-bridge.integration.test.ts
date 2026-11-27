@@ -70,6 +70,41 @@ test("the private bridge serves controls and rejects unknown actions", async () 
   } finally { await stop(); }
 });
 
+test("the bridge transfers large image bytes separately from the visible history page", async () => {
+  const image = Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"), Buffer.alloc(2_500_000, 17)]);
+  const encoded = image.toString("base64");
+  const line = `\x1b_Ga=T,f=100,c=4,r=1;${encoded}\x1b\\`;
+  const document = { setViewport() {}, beginFrame() {}, render: () => [line], takeScrollShift: () => 0,
+    handleMouse: () => undefined, dispose() {} };
+  const gui = new GuiDocuments({ chat: document, activity: document });
+  let socketPath = "";
+  const state = { v: 1 as const, layout: "columns" as const, side: "left" as const, mode: "split" as const,
+    zoom: null, showToolbar: true, showHeaders: true, compactTools: true, preferences: { ...defaults } };
+  const stop = await startGuiBridge("terminal", () => undefined, async (_terminal, label) => { socketPath = JSON.parse(label).socket; },
+    () => ({ state: () => state, action: () => {}, setting: () => {}, renderer: () => gui, search: () => undefined }));
+  const request = (payload: unknown): Promise<any> => new Promise((resolve, reject) => {
+    const socket = connect(socketPath);
+    let response = "";
+    socket.on("error", reject);
+    socket.on("connect", () => socket.write(JSON.stringify(payload) + "\n"));
+    socket.on("data", chunk => { response += chunk; });
+    socket.on("end", () => { try { resolve(JSON.parse(response)); } catch (error) { reject(error); } });
+  });
+  try {
+    const page = await request({ v: 1, op: "view", pane: "activity", top: 0, height: 1, width: 40, following: false });
+    expect(page.images).toHaveLength(1);
+    expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThan(4096);
+    let data = "";
+    while (data.length < encoded.length) {
+      const chunk = await request({ v: 1, op: "image", id: page.images[0].id, offset: data.length, length: 524288 });
+      expect(chunk.total).toBe(encoded.length);
+      data += chunk.data;
+    }
+    expect(Buffer.from(data, "base64").equals(image)).toBe(true);
+    expect((await request({ v: 1, op: "image", id: "../invalid", offset: 0, length: 1 })).error).toBeTruthy();
+  } finally { await stop(); gui.dispose(); }
+});
+
 test("the bridge serves native viewport rows and sends clicks only to their displayed frame", async () => {
   class UserMessageComponent extends Text {
     events: string[] = [];

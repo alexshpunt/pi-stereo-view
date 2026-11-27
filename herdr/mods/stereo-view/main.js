@@ -1,7 +1,5 @@
 import { View, div, image } from "gpui-kit";
-import { Buffer } from "buffer";
-import { createHash } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, writeFile, unlink } from "fs/promises";
 import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, Scrollbar } from "gpui-base";
 import { appHome, checking, exec, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
 import { parseAnsi } from "./ansi.js";
@@ -13,6 +11,13 @@ const LABEL = "herdr.stereo.bridge";
 const LINE_HEIGHT = 17;
 const PAGE = 256;
 const INTERVAL = 700;
+// The shell's binary fs bindings can yield empty files. Decode and verify in a
+// local Node process after writing only ASCII through its text binding.
+const IMAGE_DECODE = `const fs=require('node:fs'),crypto=require('node:crypto');
+const [input,output,id]=process.argv.slice(1),data=Buffer.from(fs.readFileSync(input,'utf8'),'base64');
+if(crypto.createHash('sha256').update(data).digest('hex')!==id)process.exit(2);
+const temp=output+'.'+process.pid+'.tmp';
+try{fs.writeFileSync(temp,data);fs.renameSync(temp,output);}finally{try{fs.unlinkSync(temp)}catch(e){if(e.code!=='ENOENT')throw e}}`;
 // Fixed code, not a command or script read from the terminal label. The socket and
 // request are arguments and never interpolated into this source.
 const CLIENT = `const net=require('node:net');
@@ -55,12 +60,12 @@ function bridge() {
   return { socket: label.socket, machine: split < 0 ? undefined : address.slice(0, split), address };
 }
 
-/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[]}} */
+/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[]}} */
 function paneState() {
   const selectionRows = new Map();
   return { total: null, revision: -1, items: new Map(), heights: [], width: 80, height: 300,
     handle: VirtualListScrollHandle.new(), fetching: false, error: null, initial: true, lastSize: null,
-    frameTop: 0, frameHeight: 0, pressed: false, searchState: null, searchBar: null,
+    frameTop: 0, frameHeight: 0, pressed: false, following: true, searchState: null, searchBar: null,
     selectionRows, selection: createSelection(index => selectionRows.get(index)), selecting: false, pressPoint: null, images: [] };
 }
 
@@ -78,7 +83,7 @@ function nextPage(state) {
 function validView(data, start, count, width, following) {
   return data?.v === 1 && Number.isSafeInteger(data.frame) && data.frame > 0 &&
     Number.isSafeInteger(data.total) && data.total >= 0 && data.total <= 1000000 &&
-    data.top === (following ? Math.max(0, data.total - count) : start) && data.height === count && data.width === width &&
+    Number.isSafeInteger(data.top) && data.top >= 0 && (following || data.top === start) && data.height === count && data.width === width &&
     Number.isSafeInteger(data.scrollShift) && Array.isArray(data.lines) && data.lines.length <= count &&
     Array.isArray(data.selection) && data.selection.length === data.lines.length &&
     Array.isArray(data.images) && data.images.length <= 256 && data.images.every(/** @param {any} */ image =>
@@ -135,7 +140,9 @@ export default class StereoView extends View {
     this.areaWidth = 800;
     this.imagePaths = new Map();
     this.imagePending = new Set();
-    this.imageFailures = new Set();
+    this.imageQueue = [];
+    this.imageWorkers = 0;
+    this.imageFailures = new Map();
     this.areaHeight = 400;
     this.drag = undefined;
     // Until the first layout measures the monospace probe, use one em per cell.
@@ -163,7 +170,7 @@ export default class StereoView extends View {
         state.searchBar?.dispose(); state.searchBar = null; state.searchState = null;
         state.selection.clear(); state.selectionRows.clear(); state.selecting = false;
         state.total = null; state.revision = -1; state.items.clear(); state.heights = [];
-        state.initial = true; state.error = null; state.pressed = false;
+        state.initial = true; state.following = true; state.error = null; state.pressed = false; state.images = [];
       }
     }
     this.fetchState(connection, cx);
@@ -231,7 +238,7 @@ export default class StereoView extends View {
     });
     const offset = state.handle.offset().y;
     const viewport = state.handle.viewport_size().height || state.height;
-    const following = offset + viewport >= state.handle.content_size().height - 2;
+    const following = state.following;
     const top = Math.max(0, Math.floor(offset / LINE_HEIGHT));
     const height = Math.min(PAGE, Math.max(1, Math.ceil(viewport / LINE_HEIGHT) + 1));
     this.sendSearch(pane, { action: "open", top, height, following }, cx);
@@ -307,9 +314,10 @@ export default class StereoView extends View {
           if (request.action === "close") {
             pane.searchBar?.dispose();
             pane.searchBar = null;
-            if (reply.restored?.following) pane.handle.scroll_to_bottom();
+            pane.following = !!reply.restored?.following;
+            if (pane.following) pane.handle.scroll_to_bottom();
             else if (Number.isSafeInteger(reply.restored?.top)) pane.handle.scroll_to_item(reply.restored.top);
-          } else if (Number.isSafeInteger(reply.top)) pane.handle.scroll_to_item(reply.top);
+          } else if (Number.isSafeInteger(reply.top)) { pane.following = false; pane.handle.scroll_to_item(reply.top); }
         } else if (reply.ok !== true) throw new Error("Action failed");
         this.controlError = null;
       } catch {
@@ -326,9 +334,7 @@ export default class StereoView extends View {
   /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {{socket: string, machine?: string, address: string}} connection @param {any} cx */
   fetchPane(pane, state, connection, cx) {
     if (state.fetching || state.pressed || this.actionPending || this.actions.length) return;
-    const offset = state.handle.offset().y;
-    const viewport = state.handle.viewport_size().height || state.height;
-    const following = state.initial || offset + viewport >= state.handle.content_size().height - 2;
+    const following = state.following;
     const { start, count } = nextPage(state);
     const width = state.width;
     state.fetching = true;
@@ -349,8 +355,6 @@ export default class StereoView extends View {
             state.handle.scroll_to_item(page.search.top);
         }
         const currentOffset = state.handle.offset().y;
-        const currentViewport = state.handle.viewport_size().height || state.height;
-        const stillAtEnd = currentOffset + currentViewport >= state.handle.content_size().height - 2;
         const geometryChanged = state.total !== page.total;
         state.total = page.total;
         state.revision = page.frame;
@@ -377,7 +381,7 @@ export default class StereoView extends View {
           state.items.delete(oldest);
           if (!state.selection.bounds()) state.selectionRows.delete(oldest);
         }
-        if (geometryChanged && (state.initial || (following && stillAtEnd)) && state.total > 0) state.handle.scroll_to_bottom();
+        if (geometryChanged && following && state.following && state.total > 0) state.handle.scroll_to_bottom();
         else if (!following && page.scrollShift && state.total > 0)
           state.handle.scroll_to_item(Math.max(0, Math.min(state.total - 1, Math.floor(currentOffset / LINE_HEIGHT) + page.scrollShift)));
         state.initial = false;
@@ -435,8 +439,20 @@ export default class StereoView extends View {
   /** @param {any} placement @param {{socket:string,machine?:string}} connection @param {any} cx */
   loadImage(placement, connection, cx) {
     const id = placement.id;
-    if (this.imagePaths.has(id) || this.imagePending.has(id) || this.imageFailures.has(id)) return;
+    if (this.imagePaths.has(id) || this.imagePending.has(id) || Date.now() - (this.imageFailures.get(id) ?? 0) < 5000) return;
+    this.imageFailures.delete(id);
     this.imagePending.add(id);
+    this.imageQueue.push({ placement, connection });
+    if (this.imageQueue.length > 64) this.imagePending.delete(this.imageQueue.shift().placement.id);
+    this.drainImages(cx);
+  }
+
+  /** @param {any} cx */
+  drainImages(cx) {
+    if (this.imageWorkers >= 4 || !this.imageQueue.length) return;
+    const { placement, connection } = this.imageQueue.shift();
+    const id = placement.id;
+    this.imageWorkers++;
     cx.spawn(async (/** @type {any} */ next) => {
       try {
         let encoded = "", total = -1;
@@ -454,13 +470,16 @@ export default class StereoView extends View {
         const extension = placement.mime === "image/jpeg" ? "jpg" : placement.mime.slice(6);
         const relative = `data/stereo-view/images/${id}.${extension}`;
         const directory = `${appHome()}/data/stereo-view/images`;
-        const bytes = Buffer.from(encoded, "base64");
-        if (createHash("sha256").update(bytes).digest("hex") !== id) throw new Error("Image data changed");
         await mkdir(directory, { recursive: true });
-        await writeFile(`${directory}/${id}.${extension}`, bytes);
+        const temporary = `${directory}/${id}-${Math.random().toString(36).slice(2)}.base64`;
+        await writeFile(temporary, encoded);
+        try {
+          const decoded = await exec("node", ["-e", IMAGE_DECODE, temporary, `${directory}/${id}.${extension}`, id], { timeout: 15000 });
+          if (decoded.code !== 0) throw new Error("Image data could not be decoded");
+        } finally { await unlink(temporary); }
         this.imagePaths.set(id, relative);
-      } catch (error) { this.imageFailures.add(id); console.warn("Stereo View image failed", error); }
-      finally { this.imagePending.delete(id); next.notify(); }
+      } catch (error) { this.imageFailures.set(id, Date.now()); console.warn("Stereo View image failed", error); }
+      finally { this.imagePending.delete(id); this.imageWorkers--; this.drainImages(next); next.notify(); }
     });
   }
 
@@ -488,7 +507,7 @@ export default class StereoView extends View {
     const item = state.items.get(index);
     if (!item) return div().h(LINE_HEIGHT).flex_none();
     const line = item.lines[0] ?? "";
-    const row = h_flex().relative().px(8).h(LINE_HEIGHT).flex_none().whitespace_nowrap().overflow_hidden()
+    const row = h_flex().relative().w_full().px(8).h(LINE_HEIGHT).flex_none().whitespace_nowrap().overflow_hidden()
       .children(selectedRuns(parseAnsi(line), state.selectionRows.get(index),
         state.selection.columns(index)).map(run => this.ansiRun(t, run)));
     for (const placement of state.images) {
@@ -594,7 +613,13 @@ export default class StereoView extends View {
         .on_size_change((size, cx) => this.sizePane(state, size, cx))
         .on_scroll_wheel((_event, cx) => {
           if (name === "chat" || name === "activity") this.activePane = name;
-          cx.timer.after(20, next => { const connection = bridge(); if (connection) this.fetchPane(name, state, connection, next); });
+          state.following = false;
+          cx.timer.after(100, next => {
+            const offset = state.handle.offset().y;
+            const viewport = state.handle.viewport_size().height || state.height;
+            state.following = offset + viewport >= state.handle.content_size().height - 2;
+            const connection = bridge(); if (connection) this.fetchPane(name, state, connection, next);
+          });
         })
         .on_mouse_down("left", (event, cx) => {
           if (!event.local_position) return;
@@ -701,8 +726,9 @@ export default class StereoView extends View {
         cx.notify(); cx.stop_propagation(); return;
       }
       if (this.focus.is_focused() && (key === "pageup" || key === "pagedown" || key === "home" || key === "end")) {
-        if (key === "end") pane.handle.scroll_to_bottom();
+        if (key === "end") { pane.following = true; pane.handle.scroll_to_bottom(); }
         else {
+          pane.following = false;
           const current = Math.floor(pane.handle.offset().y / LINE_HEIGHT);
           const page = Math.max(1, Math.floor((pane.handle.viewport_size().height || pane.height) / LINE_HEIGHT) - 1);
           const target = key === "home" ? 0 : current + (key === "pageup" ? -page : page);

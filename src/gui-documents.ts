@@ -77,8 +77,11 @@ export class GuiDocuments {
     document.beginFrame();
     let lines = document.render(view.width);
     if (view.following) {
-      const tail = Math.max(0, lines.length - view.height);
-      if (view.top !== tail) {
+      // Native layout can change its row count when the viewport moves. Converge on
+      // the tail before publishing a frame, but bound work for live components.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const tail = Math.max(0, lines.length - view.height);
+        if (view.top === tail) break;
         view.top = tail;
         document.beginFrame();
         lines = document.render(view.width);
