@@ -82,7 +82,7 @@ test("the bridge serves native viewport rows and sends clicks only to their disp
   const root = new Container(), history = new Container();
   root.addChild(new Container()); root.addChild(new Container()); root.addChild(history); history.addChild(text);
   const timestamps = new TranscriptTimestamps({ buildContextEntries: () => [], getBranch: () => [] } as unknown as ExtensionContext["sessionManager"]);
-  const theme = { fg: (_name: string, value: string) => value } as Theme;
+  const theme = { fg: (_name: string, value: string) => value, style: (value: string) => value } as unknown as Theme;
   const doc = (pane: "chat" | "activity") => new NativeDocument(root, pane, timestamps, () => theme, () => 0, () => false);
   const documents = { chat: doc("chat"), activity: doc("activity") };
   const gui = new GuiDocuments(documents, () => timestamps.beginFrame());
@@ -111,6 +111,7 @@ test("the bridge serves native viewport rows and sends clicks only to their disp
     expect(await request({ v: 1, op: "mouse", pane: "chat", frame: page.frame, event: { ...event, type: "press" } })).toEqual({ v: 1, ok: false });
     expect((await request({ v: 1, op: "search", pane: "chat", action: "open", top: 0, height: 10, following: false })).open).toBe(true);
     const found = await request({ v: 1, op: "search", pane: "chat", action: "query", query: "native" });
+    expect(found.error).toBeUndefined();
     expect(found.count).toBe(1);
     expect(found.current).toBe(1);
     expect((await request({ v: 1, op: "search", pane: "chat", action: "close" })).restored).toEqual({ top: 0, following: false });
