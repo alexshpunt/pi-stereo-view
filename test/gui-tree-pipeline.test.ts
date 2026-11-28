@@ -6,6 +6,7 @@ import { TreeLayout } from "../herdr/mods/stereo-view/tree-layout.js";
 import { TreeView } from "../herdr/mods/stereo-view/tree-view.js";
 import { TreeSearch } from "../herdr/mods/stereo-view/tree-search.js";
 import { cellWidth, wrapRows } from "../herdr/mods/stereo-view/wrap.js";
+import { styleMarkdown } from "../herdr/mods/stereo-view/md-style.js";
 
 class UserMessageComponent { constructor(public text: string) {} render() { return [this.text]; } }
 class BashExecutionComponent { constructor(public command: string, public outputLines: string[]) {} render() { return ["$ " + this.command]; } }
@@ -132,6 +133,11 @@ describe("layout, view and search", () => {
     const view = new TreeView({ model: local, closed: true, get: () => Promise.resolve([]), rows: () => Promise.resolve([]) } as never, { viewport: 10, cols: 40, maxChars: 4000 });
     view.changed({ kind: "snapshot", at: 0, removed: 0, inserted: 100, last: true });
     expect(view.exact).toBe(false);
+  });
+
+  it("styles markdown rows line by line, carrying the code fence down", () => {
+    const styled = styleMarkdown(["# Title", "text", "```ts", "# not a heading", "```", "> quote", "---", "### small"]);
+    expect(styled.map(row => row.style)).toEqual(["h1", "plain", "fence", "code", "fence", "quote", "rule", "h3"]);
   });
 
   it("searches in slices", () => {

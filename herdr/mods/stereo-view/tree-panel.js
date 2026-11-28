@@ -4,6 +4,7 @@
 import { TreeClient } from "./tree-client.js";
 import { TreeView } from "./tree-view.js";
 import { wrapRows } from "./wrap.js";
+import { styleMarkdown } from "./md-style.js";
 
 /**
  * @param {{ div: any, h_flex: any, v_flex: any, v_virtual_list: any }} gpui
@@ -70,7 +71,14 @@ export function createTreePanels(gpui, deps) {
       for (const el of lines(rows.t ?? [], ctx, t.foreground)) box.child(el);
       box.child(div().h(ctx.lineHeight).flex_none());
     } else if (item.k === "md") {
-      for (const el of lines(rows.t ?? [], ctx, t.foreground)) box.child(el);
+      for (const { text, style } of styleMarkdown(rows.t ?? [])) {
+        const [el] = style === "h1" || style === "h2" ? lines([text], ctx, t.accent ?? t.foreground, { bold: true })
+          : style === "h3" ? lines([text], ctx, t.foreground, { bold: true })
+          : style === "quote" ? lines([text], ctx, t.muted, { italic: true })
+          : style === "fence" || style === "rule" ? lines([text], ctx, t.muted)
+          : lines([text], ctx, t.foreground);
+        box.child(style === "code" ? el.bg(t.raised ?? t.background) : el);
+      }
     } else if (item.k === "think") {
       for (const el of lines(["thinking"], ctx, t.muted, { bold: true })) box.child(el);
       for (const el of lines(rows.t ?? [], ctx, t.muted, { italic: true })) box.child(el);
