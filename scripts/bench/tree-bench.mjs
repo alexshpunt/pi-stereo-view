@@ -134,6 +134,7 @@ for (let i = 0; i < 100; i++) {
 }
 client.close();
 
+const round = (values, p) => (values.length ? +pct(values, p).toFixed(1) : 0);
 const rows = [];
 let failed = false;
 for (const [name, values] of Object.entries(samples)) {
@@ -143,7 +144,7 @@ for (const [name, values] of Object.entries(samples)) {
   if (!row.ok) failed = true;
   rows.push(row);
 }
-const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, bodyCharsHeld: client.model.bodyChars, itemsWithBody: client.model.bodies.size, foldedItems: folded.length, expanded, expandedCharsHeld, expandedCharsCap: view.maxExpandedChars, expandWallMs: { p50: +pct(expandWalls, .5).toFixed(1), p95: +pct(expandWalls, .95).toFixed(1), max: +Math.max(...expandWalls, 0).toFixed(1) }, counterpart: { found: cpFound, p95Ms: +pct(cpWalls, .95).toFixed(1) }, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
+const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, bodyCharsHeld: client.model.bodyChars, itemsWithBody: client.model.bodies.size, foldedItems: folded.length, expanded, expandedCharsHeld, expandedCharsCap: view.maxExpandedChars, expandWallMs: { p50: round(expandWalls, .5), p95: round(expandWalls, .95), max: +Math.max(...expandWalls, 0).toFixed(1) }, counterpart: { found: cpFound, p95Ms: round(cpWalls, .95) }, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
 if (pendingAfterLoad) failed = true;
 // The whole folded tree stays in memory like scrollback: report it, fail when it passes 100 M characters.
 if (client.model.bodyChars > 100_000_000) failed = true;
