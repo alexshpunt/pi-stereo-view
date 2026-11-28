@@ -134,7 +134,8 @@ describe("layout, view and search", () => {
     const view = new TreeView(client, { viewport: 10, cols: 40 });
     view.changed({ kind: "snapshot", at: 0, removed: 0, inserted: model.items.length, last: true });
     const folded = view.layout.heights[model.indexOf(item.id)];
-    await view.expand(item.id);
+    const expanded = await view.expand(item.id);
+    expect(expanded).toBe(true);
     expect(model.isFolded(item)).toBe(false);
     expect(view.layout.heights[model.indexOf(item.id)]).toBeGreaterThan(folded);
     expect(view.fold(item.id)).toBe(true);
