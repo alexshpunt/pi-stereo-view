@@ -263,7 +263,7 @@ export function createTreePanels(gpui, deps) {
       if (found) {
         const fits = view.layout.heights[found.index] <= view.viewport;
         view.toItem(found.index);
-        state.handle.scroll_to_item?.(found.index);
+        state.handle.scroll_to_item?.(found.index, fits ? "center" : "top");
         entry.bottomRequests = 2;
       }
       const placed = state.handle.content_size().height > 0;
