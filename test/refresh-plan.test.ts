@@ -33,14 +33,16 @@ describe("rows from before a width change", () => {
   });
 });
 describe("pages that must not replace rows on screen", () => {
-  const page = (total: number, lines: string[]) => ({ total, lines });
-  it("rejects an empty window or only blank rows while the panel has content", () => {
-    expect(pageUsable(page(500, []), true)).toBe(false);
+  const page = (total: number, lines: string[], top = 0) => ({ total, lines, top });
+  it("rejects an empty window past the end or only blank rows while the panel has content", () => {
+    expect(pageUsable(page(500, [], 600), true)).toBe(false);
+    expect(pageUsable(page(500, [], 500), true)).toBe(false);
     expect(pageUsable(page(500, ["", "  ", "\x1b[48;5;22m   \x1b[49m"]), true)).toBe(false);
   });
   it("accepts a page with text, and any page for a panel that shows nothing yet or a history with no rows", () => {
     expect(pageUsable(page(500, ["", "\x1b[32mwrite\x1b[39m"]), true)).toBe(true);
-    expect(pageUsable(page(500, []), false)).toBe(true);
+    expect(pageUsable(page(500, [], 10), true)).toBe(true);
+    expect(pageUsable(page(500, [], 600), false)).toBe(true);
     expect(pageUsable(page(500, ["", ""]), false)).toBe(true);
     expect(pageUsable(page(0, []), true)).toBe(true);
   });

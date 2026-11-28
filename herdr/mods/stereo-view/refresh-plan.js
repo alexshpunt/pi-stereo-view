@@ -20,11 +20,12 @@ export function rowHasText(line) {
  * Whether a page of rows from the bridge may replace what a panel shows. While Pi lays history out again at a new
  * width, an older Pi answers with an empty window (past the end) or a window of unmeasured, blank rows. Drawing
  * that would blank a panel that has content, so the panel keeps its rows and reads again.
- * @param {{total: number, lines: string[]}} page @param {boolean} hasContent whether the panel shows any row with text now
+ * @param {{top: number, total: number, lines: string[]}} page @param {boolean} hasContent whether the panel shows any row with text now
  */
 export function pageUsable(page, hasContent) {
   if (!hasContent || page.total === 0) return true;
-  if (page.lines.length === 0) return false;
+  // An empty window is only wrong when it lies past the end of the history; inside it, it is what Pi really has.
+  if (page.lines.length === 0) return page.top < page.total;
   return page.lines.some(rowHasText);
 }
 
