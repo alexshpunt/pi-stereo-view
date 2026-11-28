@@ -14,7 +14,7 @@ export function createTreePanels(gpui, deps) {
   const { div, h_flex, v_flex, v_virtual_list } = gpui;
   const COPIED_MS = 1500;
   /** The host's virtual list takes at most 10000 sizes: past this many items, runs of `group` items share one list entry. */
-  const MAX_ENTRIES = 400;
+  const MAX_ENTRIES = 8000;
   /** @type {Map<string, any>} */
   const panes = new Map();
 
@@ -248,7 +248,7 @@ export function createTreePanels(gpui, deps) {
     view(name) { return panes.get(name)?.view; },
     /** Time spent building the items of each visible range (ms), for the live frame check. */
     ranges(name) { return panes.get(name)?.rangeMs?.slice(-300) ?? []; },
-    status(name) { const entry = panes.get(name); return entry ? { ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, dead: !!entry.dead, error: entry.error } : null; },
+    status(name) { const entry = panes.get(name); return entry ? { prof: entry.prof ? entry.prof.s.map(v => +(v / entry.prof.n).toFixed(3)) : null, ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, dead: !!entry.dead, error: entry.error } : null; },
     close() { for (const entry of panes.values()) entry.client.close(); panes.clear(); },
 
     /**
@@ -265,6 +265,7 @@ export function createTreePanels(gpui, deps) {
       const { view } = entry;
       const lineHeight = ctx.lineHeight;
       // GPUI owns the scroll offset; the view follows it (rows from the handle), then plans around it.
+      const P = [performance.now()]; // TEMPORARY profile marks
       const group = Math.max(1, Math.ceil(view.layout.count / MAX_ENTRIES));
       entry.ui.group = group;
       view.setViewport(Math.max(1, Math.floor(state.height / lineHeight)));
@@ -275,6 +276,7 @@ export function createTreePanels(gpui, deps) {
         entry.jump = null;
         if (index >= 0) { view.toItemId(view.model.items[index].id); state.handle.scroll_to_item?.(Math.floor(index / group)); entry.bottomRequests = 2; }
       }
+      P.push(performance.now());
       entry.ui.metrics = { lineHeight, cellWidth: ctx.cellWidth ?? 8, textLeft: ctx.gutter };
       // Find: one 4 ms slice per render while a pass runs; a hit to show brings its item on screen (a tall item shows its top).
       const found = entry.ui.frame();
@@ -284,11 +286,14 @@ export function createTreePanels(gpui, deps) {
         state.handle.scroll_to_item?.(Math.floor(found.index / group), fits && group === 1 ? "center" : "top");
         entry.bottomRequests = 2;
       }
+      P.push(performance.now());
       const placed = state.handle.content_size().height > 0;
       if (entry.bottomRequests > 0) entry.bottomRequests--;
       else if (placed && entry.settled) view.scrollTo(Math.round(state.handle.offset().y / lineHeight));
       if (placed) entry.settled = true;
+      P.push(performance.now());
       const frame = view.frame();
+      P.push(performance.now());
       // Heights settle and bodies arrive over several frames: the mod's tick asks for the next render (wantsRender).
       const layout = view.layout;
       const groups = Math.ceil(layout.count / group);
@@ -300,9 +305,13 @@ export function createTreePanels(gpui, deps) {
         entry.group = group;
       }
       if (view.following && (frame.total !== entry.lastTotal || !entry.settled)) { state.handle.scroll_to_bottom?.(); entry.bottomRequests = 2; }
+      P.push(performance.now());
       entry.lastTotal = frame.total;
       entry.frame = frame;
       const items = view.model.items;
+      P.push(performance.now());
+      const profAdd = () => { const prof = (entry.prof ??= { n: 0, s: [0, 0, 0, 0, 0, 0] }); prof.n++; for (let i = 1; i < P.length; i++) prof.s[i - 1] += P[i] - P[i - 1]; };
+      profAdd();
       return v_virtual_list(`stereo-tree-${name}`, groups, entry.sizes, index => items[index * group]?.id ?? String(index),
         range => {
           const started = typeof performance !== "undefined" ? performance.now() : Date.now();
