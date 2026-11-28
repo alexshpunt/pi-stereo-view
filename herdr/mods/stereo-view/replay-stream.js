@@ -48,11 +48,11 @@ export function replaySpawn(base, load) {
     const lineCallbacks = [], exitCallbacks = [], queued = [];
     load(url).then(text => {
       if (killed) return;
-      inner = createReplayStream(text);
+      inner = createReplayStream(typeof text === "string" ? text : String(text));
       for (const cb of lineCallbacks) inner.onLine(cb);
       for (const cb of exitCallbacks) inner.onExit(cb);
       for (const line of queued) inner.write(line);
-    }, error => { for (const cb of exitCallbacks) cb(1, `replay load failed: ${error}`); });
+    }).catch(error => { for (const cb of exitCallbacks) cb(1, `replay failed: ${error}`); });
     return {
       onLine(cb) { lineCallbacks.push(cb); inner?.onLine(cb); },
       onExit(cb) { exitCallbacks.push(cb); inner?.onExit(cb); },

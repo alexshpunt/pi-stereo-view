@@ -5,7 +5,7 @@ export type SpawnStream = (command: string, args: string[], options?: { on?: str
 export class TreeClient {
   constructor(spawnStream: SpawnStream, target: { socket: string; pane: string; on?: string; cwd?: string }, hooks?: {
     change?(change: import("./tree-model.js").TreeChange): void; message?(message: { t: string }, parseMs: number): void;
-    bodies?(loaded: string[], truncated: string[]): void; exit?(): void; error?(text: string): void });
+    bodies?(loaded: string[], truncated: string[]): void; exit?(code?: number | null, why?: string): void; error?(text: string): void });
   model: TreeModel; closed: boolean;
   start(): this;
   get(ids: string[]): Promise<string[] | undefined>;
