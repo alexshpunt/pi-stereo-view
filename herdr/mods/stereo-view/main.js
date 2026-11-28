@@ -1541,13 +1541,19 @@ export default class StereoView extends View {
     const id = `stereo-${name}`;
     const hovered = this.hoveredBlock(state);
     // LPT-1943: with the element tree on, the list is drawn from the local tree (no per-scroll request to Pi).
+    const frameStart = typeof performance !== "undefined" ? performance.now() : Date.now();
     const treeRows = this.trees && name !== "combined" ? this.trees.list(name, state, {
       theme: t, lineHeight: LINE_HEIGHT, font: historyFont(), fontSize: historyFontSize(), gutter: ROW_GUTTER,
       notify: () => this.viewCx?.notify(),
     }) : null;
-    if (this.trees && !(Date.now() - (this.treeStatusAt ?? 0) < 1000)) { // TEMPORARY (LPT-1943): status for the live test
-      this.treeStatusAt = Date.now();
-      writeFile(`${appHome()}/stereo-tree-status.json`, JSON.stringify({ name, drawn: !!treeRows, chat: this.trees.status("chat"), activity: this.trees.status("activity"), width: state.width, height: state.height })).catch(() => {});
+    if (this.trees) { // TEMPORARY (LPT-1943): per-render timings for the live test, written to the app home
+      const end = typeof performance !== "undefined" ? performance.now() : Date.now();
+      (this.treeFrames ??= []).push({ name, at: end, spent: end - frameStart });
+      if (this.treeFrames.length > 2000) this.treeFrames.splice(0, 1000);
+      if (!(Date.now() - (this.treeStatusAt ?? 0) < 1000)) {
+        this.treeStatusAt = Date.now();
+        writeFile(`${appHome()}/stereo-tree-status.json`, JSON.stringify({ name, drawn: !!treeRows, chat: this.trees.status("chat"), activity: this.trees.status("activity"), width: state.width, height: state.height, perf: typeof performance !== "undefined", frames: this.treeFrames.slice(-600) })).catch(() => {});
+      }
     }
     const rows = treeRows ?? v_virtual_list(id, state.total ?? 0, LINE_HEIGHT,
       index => `${name}-${index}`,
