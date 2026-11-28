@@ -4,6 +4,7 @@
 import { TreeClient } from "./tree-client.js";
 import { TreeView } from "./tree-view.js";
 import { styleMarkdown } from "./md-style.js";
+import { TreeInteraction } from "./tree-interact.js";
 
 /**
  * @param {{ div: any, h_flex: any, v_flex: any, v_virtual_list: any }} gpui
@@ -22,24 +23,39 @@ export function createTreePanels(gpui, deps) {
     if (!target) return null;
     entry = { name, view: null, client: null, sizes: [], version: -1, lastTotal: 0, notify };
     const client = new TreeClient(deps.spawnStream, { ...target, on: target.on ?? target.machine, pane: name }, {
-      change: change => { entry.view.changed(change); entry.dirty = true; entry.notify?.(); },
-      bodies: () => { entry.dirty = true; entry.notify?.(); },
+      change: change => { entry.view.changed(change); entry.ui.changed(); entry.dirty = true; entry.notify?.(); },
+      bodies: () => { entry.ui.changed(); entry.dirty = true; entry.notify?.(); },
       // A stream that ends stays as a dead entry: the old list draws and nothing retries in a loop.
       exit: (_code, why) => { entry.dead = true; if (why) entry.error = why; entry.notify?.(); },
       error: text => { entry.error = text; },
     });
     entry.client = client;
     entry.view = new TreeView(client, { viewport: 40, cols: 100 });
+    entry.ui = new TreeInteraction(entry.view);
     client.start();
     panes.set(name, entry);
     return entry;
   }
 
-  /** Text rows of one body part, as GPUI lines. */
+  /** Colors of the highlights: the selection, other find hits, the current hit. */
+  function markColor(kind, t) {
+    return kind === "sel" ? t.selection ?? t.accent ?? "#526b83" : kind === "cur" ? t.findCurrent ?? t.warning ?? "#b8891a" : t.findMatch ?? "#6b5a1f";
+  }
+
+  /**
+   * Text rows of one body part, as GPUI lines. `opts.marks[i]` lists the highlighted cell ranges of row i
+   * (`{ c0, c1, kind }`, from tree-select / tree-find): each is an absolute rectangle under the text.
+   */
   function lines(rows, ctx, color, opts = {}) {
-    return rows.map(text => {
+    return rows.map((text, i) => {
+      const marks = opts.marks?.[i];
       let el = div().h(ctx.lineHeight).flex_none().whitespace_nowrap().font_family(ctx.font).text_size(ctx.fontSize)
-        .line_height(`${ctx.lineHeight}px`).text_color(color).child(text || " ");
+        .line_height(`${ctx.lineHeight}px`).text_color(color);
+      if (marks) {
+        el = el.relative();
+        for (const mark of marks) el = el.child(div().absolute().top(0).h(ctx.lineHeight).left(mark.c0 * ctx.cellWidth).w((mark.c1 - mark.c0) * ctx.cellWidth).bg(markColor(mark.kind, ctx.theme)));
+      }
+      el = el.child(text || " ");
       if (opts.italic) el = el.italic();
       if (opts.bold) el = el.font_semibold();
       return el;
@@ -119,30 +135,35 @@ export function createTreePanels(gpui, deps) {
       return box;
     }
     if (!body) return box; // only a Pi-rows item waiting for its rows can lack one
-    const rows = layout.rowsOf(item, body).parts;
+    const wrapped = layout.rowsOf(item, body);
+    const rows = wrapped.parts;
+    const marks = entry.ui.marks(index, item, body, wrapped); // selection and find highlights: { [part]: rows of { c0, c1, kind }[] }
     if (item.k === "user") {
       box.bg(t.raised ?? t.background);
       box.child(div().h(ctx.lineHeight).flex_none());
-      for (const el of lines(rows.t ?? [], ctx, t.foreground)) box.child(el);
+      for (const el of lines(rows.t ?? [], ctx, t.foreground, { marks: marks?.t })) box.child(el);
       box.child(div().h(ctx.lineHeight).flex_none());
     } else if (item.k === "md") {
+      let n = 0;
       for (const { text, style } of styleMarkdown(rows.t ?? [])) {
-        const [el] = style === "h1" || style === "h2" ? lines([text], ctx, t.accent ?? t.foreground, { bold: true })
-          : style === "h3" ? lines([text], ctx, t.foreground, { bold: true })
-          : style === "quote" ? lines([text], ctx, t.muted, { italic: true })
-          : style === "fence" || style === "rule" ? lines([text], ctx, t.muted)
-          : lines([text], ctx, t.foreground);
+        const own = { marks: marks?.t?.[n] ? [marks.t[n]] : undefined };
+        n++;
+        const [el] = style === "h1" || style === "h2" ? lines([text], ctx, t.accent ?? t.foreground, { bold: true, ...own })
+          : style === "h3" ? lines([text], ctx, t.foreground, { bold: true, ...own })
+          : style === "quote" ? lines([text], ctx, t.muted, { italic: true, ...own })
+          : style === "fence" || style === "rule" ? lines([text], ctx, t.muted, own)
+          : lines([text], ctx, t.foreground, own);
         box.child(style === "code" ? el.bg(t.raised ?? t.background) : el);
       }
     } else if (item.k === "think") {
       for (const el of lines(["thinking"], ctx, t.muted, { bold: true })) box.child(el);
-      for (const el of lines(rows.t ?? [], ctx, t.muted, { italic: true })) box.child(el);
+      for (const el of lines(rows.t ?? [], ctx, t.muted, { italic: true, marks: marks?.t })) box.child(el);
     } else {
       // tool and bash: a header line with the name or "$", the call text, then the output.
       const title = item.k === "bash" ? "$ shell" : `${item.m?.name ?? "tool"}${item.m?.status && item.m.status !== "success" ? ` (${item.m.status})` : ""}`;
       for (const el of lines([title], ctx, t.accent ?? t.foreground, { bold: true })) box.child(el);
-      for (const el of lines(rows.a ?? [], ctx, t.muted)) box.child(el);
-      for (const el of lines(rows.o ?? [], ctx, t.foreground)) box.child(el);
+      for (const el of lines(rows.a ?? [], ctx, t.muted, { marks: marks?.a })) box.child(el);
+      for (const el of lines(rows.o ?? [], ctx, t.foreground, { marks: marks?.o })) box.child(el);
     }
     if (model.isFolded(item)) for (const el of lines([`… ${item.x} more line${item.x === 1 ? "" : "s"}`], ctx, t.muted, { italic: true })) box.child(el);
     return box;
@@ -155,7 +176,7 @@ export function createTreePanels(gpui, deps) {
     wantsRender() {
       for (const entry of panes.values()) {
         if (entry.dead) continue;
-        if (entry.dirty || !entry.view.model.ready || !entry.view.exact || entry.view.busy || entry.jump) return true;
+        if (entry.dirty || !entry.view.model.ready || !entry.view.exact || entry.view.busy || entry.jump || entry.ui.busy) return true;
       }
       return false;
     },
@@ -189,6 +210,24 @@ export function createTreePanels(gpui, deps) {
       const top = Math.max(2, Math.min(viewport - size - 2, itemTop + 2));
       return buildBar(entry, item, ctx).absolute().top(top).right(ctx.scrollbarLane ?? 14);
     },
+    // LPT-1943 selection and find (tree-interact.js). Positions are px of the list box, already divided by the zoom.
+    /** Press in the list: starts a selection gesture. `pos`: `{ x, y, count, shift, maxX? }`. Returns whether it did. */
+    pointerDown(name, state, pos, cx) { const entry = panes.get(name); return !!entry && !entry.dead && entry.ui.down(state, pos, cx); },
+    /** Whether a selection gesture is running (the panel then routes window mouse moves and the release here). */
+    dragging(name) { return !!panes.get(name)?.ui.dragging; },
+    /** Pointer move during the gesture. `pos`: `{ x, y, pressed }`. */
+    pointerMove(name, state, pos, cx) { return !!panes.get(name)?.ui.move(state, pos, cx); },
+    /** Release: the gesture ends. */
+    pointerUp(name) { panes.get(name)?.ui.up(); },
+    hasSelection(name) { return !!panes.get(name)?.ui.hasSelection; },
+    /** Copy the selected text to the clipboard. Returns whether there was a selection. */
+    copySelection(name, cx) { return !!panes.get(name)?.ui.copy(cx); },
+    clearSelection(name) { panes.get(name)?.ui.clear(); },
+    /**
+     * The find bar's callbacks for a tree pane (pass them to `createSearchBar`), or null when the pane has no tree.
+     * `hooks`: `{ state(s), closed(cx) }`: `s` is `{ query, count, current, pending, error }` for `bar.render(s, theme)`.
+     */
+    findActions(name, hooks) { const entry = panes.get(name); return entry && !entry.dead ? entry.ui.findActions(hooks) : null; },
     /** The tree view of a pane, for operations (scroll to, search) and the benchmark. */
     view(name) { return panes.get(name)?.view; },
     /** Time spent building the items of each visible range (ms), for the live frame check. */
@@ -217,6 +256,15 @@ export function createTreePanels(gpui, deps) {
         const index = view.model.indexOf(entry.jump);
         entry.jump = null;
         if (index >= 0) { view.toItemId(view.model.items[index].id); state.handle.scroll_to_item?.(index); entry.bottomRequests = 2; }
+      }
+      entry.ui.metrics = { lineHeight, cellWidth: ctx.cellWidth ?? 8, textLeft: ctx.gutter };
+      // Find: one 4 ms slice per render while a pass runs; a hit to show brings its item on screen (a tall item shows its top).
+      const found = entry.ui.frame();
+      if (found) {
+        const fits = view.layout.heights[found.index] <= view.viewport;
+        view.toItem(found.index);
+        state.handle.scroll_to_item?.(found.index, fits ? "center" : "top");
+        entry.bottomRequests = 2;
       }
       const placed = state.handle.content_size().height > 0;
       if (entry.bottomRequests > 0) entry.bottomRequests--;
