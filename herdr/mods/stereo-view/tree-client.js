@@ -38,7 +38,7 @@ export class TreeClient {
     const { socket, pane, on, cwd } = this.target;
     this.process = this.spawnStream("node", ["-e", RELAY, socket, pane], { on, cwd });
     this.process.onLine(line => this.line(line));
-    this.process.onExit(() => { this.closed = true; for (const [, p] of this.pending) p.resolve(undefined); this.pending.clear(); this.hooks.exit?.(); });
+    this.process.onExit((code, why) => { this.closed = true; for (const [, p] of this.pending) p.resolve(undefined); this.pending.clear(); this.hooks.exit?.(code, why); });
     return this;
   }
 

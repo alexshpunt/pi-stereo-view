@@ -52,7 +52,7 @@ export function replaySpawn(base, load) {
       for (const cb of lineCallbacks) inner.onLine(cb);
       for (const cb of exitCallbacks) inner.onExit(cb);
       for (const line of queued) inner.write(line);
-    }, () => { for (const cb of exitCallbacks) cb(1); });
+    }, error => { for (const cb of exitCallbacks) cb(1, `replay load failed: ${error}`); });
     return {
       onLine(cb) { lineCallbacks.push(cb); inner?.onLine(cb); },
       onExit(cb) { exitCallbacks.push(cb); inner?.onExit(cb); },

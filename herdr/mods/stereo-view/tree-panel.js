@@ -23,7 +23,7 @@ export function createTreePanels(gpui, deps) {
       change: change => { entry.view.changed(change); entry.notify?.(); },
       bodies: () => entry.notify?.(),
       // A stream that ends stays as a dead entry: the old list draws and nothing retries in a loop.
-      exit: () => { entry.dead = true; entry.notify?.(); },
+      exit: (_code, why) => { entry.dead = true; if (why) entry.error = why; entry.notify?.(); },
       error: text => { entry.error = text; },
     });
     entry.client = client;
@@ -84,7 +84,7 @@ export function createTreePanels(gpui, deps) {
     active(name) { const entry = panes.get(name); return !!entry && !entry.dead; },
     /** The tree view of a pane, for operations (scroll to, search) and the benchmark. */
     view(name) { return panes.get(name)?.view; },
-    status(name) { const entry = panes.get(name); return entry ? { ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, error: entry.error } : null; },
+    status(name) { const entry = panes.get(name); return entry ? { ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, dead: !!entry.dead, error: entry.error } : null; },
     close() { for (const entry of panes.values()) entry.client.close(); panes.clear(); },
 
     /**
