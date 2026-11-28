@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { GuiTree } from "../src/gui-tree.ts";
 import { TreeClient } from "../herdr/mods/stereo-view/tree-client.js";
 import { TreeModel } from "../herdr/mods/stereo-view/tree-model.js";
-import { TreeLayout } from "../herdr/mods/stereo-view/tree-layout.js";
+import { TreeLayout, imageRows } from "../herdr/mods/stereo-view/tree-layout.js";
+import { GuiImages, imageSize } from "../src/gui-images.ts";
 import { TreeView } from "../herdr/mods/stereo-view/tree-view.js";
 import { TreeSearch } from "../herdr/mods/stereo-view/tree-search.js";
 import { cellWidth, wrapAscii, wrapGeneral, wrapRows } from "../herdr/mods/stereo-view/wrap.js";
@@ -62,6 +63,28 @@ describe("wrap", () => {
       wrapAscii(line, cols, fast); wrapGeneral(line, cols, slow);
       expect(fast, JSON.stringify({ line, cols })).toEqual(slow);
     }
+  });
+});
+
+describe("images", () => {
+  // A 3x2 PNG header is enough for the size; the rest of the payload is not decoded.
+  const png = Buffer.concat([Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"), Buffer.from([0, 0, 0, 3, 0, 0, 0, 2, 8, 6, 0, 0, 0]), Buffer.alloc(16)]);
+  it("registers a payload with its pixel size and serves it in chunks", () => {
+    const store = new GuiImages();
+    const ref = store.register(png.toString("base64"));
+    expect(ref).toMatchObject({ mime: "image/png", w: 3, h: 2 });
+    expect(store.chunk(ref!.id, 0, 8)?.total).toBe(png.toString("base64").length);
+    expect(imageSize(Buffer.concat([Buffer.from("GIF89a"), Buffer.from([5, 0, 7, 0])]), "image/gif")).toEqual({ w: 5, h: 7 });
+  });
+  it("adds the rows of an item's images to its height, in the shape of the image", () => {
+    const model = new TreeModel();
+    model.apply({ t: "snap", pane: "chat", epoch: 1, rev: 1, total: 1, at: 0, last: true,
+      items: [{ id: "a1", k: "tool", n: 1, c: 2, b: { a: "x", o: "y" }, im: [{ id: "i", mime: "image/png", w: 800, h: 400 }] }] } as never);
+    const layout = new TreeLayout(model);
+    layout.rebuild(100);
+    expect(imageRows({ w: 800, h: 400 }, 100)).toBe(Math.ceil(80 * 0.5 / 2) + 1);
+    layout.measure(0);
+    expect(layout.heights[0]).toBe(2 + 2 + imageRows({ w: 800, h: 400 }, 100));
   });
 });
 

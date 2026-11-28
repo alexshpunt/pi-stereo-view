@@ -1,4 +1,6 @@
 import type { TreeModel, TreeBody } from "./tree-model.js";
+export function imageCols(image: { w: number; h: number }, cols: number): number;
+export function imageRows(image: { w: number; h: number }, cols: number): number;
 export class TreeLayout {
   constructor(model: TreeModel);
   cols: number; version: number; touched: Set<number> | null; heights: Int32Array; measured: Uint8Array;
