@@ -491,6 +491,7 @@ export default class StereoView extends View {
     const pane = this.viewState?.mode === "combined" ? this.combined : this.activePane === "chat" ? this.chat : this.activity;
     if (key === "search") {
       if (this.viewState?.mode === "split") this.openSearch(this.activePane, cx);
+      else if (this.viewState?.mode === "combined") this.openSearch("combined", cx);
       return;
     }
     if (key === "end") this.jumpToLatest(pane === this.chat ? "chat" : pane === this.activity ? "activity" : "combined", pane, cx);
@@ -859,11 +860,12 @@ export default class StereoView extends View {
     this.drainActions(cx);
   }
 
-  /** @param {"chat" | "activity"} pane @param {any} cx */
+  /** @param {"chat" | "activity" | "combined"} pane @param {any} cx */
   openSearch(pane, cx) {
-    if (this.viewState?.mode !== "split") return;
-    const state = pane === "chat" ? this.chat : this.activity;
-    this.activePane = pane;
+    // Combined searches only through its tree pane (the mod holds every body); the old pages have no combined search.
+    if (pane === "combined" ? !(this.viewState?.mode === "combined" && this.trees?.active("combined")) : this.viewState?.mode !== "split") return;
+    const state = pane === "chat" ? this.chat : pane === "activity" ? this.activity : this.combined;
+    if (pane !== "combined") this.activePane = pane;
     if (state.searchBar) { state.searchBar.focus(); return; }
     state.searchState = { open: true, query: "", count: 0, current: 0, pending: false };
     if (this.trees?.active(pane)) {
@@ -1536,8 +1538,8 @@ export default class StereoView extends View {
     }
     return div().id(`stereo-action-${action}`).accessibility_label(label).tooltip(label).px(6).py(3).cursor_pointer().text_color(t.foreground)
       .hover(s => s.bg(t.hover)).on_click((_event, cx) => {
-        if (action === "find-chat" || action === "find-activity") {
-          this.openSearch(action === "find-chat" ? "chat" : "activity", cx);
+        if (action === "find-chat" || action === "find-activity" || action === "find-combined") {
+          this.openSearch(action === "find-chat" ? "chat" : action === "find-activity" ? "activity" : "combined", cx);
           return;
         }
         if (action === "settings") {
@@ -1606,6 +1608,16 @@ export default class StereoView extends View {
       notify: () => this.viewCx?.notify(), svg, scrollbarLane: SCROLLBAR_LANE + 2, cellWidth: this.cellWidth,
       // Pi's own rows (items without a native component, such as notices) keep their colours.
       ansiRow: (/** @type {string} */ line) => h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap().children(parseAnsi(line).map(run => this.ansiRun(t, run))),
+      // Images of tool results: fetched through the bridge like the old pages' images, drawn at their shape.
+      image: (/** @type {{ id: string, w: number, h: number }} */ im, /** @type {number} */ cols, /** @type {number} */ rows) => {
+        const path = this.imagePaths.get(im.id);
+        const connection = bridge();
+        if (!path && connection && this.viewCx) this.loadImage({ id: im.id }, connection, this.viewCx);
+        const width = cols * this.cellWidth;
+        const height = Math.min(rows * LINE_HEIGHT, width * im.h / Math.max(1, im.w));
+        return path ? div().h((rows + 1) * LINE_HEIGHT).flex_none().child(image(path).w(width).h(height))
+          : div().h((rows + 1) * LINE_HEIGHT).flex_none().text_color(t.muted).child(this.imageFailures.has(im.id) ? "[Image unavailable]" : "[Loading image…]");
+      },
     }) : null;
     if (treeRows) this.drewTree = true;
     if (this.trees) { // TEMPORARY (LPT-1943): per-render timings for the live test, written to the app home
@@ -1891,6 +1903,8 @@ export default class StereoView extends View {
       .child(this.control("swap", "Swap", t))
       .child(this.control("settings", "Settings", t))
       .child(this.control("headers", state?.showHeaders ? "Hide headers" : "Show headers", t));
+    // Combined has no pane headers, so its Find sits in the toolbar (tree pane only: the old pages cannot search it).
+    if (state?.mode === "combined" && this.trees?.active("combined")) toolbar.child(this.control("find-combined", "Find", t));
     const hasSurface = !!this.surface?.active;
     const placement = this.dialogPlacement();
     // Until the first state arrives the layout is a guess: draw the background only, so the first frame does not
@@ -1995,8 +2009,8 @@ export default class StereoView extends View {
       if (this.focus.is_focused() && (key === "pageup" || key === "pagedown" || key === "home" || key === "end")) {
         this.navigate(key, cx); cx.stop_propagation(); return;
       }
-      if (event.modifiers?.control && event.key?.toLowerCase() === "f" && this.viewState?.mode === "split") {
-        this.openSearch(this.activePane, cx);
+      if (event.modifiers?.control && event.key?.toLowerCase() === "f" && (this.viewState?.mode === "split" || this.viewState?.mode === "combined")) {
+        this.openSearch(this.viewState.mode === "combined" ? "combined" : this.activePane, cx);
         cx.stop_propagation();
       }
     });

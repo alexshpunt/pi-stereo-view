@@ -1,5 +1,6 @@
 import type { Component } from "@earendil-works/pi-tui";
 import { bodyRows } from "../herdr/mods/stereo-view/wrap.js";
+import { GuiImages } from "./gui-images.ts";
 import { componentText, contentText, type ContentEntry, type NativeContentIndex, type Pane as NativePane } from "./content.ts";
 /** The tree panes: Chat and Activity, and Pi's single history for Combined. */
 export type Pane = NativePane | "combined";
@@ -21,6 +22,8 @@ export interface TreeItem {
   m?: { name?: string; status?: string };
   /** Body, only when it is small or the item is at the tail. */
   b?: ItemBody;
+  /** Images of a tool result: id (fetched with `op: "image"`), pixel size, type. The GUI draws them under the text. */
+  im?: { id: string; mime: string; w: number; h: number }[];
   /** Lines hidden by the collapsed body (what the TUI shows folded); the full body comes with `get` + `full`. */
   x?: number;
 }
@@ -57,7 +60,20 @@ const tailHash = (text: string): number => {
   return hash;
 };
 
-interface Described { k: ItemKind; body?: ItemBody; meta?: TreeItem["m"]; chars: number; lines: number; collapsed?: { body: ItemBody; hidden: number }; rows?: { cols: number; full: boolean; n: number } }
+/** Image blocks of a tool result, stored for the GUI to fetch (`op: "image"`); the item carries only id and shape. */
+export const treeImages = new GuiImages();
+function imageRefs(content: unknown): NonNullable<TreeItem["im"]> {
+  const out: NonNullable<TreeItem["im"]> = [];
+  if (!Array.isArray(content)) return out;
+  for (const block of content as { type?: string; data?: unknown }[]) {
+    if (block?.type !== "image" || typeof block.data !== "string") continue;
+    const ref = treeImages.register(block.data);
+    if (ref) out.push(ref);
+  }
+  return out;
+}
+
+interface Described { k: ItemKind; body?: ItemBody; meta?: TreeItem["m"]; images?: NonNullable<TreeItem["im"]>; chars: number; lines: number; collapsed?: { body: ItemBody; hidden: number }; rows?: { cols: number; full: boolean; n: number } }
 
 function describe(entry: ContentEntry): Described {
   const source = entry.source as Component & { text?: unknown; command?: unknown; outputLines?: unknown; customComponent?: unknown };
@@ -85,8 +101,11 @@ function describe(entry: ContentEntry): Described {
     const result = (source as { result?: { content?: unknown } }).result;
     let args = "";
     try { args = JSON.stringify(summary.args, null, 2) ?? ""; } catch { /* unserializable arguments */ }
-    return pair("tool", args.length > ARGS_LIMIT ? args.slice(0, ARGS_LIMIT) : args, contentText(result?.content),
+    const described = pair("tool", args.length > ARGS_LIMIT ? args.slice(0, ARGS_LIMIT) : args, contentText(result?.content),
       { name: summary.name, status: summary.status });
+    const images = imageRefs(result?.content);
+    if (images.length) described.images = images;
+    return described;
   }
   return { k: "rows", chars: 0, lines: 1 };
 }
@@ -155,7 +174,7 @@ class PaneModel {
       if (!cached || position >= hot || running) {
         const d = describe(entry);
         const id = cached?.id ?? this.idOf(entry, ordinal);
-        const f = `${id}|${d.k}|${d.lines}|${d.chars}|${d.meta?.status ?? ""}|${d.body ? tailHash(d.body.t ?? d.body.o ?? d.body.a ?? "") : 0}`;
+        const f = `${id}|${d.k}|${d.lines}|${d.chars}|${d.images?.length ?? 0}|${d.meta?.status ?? ""}|${d.body ? tailHash(d.body.t ?? d.body.o ?? d.body.a ?? "") : 0}`;
         if (!cached || cached.f !== f) { cached = { d, id, f }; this.described.set(entry, cached); }
       }
       out.push({ id: cached.id, f: cached.f, d: cached.d, entry });
@@ -168,6 +187,7 @@ class PaneModel {
 function header(row: { id: string; d: Described }, full: boolean): { item: TreeItem; truncated: boolean } {
   const item: TreeItem = { id: row.id, k: row.d.k, n: row.d.lines, c: row.d.chars };
   if (row.d.meta) item.m = row.d.meta;
+  if (row.d.images) item.im = row.d.images;
   let truncated = false;
   if (row.d.body && full) {
     const cut = limited(row.d.body);

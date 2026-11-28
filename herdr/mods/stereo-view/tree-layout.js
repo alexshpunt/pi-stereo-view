@@ -6,6 +6,16 @@ import { estimateRows, wrapRows } from "./wrap.js";
 /** Rows of padding/headers an item kind adds around its text. */
 const CHROME = { user: 2, md: 1, think: 2, tool: 2, bash: 2, rows: 1 };
 const FALLBACK_ROWS = 3;
+const IMAGE_MAX_COLS = 80;
+const IMAGE_MAX_ROWS = 30;
+
+/** Columns an image of the item takes at `cols` text cells (never wider than the text). */
+export function imageCols(image, cols) { return Math.max(1, Math.min(cols, IMAGE_MAX_COLS, Math.ceil(image.w / 8))); }
+/** Rows an image takes: its shape at that width (a cell is twice as tall as wide), plus one row of space. */
+export function imageRows(image, cols) {
+  const width = imageCols(image, cols);
+  return Math.max(2, Math.min(IMAGE_MAX_ROWS, Math.ceil(width * (image.h / Math.max(1, image.w)) / 2))) + 1;
+}
 
 export class TreeLayout {
   constructor(model) {
@@ -46,8 +56,12 @@ export class TreeLayout {
     return true;
   }
 
-  /** Padding rows plus the "N more lines" marker row of a folded item. */
-  chrome(item) { return (CHROME[item.k] ?? 1) + (this.model.isFolded(item) ? 1 : 0); }
+  /** Padding rows, the "N more lines" marker row of a folded item, and the rows of its images (shape kept, cell ratio 1:2). */
+  chrome(item) {
+    let rows = (CHROME[item.k] ?? 1) + (this.model.isFolded(item) ? 1 : 0);
+    if (item.im) for (const image of item.im) rows += imageRows(image, this.cols);
+    return rows;
+  }
 
   estimate(item) {
     if (item.k === "rows") return this.fallbackRows.get(item.id)?.rows ?? FALLBACK_ROWS;

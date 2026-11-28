@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { GuiContent, type GuiPage } from "./gui-content.ts";
 import { attachTreeStream } from "./gui-stream.ts";
-import { GuiTree } from "./gui-tree.ts";
+import { GuiTree, treeImages } from "./gui-tree.ts";
 import type { NativeContentIndex } from "./content.ts";
 import { parseGuiRequest, type GuiAction, type GuiSetting } from "./gui-protocol.ts";
 import type { TranscriptLayout } from "./layout.ts";
@@ -143,7 +143,7 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
               socket.end(JSON.stringify({ v: 1, ok: surface?.mouse(parsed.frame, parsed.event) === true }) + "\n");
             }
             else if (parsed.op === "image") {
-              const chunk = current.renderer()?.imageChunk(parsed.id, parsed.offset, parsed.length);
+              const chunk = treeImages.chunk(parsed.id, parsed.offset, parsed.length) ?? current.renderer()?.imageChunk(parsed.id, parsed.offset, parsed.length);
               if (!chunk) throw new Error("Image unavailable");
               socket.end(JSON.stringify({ v: 1, ...chunk }) + "\n");
             }

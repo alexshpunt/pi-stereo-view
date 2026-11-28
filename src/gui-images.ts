@@ -55,6 +55,14 @@ export class GuiImages {
     return { lines: sanitized, images: result };
   }
 
+  /** An image of a tool result or message (base64 payload): stored for `chunk`, with its pixel size for the GUI's layout. */
+  register(payload: string): { id: string; mime: string; w: number; h: number } | undefined {
+    const placement = this.add(payload, 0, 0, 1, 1);
+    if (!placement) return undefined;
+    const size = imageSize(Buffer.from(payload.slice(0, 131072), "base64"), placement.mime);
+    return { id: placement.id, mime: placement.mime, w: size?.w ?? 4, h: size?.h ?? 3 };
+  }
+
   chunk(id: string, offset: number, length: number): { data: string; total: number } | undefined {
     const data = this.data.get(id);
     if (!data || !Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 1 || length > 524288) return undefined;
@@ -83,6 +91,29 @@ export class GuiImages {
     }
     return { id, row, column, rows, columns, mime };
   }
+}
+
+/** Pixel size from an image header (PNG, GIF, JPEG, WebP); undefined when it cannot be read. */
+export function imageSize(bytes: Buffer, mime: string): { w: number; h: number } | undefined {
+  try {
+    if (mime === "image/png" && bytes.length >= 24) return { w: bytes.readUInt32BE(16), h: bytes.readUInt32BE(20) };
+    if (mime === "image/gif" && bytes.length >= 10) return { w: bytes.readUInt16LE(6), h: bytes.readUInt16LE(8) };
+    if (mime === "image/jpeg") {
+      for (let at = 2; at + 9 < bytes.length;) {
+        if (bytes[at] !== 0xff) { at++; continue; }
+        const marker = bytes[at + 1]!;
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return { h: bytes.readUInt16BE(at + 5), w: bytes.readUInt16BE(at + 7) };
+        at += 2 + bytes.readUInt16BE(at + 2);
+      }
+    }
+    if (mime === "image/webp" && bytes.length >= 30) {
+      const kind = bytes.subarray(12, 16).toString("ascii");
+      if (kind === "VP8X") return { w: 1 + bytes.readUIntLE(24, 3), h: 1 + bytes.readUIntLE(27, 3) };
+      if (kind === "VP8 ") return { w: bytes.readUInt16LE(26) & 0x3fff, h: bytes.readUInt16LE(28) & 0x3fff };
+      if (kind === "VP8L") { const bits = bytes.readUInt32LE(21); return { w: (bits & 0x3fff) + 1, h: ((bits >> 14) & 0x3fff) + 1 }; }
+    }
+  } catch { /* a truncated header: the GUI falls back to a default shape */ }
+  return undefined;
 }
 
 function numberControl(controls: string, key: string): number | undefined {

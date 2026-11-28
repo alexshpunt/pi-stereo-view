@@ -3,6 +3,7 @@
 // a resize never waits for Pi. Item kinds: user, md, think, tool, bash (native), rows (Pi's own rendered rows).
 import { TreeClient } from "./tree-client.js";
 import { TreeView } from "./tree-view.js";
+import { imageCols, imageRows } from "./tree-layout.js";
 import { styleMarkdown } from "./md-style.js";
 import { TreeInteraction } from "./tree-interact.js";
 
@@ -180,6 +181,8 @@ export function createTreePanels(gpui, deps) {
       for (const el of lines(rows.a ?? [], ctx, t.muted, { marks: marks?.a })) box.child(el);
       for (const el of lines(rows.o ?? [], ctx, t.foreground, { marks: marks?.o })) box.child(el);
     }
+    // Images of a tool result under its text (their rows are part of the item's height: layout.chrome).
+    if (item.im) for (const im of item.im) box.child(ctx.image ? ctx.image(im, imageCols(im, layout.cols), imageRows(im, layout.cols) - 1) : div().h(ctx.lineHeight).text_color(t.muted).child("[image]"));
     if (model.isFolded(item)) for (const el of lines([`… ${item.x} more line${item.x === 1 ? "" : "s"}`], ctx, t.muted, { italic: true })) box.child(el);
     return box;
   }
