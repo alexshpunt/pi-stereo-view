@@ -124,7 +124,7 @@ describe("layout, view and search", () => {
 
   it("folds big items on the wire, expands to the full body and folds back", async () => {
     const big = Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n");
-    const tree = new GuiTree(() => fakeIndex([new BashExecutionComponent(big.slice(0, 40), big.split("\n")), new UserMessageComponent("hi")]), () => 80);
+    const tree = new GuiTree(() => fakeIndex([new BashExecutionComponent(big.slice(0, 40), big.split("\n")), ...Array.from({ length: 20 }, (_, i) => new UserMessageComponent(`hi ${i}`))]), () => 80); // the last 16 items are the tail and are never folded
     const { client } = connect(tree);
     const model = client.model;
     const item = model.items.find(entry => entry.k === "bash")!;
