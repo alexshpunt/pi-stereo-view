@@ -151,7 +151,7 @@ describe("selection across items", () => {
     const marks = select.marks(0, item, body, view.layout.rowsOf(item, body))!;
     expect(marks.t.map((row: unknown) => row && (row as { c0: number; c1: number }[]).map(m => [m.c0, m.c1]))).toEqual([undefined, [[2, 4]], [[0, 1]], [[0, 5]], [[0, 5]]]);
     const next = view.model.items[1], nextBody = view.model.bodies.get("n")!;
-    expect(select.marks(1, next, nextBody, view.layout.rowsOf(next, nextBody))!.t).toEqual([[{ c0: 0, c1: 4, kind: "sel" }]]);
+    expect(select.marks(1, next, nextBody, view.layout.rowsOf(next, nextBody))!.t).toEqual([[{ c0: 0, c1: 4, kind: "sel" }], undefined]); // "tail" / "text" at 8 cols: the selection ends after "tail"
   });
 
   it("outlives a resize, an expansion and a streamed append, and drops with a removed endpoint", () => {
@@ -195,6 +195,26 @@ describe("selection across items", () => {
     select.start(pt(select, 1, 0));
     select.extend(pt(select, view.layout.totalRows, 0));
     expect(select.text()).toBe("first\n\nlast");
+  });
+});
+
+describe("cost per frame", () => {
+  it("builds the marks of a screenful of items inside a selection over thousands of items in a few ms", () => {
+    const sources: Source[] = Array.from({ length: 5000 }, (_, i) => ({ id: `i${i}`, k: "md", body: { t: `item ${i} needle\nsecond line of item ${i} with some more words to wrap around` } }));
+    const { view } = build(sources, 40, 50);
+    const ui = new TreeInteraction(view);
+    ui.selection.start(ui.selection.pointAt(10, 3)!);
+    ui.selection.extend(ui.selection.pointAt(view.layout.totalRows - 5, 3)!);
+    ui.find.begin(); ui.find.setQuery("needle");
+    while (ui.find.busy) ui.find.step(4);
+    expect(ui.find.search.hits).toHaveLength(5000);
+    const frame = () => {
+      const started = performance.now();
+      for (let i = 2000; i < 2030; i++) { const item = view.model.items[i], body = view.model.bodies.get(item.id)!; ui.marks(i, item, body, view.layout.rowsOf(item, body)); }
+      return performance.now() - started;
+    };
+    frame(); // spans are built once per item and width
+    expect(Math.min(frame(), frame(), frame())).toBeLessThan(4);
   });
 });
 

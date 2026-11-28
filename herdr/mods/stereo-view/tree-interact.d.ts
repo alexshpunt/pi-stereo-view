@@ -5,7 +5,7 @@ import type { TreeFind, FindState, FindTarget } from "./tree-find.js";
 import type { Marks } from "./tree-text.js";
 import type { TreeBody, TreeHeader } from "./tree-model.js";
 export interface PointerState { handle: { offset(): { x: number; y: number }; viewport_size(): { width: number; height: number }; scroll_to_item(index: number, strategy?: "top" | "center"): void }; height: number }
-export interface PointerCx { notify(): void; timer: { after(ms: number, cb: (cx: PointerCx) => void): unknown }; write_to_clipboard(text: string): void }
+export interface PointerCx { notify(): void; timer: { after(ms: number, cb: (cx: any) => void): unknown }; write_to_clipboard(text: string): void }
 export function autoScrollTarget(layout: TreeLayout, top: number, direction: number): number;
 export class TreeInteraction {
   constructor(view: TreeView);
