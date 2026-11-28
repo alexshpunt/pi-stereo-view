@@ -115,8 +115,7 @@ export function createTreePanels(gpui, deps) {
       else if (placed && entry.settled) view.scrollTo(Math.round(state.handle.offset().y / lineHeight));
       if (placed) entry.settled = true;
       const frame = view.frame();
-      // Heights settle and bodies arrive over several frames: keep drawing until they have.
-      if (!view.exact || !view.complete) ctx.notify();
+      // Heights settle and bodies arrive over several frames: the mod's tick asks for the next render (wantsRender).
       const layout = view.layout;
       if (entry.version !== layout.version || entry.sizes.length !== layout.count) {
         const sizes = new Array(layout.count);
