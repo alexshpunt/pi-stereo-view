@@ -18,6 +18,7 @@ function rowHeight() {
   const scale = typeof zoom === "number" && zoom > 0 ? zoom : 1;
   return Math.round(LINE_HEIGHT * scale) / scale;
 }
+let imagesPruned = false;
 // The shell's binary fs bindings can yield empty files. Decode and verify in a
 // local Node process after writing only ASCII through its text binding.
 const IMAGE_DECODE = `const fs=require('node:fs'),crypto=require('node:crypto');
@@ -25,6 +26,12 @@ const [input,output,id]=process.argv.slice(1),data=Buffer.from(fs.readFileSync(i
 if(crypto.createHash('sha256').update(data).digest('hex')!==id)process.exit(2);
 const temp=output+'.'+process.pid+'.tmp';
 try{fs.writeFileSync(temp,data);fs.renameSync(temp,output);}finally{try{fs.unlinkSync(temp)}catch(e){if(e.code!=='ENOENT')throw e}}`;
+// Keeps the newest 200 decoded images from earlier runs. It runs once per process
+// before this process writes its first image, so it never removes a file in use.
+const IMAGE_PRUNE = `const fs=require('node:fs'),path=require('node:path');const dir=process.argv[1];
+const files=fs.readdirSync(dir).filter(n=>/^[0-9a-f]{64}\\.(png|jpg|gif|webp)$/.test(n))
+.map(n=>({n,t:fs.statSync(path.join(dir,n)).mtimeMs})).sort((a,b)=>b.t-a.t);
+for(const f of files.slice(200))fs.unlinkSync(path.join(dir,f.n));`;
 // Fixed code, not a command or script read from the terminal label. The socket and
 // request are arguments and never interpolated into this source.
 const CLIENT = `const net=require('node:net');
@@ -695,6 +702,10 @@ export default class StereoView extends View {
         const relative = `data/stereo-view/images/${id}.${extension}`;
         const directory = `${appHome()}/data/stereo-view/images`;
         await mkdir(directory, { recursive: true });
+        if (!imagesPruned) {
+          imagesPruned = true;
+          try { await exec("node", ["-e", IMAGE_PRUNE, directory], { timeout: 5000 }); } catch { /* A failed prune only leaves old cache files. */ }
+        }
         const temporary = `${directory}/${id}-${Math.random().toString(36).slice(2)}.base64`;
         await writeFile(temporary, encoded);
         try {
