@@ -22,7 +22,8 @@ export function createTreePanels(gpui, deps) {
     const client = new TreeClient(deps.spawnStream, { ...target, pane: name }, {
       change: change => { entry.view.changed(change); entry.notify?.(); },
       bodies: () => entry.notify?.(),
-      exit: () => { panes.delete(name); },
+      // A stream that ends stays as a dead entry: the old list draws and nothing retries in a loop.
+      exit: () => { entry.dead = true; entry.notify?.(); },
       error: text => { entry.error = text; },
     });
     entry.client = client;
@@ -80,7 +81,7 @@ export function createTreePanels(gpui, deps) {
 
   return {
     /** Whether the pane's tree is in use (its stream exists); the old per-page polling stays off then. */
-    active(name) { return panes.has(name); },
+    active(name) { const entry = panes.get(name); return !!entry && !entry.dead; },
     /** The tree view of a pane, for operations (scroll to, search) and the benchmark. */
     view(name) { return panes.get(name)?.view; },
     status(name) { const entry = panes.get(name); return entry ? { ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, error: entry.error } : null; },
@@ -93,7 +94,7 @@ export function createTreePanels(gpui, deps) {
      */
     list(name, state, ctx) {
       const entry = ensure(name, ctx.notify);
-      if (!entry || !entry.view.model.ready || !state.handle) return null;
+      if (!entry || entry.dead || !entry.view.model.ready || !state.handle) return null;
       entry.notify = ctx.notify;
       const { view } = entry;
       const lineHeight = ctx.lineHeight;

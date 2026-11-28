@@ -217,7 +217,7 @@ function treeSpawn(/** @type {string | null} */ mode) {
     const spawn = /** @type {any} */ (hostApi).spawnStream;
     return typeof spawn === "function" ? spawn : null;
   }
-  if (mode?.startsWith("replay:")) return replaySpawn(mode.slice(7), async url => (await fetch(url)).text());
+  if (mode?.startsWith("replay:")) return replaySpawn(mode.slice(7), path => readFile(path, "utf8"));
   return null;
 }
 
