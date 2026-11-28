@@ -297,7 +297,12 @@ export function createTreePanels(gpui, deps) {
       // Heights settle and bodies arrive over several frames: the mod's tick asks for the next render (wantsRender).
       const layout = view.layout;
       const groups = Math.ceil(layout.count / group);
-      if (entry.version !== layout.version || entry.sizes.length !== groups || entry.group !== group) {
+      if (entry.version !== layout.version && group === 1 && layout.touched && entry.sizes.length === groups && entry.group === group) {
+        for (const i of layout.touched) entry.sizes[i] = layout.heights[i] * lineHeight; // measuring changes a few heights per frame
+        layout.touched.clear();
+        entry.version = layout.version;
+      } else if (entry.version !== layout.version || entry.sizes.length !== groups || entry.group !== group) {
+        layout.touched = new Set();
         const sizes = new Array(groups).fill(0);
         for (let i = 0; i < layout.count; i++) sizes[Math.floor(i / group)] += layout.heights[i] * lineHeight;
         entry.sizes = sizes;

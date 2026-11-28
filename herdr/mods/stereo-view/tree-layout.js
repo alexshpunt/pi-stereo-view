@@ -20,6 +20,8 @@ export class TreeLayout {
     this.cursor = 0;
     /** Bumps whenever any height changes: a renderer re-sends item sizes only then. */
     this.version = 0;
+    /** Items whose height changed since the owner last looked (null: everything may have). */
+    this.touched = new Set();
     this.unmeasured = 0;
   }
 
@@ -41,6 +43,7 @@ export class TreeLayout {
     this.measured = new Uint8Array(items.length);
     this.cursor = 0;
     this.version++;
+    this.touched = null; // structure changed: the owner rebuilds whatever it derived
     for (let i = 0; i < items.length; i++) this.heights[i] = this.estimate(items[i]);
     this.countUnmeasured();
     this.buildTree();
@@ -76,6 +79,7 @@ export class TreeLayout {
     this.heights = Int32Array.from(heights);
     this.measured = Uint8Array.from(measured);
     this.version++;
+    this.touched = null; // structure changed: the owner rebuilds whatever it derived
     for (let i = 0; i < inserted; i++) this.wrapped.delete(items[at + i].id);
     this.countUnmeasured();
     this.buildTree();
@@ -112,7 +116,7 @@ export class TreeLayout {
     this.heights[i] = rows;
     if (!this.measured[i]) this.unmeasured--;
     this.measured[i] = 1;
-    if (delta) { this.version++; for (let k = i + 1; k <= this.heights.length; k += k & -k) this.tree[k] += delta; }
+    if (delta) { this.version++; this.touched?.add(i); for (let k = i + 1; k <= this.heights.length; k += k & -k) this.tree[k] += delta; }
     return delta;
   }
 
