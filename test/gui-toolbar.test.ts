@@ -136,6 +136,22 @@ test("keeps split history visible while an extension dialog is open", async () =
   expect(h.find(root, "stereo-surface")).toBeDefined();
 });
 
+test("keeps both history panels usable when a saved chat width exceeds the window", async () => {
+  const h = harness(); h.view.init({}, h.cx); await h.flush();
+  h.view.viewState.preferences.chatWidth = 75;
+  h.view.areaWidth = 536;
+  expect(h.view.areaWidth - h.view.chatExtent()).toBeGreaterThanOrEqual(200);
+});
+
+test("fits pane controls independently of the window toolbar", async () => {
+  const h = harness(); h.view.init({}, h.cx); await h.flush();
+  h.view.areaWidth = 536; h.view.controlWidth = 536;
+  h.view.viewState.preferences.chatWidth = 75;
+  const root = h.view.render();
+  expect(h.find(root, "stereo-icon-compact")).toBeDefined();
+  expect(h.find(root, "stereo-icon-zoom-activity")).toBeDefined();
+});
+
 test("uses picker placement temporarily and restores the saved history layout", async () => {
   const h = harness(); h.setSurface({ active: true, piWindow: true, frame: 8, mouseFrame: 12, lines: ["picker"] });
   h.view.init({}, h.cx); await h.flush();

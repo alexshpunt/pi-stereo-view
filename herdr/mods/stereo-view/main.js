@@ -15,6 +15,7 @@ const PAGE = 256;
 const INTERVAL = 700;
 const ICON_SIZE = 14; // Toolbar icon edge in logical pixels.
 const NARROW_CONTROLS_WIDTH = 400; // Switch to icons when text controls no longer fit.
+const MIN_ACTIVITY_WIDTH = 200; // Leave room for the heading and controls in a narrow split.
 /** @typedef {{id:number, frame:number, mouseFrame:number, focused:boolean, row:number, col:number, width:number, height:number, lines:string[]}} OverlayLayer */
 /** @typedef {{revision:number, columns:number, rows:number, overlays:OverlayLayer[]}} OverlayPage */
 // GPUI snaps each virtual row to a whole window pixel before scrolling.
@@ -1000,10 +1001,10 @@ export default class StereoView extends View {
     return row;
   }
 
-  /** @param {string} action @param {string} label @param {any} t */
-  control(action, label, t) {
+  /** @param {string} action @param {string} label @param {any} t @param {number} [width] */
+  control(action, label, t, width = this.controlWidth) {
     const state = this.viewState;
-    const icons = state?.preferences?.buttonStyle === "icons" || this.controlWidth < NARROW_CONTROLS_WIDTH;
+    const icons = state?.preferences?.buttonStyle === "icons" || width < NARROW_CONTROLS_WIDTH;
     const icon = action === "mode" ? (state?.mode === "combined" ? "split" : "combine")
       : action === "layout" ? (state?.layout === "rows" ? "columns" : "rows")
       : action.startsWith("find-") ? "find"
@@ -1028,12 +1029,13 @@ export default class StereoView extends View {
   chatExtent() {
     const rows = this.viewState?.layout === "rows";
     const total = rows ? this.areaHeight : this.areaWidth;
-    if (this.drag) return Math.max(40, Math.min(total - 40, this.drag.size));
+    const reserve = rows ? 40 : Math.min(MIN_ACTIVITY_WIDTH, total / 2);
+    if (this.drag) return Math.max(40, Math.min(total - reserve, this.drag.size));
     const prefs = this.viewState?.preferences;
     const value = rows
       ? (prefs?.chatHeight == null ? Math.min(total / 2, Math.max(LINE_HEIGHT * 3, (this.chat.total ?? 1) * LINE_HEIGHT + 28)) : prefs.chatHeight * LINE_HEIGHT)
       : (prefs?.chatWidth == null ? Math.max(24 * this.cellWidth + 16, total * 0.2) : prefs.chatWidth * this.cellWidth + 16);
-    return Math.max(40, Math.min(total - 40, value));
+    return Math.max(40, Math.min(total - reserve, value));
   }
 
   /** @param {any} t */
@@ -1079,12 +1081,15 @@ export default class StereoView extends View {
     const heading = h_flex().items_center().justify_between().px(8).py(3)
       .child(div().text_color(t.muted).child(title));
     const actions = h_flex().items_center();
-    if (name !== "combined") actions.child(this.control(`find-${name}`, "Find", t));
-    if (name === "activity") actions.child(this.control("compact", this.viewState?.compactTools ? "Full tools" : "Compact tools", t));
-    if (name !== "combined") actions.child(this.control(`zoom-${name}`, this.viewState?.zoom === name ? "Restore" : "Maximize", t));
+    const placement = this.dialogPlacement();
+    const split = this.viewState?.mode === "split" && this.viewState.layout === "columns" && !this.viewState.zoom && placement !== "combined" && placement !== "maximize";
+    const width = split ? (name === "chat" ? this.chatExtent() : this.areaWidth - this.chatExtent() - 5) : this.areaWidth;
+    if (name !== "combined") actions.child(this.control(`find-${name}`, "Find", t, width));
+    if (name === "activity") actions.child(this.control("compact", this.viewState?.compactTools ? "Full tools" : "Compact tools", t, width));
+    if (name !== "combined") actions.child(this.control(`zoom-${name}`, this.viewState?.zoom === name ? "Restore" : "Maximize", t, width));
     heading.child(actions);
     const panel = v_flex().flex_1().min_w(0).min_h(0).border_1().border_color(t.border);
-    if (this.viewState?.mode === "split" && this.viewState.layout === "columns") panel.h_full();
+    if (split) panel.h_full();
     else panel.w_full();
     if (name === "chat" && this.viewState?.mode === "split" && !this.viewState?.zoom) {
       if (this.viewState.layout === "rows") panel.flex_none().h(this.chatExtent());
@@ -1324,14 +1329,14 @@ export default class StereoView extends View {
         activity: () => this.panel("activity", "Activity", this.activity, t, hasSurface && state?.zoom !== "chat"),
       };
       const container = state?.layout === "rows" ? v_flex() : h_flex();
-      content = container.id("stereo-panels").flex_1().min_w(0).min_h(0);
+      content = container.id("stereo-panels").flex_1().w_full().min_w(0).min_h(0);
       const order = state?.zoom ? [state.zoom] : state?.side === "right" ? ["activity", "chat"] : ["chat", "activity"];
       for (const [index, name] of order.entries()) {
         if (index > 0) content.child(this.divider(t));
         content.child(panels[name]());
       }
     }
-    const body = v_flex().id("stereo-body").flex_1().min_w(0).min_h(0)
+    const body = v_flex().id("stereo-body").flex_1().w_full().min_w(0).min_h(0)
       .on_size_change((size, cx) => {
         const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
         const width = size.width / zoom, height = size.height / zoom;
