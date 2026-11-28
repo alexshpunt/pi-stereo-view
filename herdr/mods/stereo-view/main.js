@@ -1140,10 +1140,11 @@ export default class StereoView extends View {
     const { width, height } = paneDimensions(size, zoom, this.cellWidth, ROW_CHROME);
     this.rememberGeometry();
     if (width === state.width && height === state.height) return;
+    let widthChanged = false;
     if (width !== state.width) {
       // Keep the rows: drawn with the old wrapping they are better than a blank panel until the next page lands.
       state.stale = true;
-      this.scheduleRead(cx);
+      widthChanged = true;
       state.selection.clear();
       state.selectionRows.clear();
       state.selectionFocus = null;
@@ -1154,6 +1155,7 @@ export default class StereoView extends View {
     state.width = width;
     state.height = height;
     cx.notify();
+    if (widthChanged) this.scheduleRead(cx);
   }
 
   /** A run's resolved colors. @param {any} t @param {any} run */
