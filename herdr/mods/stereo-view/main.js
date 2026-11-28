@@ -11,8 +11,6 @@ import { composerAlive, composerFieldCommand, composerRoute } from "./composer-r
 import { dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT } from "./refresh-plan.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
 import * as hostApi from "herdr";
-// TEMPORARY (LPT-1943): the native frame-time HUD, for the live frame check.
-import { show_fps_monitor } from "gpui-fps";
 import { createTreePanels } from "./tree-panel.js";
 import { replaySpawn } from "./replay-stream.js";
 import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "./history-blocks.js";
@@ -420,10 +418,6 @@ export default class StereoView extends View {
    */
   tick(cx) {
     // LPT-1943: the tree's stream and background measuring change what a frame shows between events.
-    if (this.trees && !this.hudTried) { // TEMPORARY (LPT-1943): the HUD needs a live host call, which a timer callback is
-      this.hudTried = true;
-      try { show_fps_monitor({ frame_budget: 16 }); } catch (error) { writeFile(`${appHome()}/stereo-hud-error.txt`, String(error)).catch(() => {}); }
-    }
     if (this.trees?.wantsRender() && isShown()) cx.notify();
     const shown = isShown();
     const plan = refreshPlan({ shown, prefetchable: !shown && isPrefetchable(), wasShown: this.tickShown, elapsed: Date.now() - this.lastRead });
