@@ -17,6 +17,9 @@ const LINE_HEIGHT_RATIO = 1.32; // Row height per point of terminal text, matchi
 let LINE_HEIGHT = DEFAULT_LINE_HEIGHT; // Set by syncTypography from the terminal's text size and line height.
 const PAGE = 256;
 const INTERVAL = 700;
+/** How many times a GUI that has just appeared hands the keyboard to the composer, and for how long it tries (LPT-1930). */
+const KEYBOARD_TRIES = 3;
+const KEYBOARD_CLAIM_MS = 15000;
 const ICON_SIZE = 14; // Toolbar icon edge in logical pixels.
 const NARROW_CONTROLS_WIDTH = 400; // Switch to icons when text controls no longer fit.
 const MIN_ACTIVITY_WIDTH = 200; // Leave room for the heading and controls in a narrow split.
@@ -276,6 +279,9 @@ export default class StereoView extends View {
     this.drag = undefined;
     // Until the first layout measures the monospace probe, use one em per cell.
     this.activePane = "chat";
+    this.wasShown = false;
+    this.keyboardTries = 0;
+    this.keyboardUntil = 0;
     this.cellWidth = 12;
     this.cellMeasured = false;
     this.available = !checking() && !!bridge();
@@ -286,9 +292,10 @@ export default class StereoView extends View {
         const command = await nextCommand();
         if (!isShown()) continue;
         if (command === "focus" && props()?.view === "gui") {
+          // Herdr's own focus command replaces the claim a freshly shown GUI makes.
+          this.keyboardTries = 0;
           this.refresh(cx);
-          if (this.surfaceInput) this.surfaceInput.focus();
-          else { this.focus?.focus(); this.handKeyboardToComposer(); }
+          this.takeKeyboard();
           continue;
         }
         const action = composerRoute(command, props()?.pane);
@@ -307,7 +314,28 @@ export default class StereoView extends View {
     const address = terminalAddress();
     const labels = terminals().find(t => t.address === address)?.labels;
     const command = composerFieldCommand(props()?.pane);
-    if (command && composerAlive(labels)) run(command);
+    if (!command || !composerAlive(labels)) return false;
+    run(command);
+    return true;
+  }
+
+  /** The pane has the keyboard: the view takes it (the open Pi dialog's input, else its own handle) and passes it on. */
+  takeKeyboard() {
+    if (this.surfaceInput) { this.surfaceInput.focus(); return false; }
+    this.focus?.focus();
+    return this.handKeyboardToComposer();
+  }
+
+  /**
+   * Herdr sends "focus" only when a pane takes the keyboard. A pane that has it already when its GUI first
+   * appears (a new pane whose Pi starts after the pane was made, or a Pi that restarts) gets no command, so
+   * the keyboard would stay on the hidden terminal. The view therefore claims it when it appears: a few times
+   * once the composer is alive, for a while at most (LPT-1930).
+   */
+  claimKeyboardOnEntry() {
+    const own = panes().find(p => p.pane === props()?.pane);
+    if (this.keyboardTries <= 0 || Date.now() > this.keyboardUntil || !own?.focused) return;
+    if (this.takeKeyboard()) this.keyboardTries--;
   }
 
   /**
@@ -382,7 +410,11 @@ export default class StereoView extends View {
 
   /** @param {any} cx */
   refresh(cx) {
-    if (!isShown()) return;
+    const shown = isShown();
+    if (shown && !this.wasShown) { this.keyboardTries = KEYBOARD_TRIES; this.keyboardUntil = Date.now() + KEYBOARD_CLAIM_MS; }
+    this.wasShown = shown;
+    if (!shown) return;
+    this.claimKeyboardOnEntry();
     const connection = bridge();
     this.available = !!connection;
     if (!connection) { this.connection = undefined; cx.notify(); return; }

@@ -30,6 +30,7 @@ function harness() {
   let focusCount = 0;
   let paneView = false;
   let shownView = "gui";
+  let paneFocused = true;
   const pending: Promise<unknown>[] = [];
   let listening = false;
   let deliverCommand: ((command: string) => void) | undefined;
@@ -125,7 +126,7 @@ function harness() {
       })) });
     }
     return { code: 0, stdout: JSON.stringify(data) };
-  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom, font: terminalFont, font_size: terminalSize }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
+  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView, focused: paneFocused }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom, font: terminalFont, font_size: terminalSize }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
   const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
@@ -142,7 +143,7 @@ function harness() {
     setPointerHandled(value: boolean) { pointerHandled = value; }, stopped: () => stopped,
     surfaceFocused: () => inputFocused, sendCommand: (command: string) => deliverCommand?.(command),
     runs, setComposerLabel(stamp?: number) { (terminal.labels as any)["herdr.composer"] = stamp === undefined ? undefined : String(stamp); },
-    setPaneView(value: boolean) { paneView = value; }, setShownView(value: string) { shownView = value; }, focused: () => focusCount };
+    setPaneView(value: boolean) { paneView = value; }, setShownView(value: string) { shownView = value; }, setPaneFocused(value: boolean) { paneFocused = value; }, focused: () => focusCount };
 }
 
 test("pane view drops app chrome, starts with a live bridge and pauses in TUI", async () => {
@@ -166,8 +167,9 @@ test("a pane created in TUI mode recognizes a live bridge before switching", asy
 
 test("pane focus targets the active panel or the open Pi dialog", async () => {
   const h = harness(); h.setPaneView(true); h.view.init({}, h.cx); await h.flush();
+  const claimed = h.focused();
   h.sendCommand("focus"); await Promise.resolve(); await h.flush();
-  expect(h.focused()).toBe(1);
+  expect(h.focused()).toBe(claimed + 1);
   h.setSurface({ active: true, frame: 2, lines: ["dialog"] });
   h.view.refresh(h.cx); await h.flush();
   h.sendCommand("focus"); await Promise.resolve();
@@ -192,6 +194,52 @@ test("a GUI focus goes on to the composer field of its pane unless a Pi dialog i
   h.sendCommand("focus"); await Promise.resolve();
   expect(h.surfaceFocused()).toBe(true);
   expect(h.runs, "the dialog keeps the keyboard").toHaveLength(1);
+});
+// LPT-1930: Herdr sends "focus" only when a pane takes the keyboard. A pane that was focused already when its
+// GUI first appeared (a new pane whose Pi starts after the pane was made) got no such command, so the keyboard
+// stayed on the hidden terminal and typed text was lost.
+test("a pane that is focused when its GUI appears hands the keyboard to the composer without a focus command", async () => {
+  const h = harness(); h.setPaneView(true); h.setShownView("tui"); h.view.init({}, h.cx); await h.flush();
+  h.setComposerLabel(Date.now());
+  h.view.refresh(h.cx); await h.flush();
+  expect(h.runs, "still in TUI").toEqual([]);
+
+  h.setShownView("gui"); h.view.refresh(h.cx); await h.flush();
+  expect(h.runs).toEqual(["paste-composer.field:m%2Fp:focus"]);
+  expect(h.focused(), "the view takes the keyboard first").toBe(1);
+
+  h.view.refresh(h.cx); await h.flush();
+  h.view.refresh(h.cx); await h.flush();
+  h.view.refresh(h.cx); await h.flush();
+  expect(h.runs.length, "a few retries, not a stream").toBeLessThanOrEqual(3);
+});
+
+test("a GUI that appears before its composer is alive hands the keyboard over when the composer comes", async () => {
+  const h = harness(); h.setPaneView(true); h.setShownView("tui"); h.view.init({}, h.cx); await h.flush();
+  h.setShownView("gui"); h.view.refresh(h.cx); await h.flush();
+  expect(h.runs, "no composer yet").toEqual([]);
+  h.setComposerLabel(Date.now());
+  h.view.refresh(h.cx); await h.flush();
+  expect(h.runs).toEqual(["paste-composer.field:m%2Fp:focus"]);
+});
+
+test("a GUI that appears in a pane without the keyboard leaves the keyboard where it is", async () => {
+  const h = harness(); h.setPaneView(true); h.setShownView("tui"); h.view.init({}, h.cx); await h.flush();
+  h.setComposerLabel(Date.now()); h.setPaneFocused(false);
+  h.setShownView("gui"); h.view.refresh(h.cx); await h.flush();
+  h.view.refresh(h.cx); await h.flush();
+  expect(h.runs).toEqual([]);
+  expect(h.focused()).toBe(0);
+});
+
+test("a GUI that appears with a Pi dialog open leaves the keyboard with the dialog", async () => {
+  const h = harness(); h.setPaneView(true); h.setShownView("tui"); h.view.init({}, h.cx); await h.flush();
+  h.setComposerLabel(Date.now());
+  h.setSurface({ active: true, frame: 2, lines: ["dialog"] });
+  h.setShownView("gui"); h.view.refresh(h.cx); await h.flush();
+  h.view.refresh(h.cx); await h.flush();
+  expect(h.surfaceFocused()).toBe(true);
+  // The composer itself declines the handover while Pi's editor does not have the keyboard (a dialog is open).
 });
 
 test("keeps split history visible while an extension dialog is open", async () => {
