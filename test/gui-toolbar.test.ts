@@ -7,7 +7,7 @@ import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { dialogKey } from "../herdr/mods/stereo-view/dialog-keys.js";
 // @ts-expect-error The mod has no TypeScript declarations.
-import { createImagePruner } from "../herdr/mods/stereo-view/image-pruner.js";
+import { createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -99,8 +99,8 @@ function harness() {
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, dialogKey, createImagePruner,
-    appHome: () => "/tmp", mkdir: async () => {}, writeFile: async () => {}, unlink: async () => {} };
+  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, dialogKey, createImageCache, IMAGE_CACHE_INIT,
+    appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
   const flush = async () => { while (pending.length) await Promise.all(pending.splice(0)); };
