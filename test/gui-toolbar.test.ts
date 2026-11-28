@@ -134,6 +134,16 @@ test("keeps history visible behind Pi overlays and forwards overlay input", asyn
     event: { type: "release", button: "left", x: 1, y: 0 } });
 });
 
+test("forwards Enter to a focused Pi overlay even with an empty input", async () => {
+  const h = harness();
+  h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 3, col: 4, width: 20, height: 2, lines: ["overlay"] }]);
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.view.render().keyDown!({ key: "enter", modifiers: {} }, h.cx);
+  await h.flush();
+  expect(h.calls).toContainEqual({ v: 1, op: "overlay-key", revision: 1, id: 7, frame: 4, data: "\r" });
+});
+
 test("uses icon controls when the saved preference requests icons", async () => {
   const h = harness();
   (h.state as any).preferences.buttonStyle = "icons";
@@ -218,7 +228,6 @@ test("shows Pi's active dialog and forwards keys until it closes", async () => {
   expect(h.find(root, "stereo-surface")).toBeDefined();
   root.keyDown!({ key: "down", modifiers: {} }, h.cx);
   root.keyDown!({ key: "enter", modifiers: {} }, h.cx);
-  h.submitSurface();
   await h.flush();
   expect(h.calls.filter(call => call.op === "surface-key")).toEqual([
     { v: 1, op: "surface-key", frame: 8, data: "\x1b[B" },

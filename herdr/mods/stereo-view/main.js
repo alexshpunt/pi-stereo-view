@@ -351,7 +351,6 @@ export default class StereoView extends View {
       const parts = Array.from(data);
       for (let i = 0; i < parts.length; i += 256) this.sendSurfaceData(parts.slice(i, i + 256).join(""), cx);
     });
-    input.on("submit", (_event, cx) => { this.sendSurfaceData("\r", cx); });
     cx.timer.after(50, () => { if (this.surfaceInput === input && isShown()) input.focus(); });
   }
 
@@ -1134,8 +1133,12 @@ export default class StereoView extends View {
     if (this.focus) root.track_focus(this.focus).on_key_down((event, cx) => {
       if ((this.overlays?.overlays.some(layer => layer.focused) || this.surface?.active || this.dock?.focused) && this.surfaceInput) {
         const key = event.key?.toLowerCase();
-        // Text and Enter belong to the native input; it supplies composed text and submit events.
-        if (key === "enter" || key === "return" || (event.modifiers?.control && event.modifiers?.alt && event.key_char) ||
+        // Text belongs to the native input; forward Enter even when the field is empty.
+        if (key === "enter" || key === "return") {
+          if (this.sendSurfaceData("\r", cx)) cx.stop_propagation();
+          return;
+        }
+        if ((event.modifiers?.control && event.modifiers?.alt && event.key_char) ||
             (key === "v" && event.modifiers?.control && !event.modifiers?.alt) ||
             (!event.modifiers?.control && !event.modifiers?.alt &&
             !event.modifiers?.platform && (key?.length === 1 || event.key_char))) return;
