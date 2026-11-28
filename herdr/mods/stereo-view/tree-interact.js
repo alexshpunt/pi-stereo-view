@@ -38,6 +38,8 @@ export class TreeInteraction {
     this.selection = new TreeSelection(view, this.spans);
     this.find = new TreeFind(view, this.spans);
     this.metrics = { lineHeight: 1, cellWidth: 1, textLeft: 0 };
+    /** Items per list entry (the panel groups items past the host's list size limit). */
+    this.group = 1;
     this.drag = null;
     this.sink = null;
     this.published = "";
@@ -107,7 +109,7 @@ export class TreeInteraction {
       const { lineHeight } = this.metrics;
       const top = Math.round(state.handle.offset().y / lineHeight);
       const viewport = state.handle.viewport_size().height || state.height;
-      state.handle.scroll_to_item(autoScrollTarget(this.view.layout, top, drag.auto));
+      state.handle.scroll_to_item(Math.floor(autoScrollTarget(this.view.layout, top, drag.auto) / (this.group ?? 1)));
       this.extendTo(drag, viewport, next);
       next.notify();
       this.autoScroll(drag, next);

@@ -13,6 +13,8 @@ import { TreeInteraction } from "./tree-interact.js";
 export function createTreePanels(gpui, deps) {
   const { div, h_flex, v_flex, v_virtual_list } = gpui;
   const COPIED_MS = 1500;
+  /** The host's virtual list takes at most 10000 sizes: past this many items, runs of `group` items share one list entry. */
+  const MAX_ENTRIES = 8000;
   /** @type {Map<string, any>} */
   const panes = new Map();
 
@@ -249,13 +251,15 @@ export function createTreePanels(gpui, deps) {
       const { view } = entry;
       const lineHeight = ctx.lineHeight;
       // GPUI owns the scroll offset; the view follows it (rows from the handle), then plans around it.
+      const group = Math.max(1, Math.ceil(view.layout.count / MAX_ENTRIES));
+      entry.ui.group = group;
       view.setViewport(Math.max(1, Math.floor(state.height / lineHeight)));
       if (state.width > 0) view.setCols(Math.max(10, state.width - 2));
       if (entry.jump) {
         // Go to: the item's top row, then GPUI follows (the view stops reading the handle for two frames).
         const index = view.model.indexOf(entry.jump);
         entry.jump = null;
-        if (index >= 0) { view.toItemId(view.model.items[index].id); state.handle.scroll_to_item?.(index); entry.bottomRequests = 2; }
+        if (index >= 0) { view.toItemId(view.model.items[index].id); state.handle.scroll_to_item?.(Math.floor(index / group)); entry.bottomRequests = 2; }
       }
       entry.ui.metrics = { lineHeight, cellWidth: ctx.cellWidth ?? 8, textLeft: ctx.gutter };
       // Find: one 4 ms slice per render while a pass runs; a hit to show brings its item on screen (a tall item shows its top).
@@ -263,7 +267,7 @@ export function createTreePanels(gpui, deps) {
       if (found) {
         const fits = view.layout.heights[found.index] <= view.viewport;
         view.toItem(found.index);
-        state.handle.scroll_to_item?.(found.index, fits ? "center" : "top");
+        state.handle.scroll_to_item?.(Math.floor(found.index / group), fits && group === 1 ? "center" : "top");
         entry.bottomRequests = 2;
       }
       const placed = state.handle.content_size().height > 0;
@@ -273,21 +277,28 @@ export function createTreePanels(gpui, deps) {
       const frame = view.frame();
       // Heights settle and bodies arrive over several frames: the mod's tick asks for the next render (wantsRender).
       const layout = view.layout;
-      if (entry.version !== layout.version || entry.sizes.length !== layout.count) {
-        const sizes = new Array(layout.count);
-        for (let i = 0; i < sizes.length; i++) sizes[i] = layout.heights[i] * lineHeight;
+      const groups = Math.ceil(layout.count / group);
+      if (entry.version !== layout.version || entry.sizes.length !== groups || entry.group !== group) {
+        const sizes = new Array(groups).fill(0);
+        for (let i = 0; i < layout.count; i++) sizes[Math.floor(i / group)] += layout.heights[i] * lineHeight;
         entry.sizes = sizes;
         entry.version = layout.version;
+        entry.group = group;
       }
       if (view.following && (frame.total !== entry.lastTotal || !entry.settled)) { state.handle.scroll_to_bottom?.(); entry.bottomRequests = 2; }
       entry.lastTotal = frame.total;
       entry.frame = frame;
       const items = view.model.items;
-      return v_virtual_list(`stereo-tree-${name}`, layout.count, entry.sizes, index => items[index]?.id ?? String(index),
+      return v_virtual_list(`stereo-tree-${name}`, groups, entry.sizes, index => items[index * group]?.id ?? String(index),
         range => {
           const started = typeof performance !== "undefined" ? performance.now() : Date.now();
           const out = [];
-          for (let i = range.start; i < range.end; i++) out.push(renderItem(entry, i, ctx));
+          for (let g = range.start; g < range.end; g++) {
+            if (group === 1) { out.push(renderItem(entry, g, ctx)); continue; }
+            const run = v_flex().id(`stereo-tree-${name}-run-${g}`).w_full().flex_none();
+            for (let i = g * group; i < Math.min(layout.count, (g + 1) * group); i++) run.child(renderItem(entry, i, ctx));
+            out.push(run);
+          }
           const spent = (typeof performance !== "undefined" ? performance.now() : Date.now()) - started;
           (entry.rangeMs ??= []).push({ spent, items: range.end - range.start }); if (entry.rangeMs.length > 600) entry.rangeMs.splice(0, 300);
           return out;

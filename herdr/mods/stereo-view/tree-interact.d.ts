@@ -11,6 +11,7 @@ export class TreeInteraction {
   constructor(view: TreeView);
   selection: TreeSelection; find: TreeFind;
   metrics: { lineHeight: number; cellWidth: number; textLeft: number };
+  group: number;
   readonly busy: boolean; readonly dragging: boolean; readonly hasSelection: boolean;
   changed(): void;
   down(state: PointerState, pos: { x: number; y: number; count: number; shift: boolean; maxX?: number }, cx: PointerCx): boolean;
