@@ -1,12 +1,13 @@
 import { View, div, image, svg } from "gpui-kit";
 import { writeFile, unlink } from "fs/promises";
 import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, ScrollHandle, Scrollbar, Input, InputState } from "gpui-base";
-import { appHome, checking, exec, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
+import { appHome, checking, exec, nextCommand, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
 import { parseAnsi } from "./ansi.js";
 import { createSettingsPanel } from "./settings.js";
 import { createSearchBar } from "./search-bar.js";
 import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
+import { composerRoute } from "./composer-route.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
 
 const LABEL = "herdr.stereo.bridge";
@@ -226,6 +227,14 @@ export default class StereoView extends View {
     this.available = false;
     if (checking()) return;
     this.focus = cx.focus_handle();
+    cx.spawn(async (cx) => {
+      for (;;) {
+        const action = composerRoute(await nextCommand(), props()?.pane);
+        if (action && isShown() && !this.surface?.active && !this.overlays?.overlays.some(layer => layer.focused) && !this.dock?.focused) {
+          this.navigate(action, cx);
+        }
+      }
+    });
     cx.timer.every(INTERVAL, (/** @type {any} */ cx) => this.refresh(cx));
     this.refresh(cx);
   }
@@ -234,6 +243,24 @@ export default class StereoView extends View {
     const state = this.viewState;
     return this.surface?.active && this.surface.piWindow && state?.mode === "split" && state.layout === "columns" && !state.zoom
       ? state.preferences?.piWindows : undefined;
+  }
+
+  /** Handle navigation from the focused panel or its composer. */
+  navigate(key, cx) {
+    const pane = this.viewState?.mode === "combined" ? this.combined : this.activePane === "chat" ? this.chat : this.activity;
+    if (key === "search") {
+      if (this.viewState?.mode === "split") this.openSearch(this.activePane, cx);
+      return;
+    }
+    if (key === "end") { pane.following = true; pane.handle.scroll_to_bottom(); }
+    else {
+      pane.following = false;
+      const current = Math.floor(pane.handle.offset().y / panelRowHeight(pane));
+      const page = Math.max(1, Math.floor((pane.handle.viewport_size().height || pane.height) / panelRowHeight(pane)) - 1);
+      const target = key === "home" ? 0 : current + (key === "pageup" ? -page : page);
+      pane.handle.scroll_to_item(Math.max(0, Math.min((pane.total ?? 1) - 1, target)));
+    }
+    cx.notify();
   }
 
   /** @param {any} cx */
@@ -1404,15 +1431,7 @@ export default class StereoView extends View {
         cx.notify(); cx.stop_propagation(); return;
       }
       if (this.focus.is_focused() && (key === "pageup" || key === "pagedown" || key === "home" || key === "end")) {
-        if (key === "end") { pane.following = true; pane.handle.scroll_to_bottom(); }
-        else {
-          pane.following = false;
-          const current = Math.floor(pane.handle.offset().y / panelRowHeight(pane));
-          const page = Math.max(1, Math.floor((pane.handle.viewport_size().height || pane.height) / panelRowHeight(pane)) - 1);
-          const target = key === "home" ? 0 : current + (key === "pageup" ? -page : page);
-          pane.handle.scroll_to_item(Math.max(0, Math.min((pane.total ?? 1) - 1, target)));
-        }
-        cx.notify(); cx.stop_propagation(); return;
+        this.navigate(key, cx); cx.stop_propagation(); return;
       }
       if (event.modifiers?.control && event.key?.toLowerCase() === "f" && this.viewState?.mode === "split") {
         this.openSearch(this.activePane, cx);
