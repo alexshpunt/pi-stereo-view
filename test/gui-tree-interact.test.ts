@@ -25,6 +25,9 @@ function build(sources: Source[], cols = 20, viewport = 10) {
   return { client, view };
 }
 
+/** The point under a pointer; the tree is never empty in these tests. */
+const pt = (select: TreeSelection, row: number, col: number) => select.pointAt(row, col)!;
+
 /** Row of the pane where item `id` starts. */
 const itemRow = (view: TreeView, id: string) => view.layout.prefix(view.model.indexOf(id));
 
@@ -55,9 +58,10 @@ describe("row spans", () => {
     expect(caretAt("hello", 0, 5, 1.6)).toEqual({ off: 2, ch: 1 });
     expect(caretAt("hello", 0, 5, 9)).toEqual({ off: 5, ch: 5 });
     expect(caretAt("hello", 0, 5, -3)).toEqual({ off: 0, ch: 0 });
-    expect(caretAt("a世b", 0, 3, 2.2)).toEqual({ off: 1, ch: 1 }); // the left half of the wide char, cell 2 of 1..3
-    expect(caretAt("a世b", 0, 3, 3.5)).toEqual({ off: 2, ch: 1 });
-    expect(caretAt("a世b", 0, 3, 3.6)).toEqual({ off: 2, ch: 2 });
+    expect(caretAt("a世b", 0, 3, 1.8)).toEqual({ off: 1, ch: 1 }); // the left half of the wide char (cells 1..3)
+    expect(caretAt("a世b", 0, 3, 2.2)).toEqual({ off: 2, ch: 1 }); // the right half
+    expect(caretAt("a世b", 0, 3, 3.2)).toEqual({ off: 2, ch: 2 });
+    expect(caretAt("a世b", 0, 3, 3.8)).toEqual({ off: 3, ch: 2 });
     expect(rowOfOffset(rowSpans("aaa bbb ccc", 4), 5)).toBe(1);
   });
 
@@ -81,8 +85,8 @@ describe("selection across items", () => {
   it("copies the text between two points of different items, as the source text", () => {
     const { view } = build(sources());
     const select = new TreeSelection(view);
-    const from = select.pointAt(itemRow(view, "u") + 1, 6.3); // first text row of the user item sits under one padding row
-    const to = select.pointAt(itemRow(view, "m") + 1, 4.2);
+    const from = pt(select, itemRow(view, "u") + 1, 6.3); // first text row of the user item sits under one padding row
+    const to = pt(select, itemRow(view, "m") + 1, 4.2);
     select.start(from);
     select.extend(to);
     expect(select.text()).toBe("world foo\n\nline one\nline");
@@ -91,8 +95,8 @@ describe("selection across items", () => {
   it("selects backwards the same way and joins the call and the output of a tool", () => {
     const { view } = build(sources());
     const select = new TreeSelection(view);
-    const end = select.pointAt(itemRow(view, "b") + 3, 3); // header, call, output row 0, output row 1 -> "beta"
-    const begin = select.pointAt(itemRow(view, "b") + 1, 3);
+    const end = pt(select, itemRow(view, "b") + 3, 3); // header, call, output row 0, output row 1 -> "beta"
+    const begin = pt(select, itemRow(view, "b") + 1, 3);
     select.start(end);
     select.extend(begin);
     expect(select.text()).toBe("-la\nalpha\nbet");
@@ -102,16 +106,16 @@ describe("selection across items", () => {
     const { view } = build([{ id: "u", k: "user", body: { t: "aaaa bbbb cccc" } }], 9);
     expect(wrapRows("aaaa bbbb cccc", 9)).toEqual(["aaaa bbbb", "cccc"]);
     const select = new TreeSelection(view);
-    select.start(select.pointAt(1, 0));
-    select.extend(select.pointAt(2, 10));
+    select.start(pt(select, 1, 0));
+    select.extend(pt(select, 2, 10));
     expect(select.text()).toBe("aaaa bbbb cccc");
   });
 
   it("snaps to the text from the padding rows and past the last row", () => {
     const { view } = build(sources());
     const select = new TreeSelection(view);
-    select.start(select.pointAt(0, 5)); // the padding row above the user text
-    select.extend(select.pointAt(view.layout.totalRows + 50, 0));
+    select.start(pt(select, 0, 5)); // the padding row above the user text
+    select.extend(pt(select, view.layout.totalRows + 50, 0));
     expect(select.text()).toBe("hello world foo\n\nline one\nline two\n\nls -la\nalpha\nbeta");
   });
 
@@ -119,20 +123,20 @@ describe("selection across items", () => {
     const { view } = build(sources());
     const select = new TreeSelection(view);
     const row = itemRow(view, "u") + 1;
-    select.start(select.pointAt(row, 7.2), "word");
+    select.start(pt(select, row, 7.2), "word");
     expect(select.text()).toBe("world");
-    select.extend(select.pointAt(row, 13));
+    select.extend(pt(select, row, 13));
     expect(select.text()).toBe("world foo");
-    select.extend(select.pointAt(row, 0.2));
+    select.extend(pt(select, row, 0.2));
     expect(select.text()).toBe("hello world");
-    select.start(select.pointAt(itemRow(view, "m") + 1, 2), "line");
+    select.start(pt(select, itemRow(view, "m") + 1, 2), "line");
     expect(select.text()).toBe("line two");
   });
 
   it("shows nothing for a click without a drag", () => {
     const { view } = build(sources());
     const select = new TreeSelection(view);
-    select.start(select.pointAt(itemRow(view, "u") + 1, 3));
+    select.start(pt(select, itemRow(view, "u") + 1, 3));
     expect(select.range()).toBeUndefined();
     expect(select.text()).toBeUndefined();
   });
@@ -141,11 +145,11 @@ describe("selection across items", () => {
     const { view } = build([{ id: "m", k: "md", body: { t: "alpha beta\n\ngamma delta" } }, { id: "n", k: "md", body: { t: "tail text" } }], 8);
     const select = new TreeSelection(view);
     // rows of "m" at 8 cols: "alpha", "beta", "", "gamma", "delta"
-    select.start(select.pointAt(1, 2));
-    select.extend(select.pointAt(itemRow(view, "n"), 4));
+    select.start(pt(select, 1, 2));
+    select.extend(pt(select, itemRow(view, "n"), 4));
     const item = view.model.items[0], body = view.model.bodies.get("m")!;
     const marks = select.marks(0, item, body, view.layout.rowsOf(item, body))!;
-    expect(marks.t.map((row: unknown) => row && (row as { c0: number; c1: number }[]).map(m => [m.c0, m.c1]))).toEqual([undefined, [[0, 4]], [[0, 1]], [[0, 5]], [[0, 5]]]);
+    expect(marks.t.map((row: unknown) => row && (row as { c0: number; c1: number }[]).map(m => [m.c0, m.c1]))).toEqual([undefined, [[2, 4]], [[0, 1]], [[0, 5]], [[0, 5]]]);
     const next = view.model.items[1], nextBody = view.model.bodies.get("n")!;
     expect(select.marks(1, next, nextBody, view.layout.rowsOf(next, nextBody))!.t).toEqual([[{ c0: 0, c1: 4, kind: "sel" }]]);
   });
@@ -153,8 +157,8 @@ describe("selection across items", () => {
   it("outlives a resize, an expansion and a streamed append, and drops with a removed endpoint", () => {
     const { view, client } = build([{ id: "u", k: "user", body: { t: "hello world foo bar baz" } }, { id: "m", k: "md", body: { t: "one\ntwo" }, x: 3 }], 12);
     const select = new TreeSelection(view);
-    select.start(select.pointAt(1, 6));
-    select.extend(select.pointAt(itemRow(view, "m") + 1, 3)); // "one" shown, 3 more lines are hidden
+    select.start(pt(select, 1, 6));
+    select.extend(pt(select, itemRow(view, "m"), 3)); // "one" is the first of the two lines shown, 3 more are hidden
     const before = select.text();
     expect(before).toBe("world foo bar baz\n\none");
     view.setCols(7);
@@ -175,18 +179,21 @@ describe("selection across items", () => {
   it("copies exactly what is shown: a folded item gives its shown lines, an expanded one its full text", () => {
     const { view, client } = build([{ id: "b", k: "bash", body: { a: "cat big", o: "l1\nl2" }, x: 98 }]);
     const select = new TreeSelection(view);
-    select.start(select.pointAt(0, 0));
-    select.extend(select.pointAt(50, 0));
+    select.start(pt(select, 0, 0));
+    select.extend(pt(select, 50, 0));
     expect(select.text()).toBe("cat big\nl1\nl2");
     client.model.storeBodies({ b: { a: "cat big", o: "l1\nl2\nl3" } });
+    view.layout.remeasure("b");
+    select.start(pt(select, 0, 0));
+    select.extend(pt(select, 50, 0));
     expect(select.text()).toBe("cat big\nl1\nl2\nl3");
   });
 
   it("skips Pi-rows items and items without text", () => {
     const { view } = build([{ id: "u", k: "user", body: { t: "first" } }, { id: "r", k: "rows", body: {} }, { id: "m", k: "md", body: { t: "last" } }]);
     const select = new TreeSelection(view);
-    select.start(select.pointAt(1, 0));
-    select.extend(select.pointAt(view.layout.totalRows, 0));
+    select.start(pt(select, 1, 0));
+    select.extend(pt(select, view.layout.totalRows, 0));
     expect(select.text()).toBe("first\n\nlast");
   });
 });
@@ -307,7 +314,7 @@ describe("pointer gestures", () => {
     // y = 20 px is pane row 1 (the first text row of the user item); x = 8 + 6.3 cells * 10
     expect(r.ui.down(r.state, { x: 71, y: 25, count: 1, shift: false }, r.cx)).toBe(true);
     expect(r.ui.dragging).toBe(true);
-    r.ui.move(r.state, { x: 200, y: 25 + 3 * 20, pressed: true }, r.cx); // three rows lower: item m0's first text row (rows 2..)
+    r.ui.move(r.state, { x: 200, y: 25 + 2 * 20, pressed: true }, r.cx); // two rows lower: item m0's first text row (rows 0-2 are the user item)
     expect(r.ui.hasSelection).toBe(true);
     expect(r.ui.copy(r.cx)).toBe(true);
     expect(r.written[0]).toBe("world foo\n\nitem 0 text");
