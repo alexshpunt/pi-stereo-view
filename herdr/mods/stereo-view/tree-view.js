@@ -30,6 +30,7 @@ export class TreeView {
   /** A snapshot or splice arrived (the client calls this from its `change` hook). */
   changed(change) {
     this.complete = false;
+    this.exact = false;
     if (change.kind === "snapshot") {
       if (!change.last) return;
       this.layout.rebuild();
@@ -62,6 +63,7 @@ export class TreeView {
     const height = this.layout.heights[index] || 1;
     const fraction = height ? offset / height : 0;
     this.layout.rebuild(cols);
+    this.exact = false;
     this.requestedRows.clear();
     this.anchor = { index, offset: Math.min(Math.floor(fraction * (this.layout.heights[index] || 1)), Math.max(0, (this.layout.heights[index] || 1) - 1)) };
   }
@@ -112,6 +114,9 @@ export class TreeView {
       if (item.k === "rows" ? !layout.fallbackRows.has(item.id) : !this.model.bodies.has(item.id)) pending.push(entry.index);
     }
     this.prefetch(visibleFirst, visibleLast);
+    // Spare budget makes the rest of the pane exact, so far jumps and the scrollbar stop drifting.
+    const left = this.budgetMs - (now() - started);
+    if (left > 0.5 && !this.exact) this.exact = layout.measureSlice(left);
     return { top, total: layout.totalRows, window: windowItems, pending, spentMs: now() - started, measuredCount };
   }
 

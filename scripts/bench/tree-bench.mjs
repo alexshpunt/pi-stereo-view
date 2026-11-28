@@ -59,6 +59,9 @@ const firstPending = first.pending.length;
 const loadStart = performance.now();
 while (!view.fullyLoaded && performance.now() - loadStart < 120000) { time("frame while loading", () => view.frame()); await sleep(1); }
 const loadWall = performance.now() - loadStart;
+const exactStart = performance.now();
+while (!view.exact && performance.now() - exactStart < 60000) { time("frame while measuring", () => view.frame()); await sleep(0); }
+const exactWall = performance.now() - exactStart;
 time("frame", () => view.frame());
 
 let pendingAfterLoad = 0;
@@ -112,7 +115,7 @@ for (const [name, values] of Object.entries(samples)) {
   if (!row.ok) failed = true;
   rows.push(row);
 }
-const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), firstFramePending: firstPending, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
+const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
 if (pendingAfterLoad) failed = true;
 console.log(JSON.stringify(summary));
 console.table(rows.map(({ name, n, p50, p95, max, ok }) => ({ name, n, p50, p95, max, ok })));

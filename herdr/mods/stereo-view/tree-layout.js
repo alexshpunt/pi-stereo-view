@@ -17,6 +17,7 @@ export class TreeLayout {
     /** Wrapped rows per id at `cols`; dropped on a width change. */
     this.wrapped = new Map();
     this.fallbackRows = new Map();
+    this.cursor = 0;
   }
 
   chrome(item) { return CHROME[item.k] ?? 1; }
@@ -32,6 +33,7 @@ export class TreeLayout {
     const items = this.model.items;
     this.heights = new Int32Array(items.length);
     this.measured = new Uint8Array(items.length);
+    this.cursor = 0;
     for (let i = 0; i < items.length; i++) this.heights[i] = this.estimate(items[i]);
     this.buildTree();
   }
@@ -99,12 +101,32 @@ export class TreeLayout {
    * Measure item i from its loaded body at the current width. Returns the change in rows,
    * or undefined when its body is not loaded yet.
    */
-  measure(i) {
+  measure(i, keep = true) {
     const item = this.model.items[i];
     const body = this.model.bodies.get(item.id);
     if (!body) return undefined;
     if (this.measured[i]) return 0;
-    return this.setHeight(i, this.chrome(item) + this.rowsOf(item, body).total);
+    if (keep) return this.setHeight(i, this.chrome(item) + this.rowsOf(item, body).total);
+    // Background measuring far from the screen: count the rows, keep nothing.
+    let total = 0;
+    for (const key of ["t", "a", "o"]) if (typeof body[key] === "string") total += wrapRows(body[key], this.cols).length;
+    return this.setHeight(i, this.chrome(item) + total);
+  }
+
+  /** Measure up to `budgetMs` of items from a moving cursor; returns true when every loaded item is exact. */
+  measureSlice(budgetMs) {
+    const started = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const items = this.model.items;
+    let scanned = 0;
+    while (scanned < items.length) {
+      if (this.cursor >= items.length) this.cursor = 0;
+      const i = this.cursor++;
+      scanned++;
+      if (items[i].k === "rows" || this.measured[i]) continue;
+      this.measure(i, false);
+      if ((typeof performance !== "undefined" ? performance.now() : Date.now()) - started > budgetMs) return false;
+    }
+    return true;
   }
 
   /** Wrapped rows of the body parts, cached per id for the current width. */
@@ -119,6 +141,8 @@ export class TreeLayout {
       total += parts[key].length;
     }
     rows = { body, parts, total };
+    // Only what is near the screen is kept; far items are re-wrapped when they come back.
+    if (this.wrapped.size > 1500) this.wrapped.clear();
     this.wrapped.set(item.id, rows);
     return rows;
   }
