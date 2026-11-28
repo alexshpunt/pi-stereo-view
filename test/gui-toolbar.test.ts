@@ -16,7 +16,8 @@ import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_
 import { dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT } from "../herdr/mods/stereo-view/refresh-plan.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
-function harness() {
+function harness(stored?: string) {
+  let saved: string | null = stored ?? null;
   const calls: any[] = [];
   const runs: string[] = [];
   let total = 1;
@@ -132,12 +133,13 @@ function harness() {
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
   const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
-    appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
+    appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {},
+    localStorage: { getItem: () => saved, setItem: (_key: string, value: string) => { saved = value; } } };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
   const flush = async () => { while (pending.length) await Promise.all(pending.splice(0)); };
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
-  return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
+  return { view, cx, calls, state, flush, find, opened, copied, saved: () => saved, setTotal(value: number) { total = value; },
     setJump(value: { serial: number; top: number }) { jump = value; },
     setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; }, setFont(value: string | undefined) { terminalFont = value; }, setFontSize(value: number | undefined) { terminalSize = value; },
     setSurface(value: typeof surface) { surface = value; }, setOverlays(value: any[]) { overlays = value; },
@@ -185,6 +187,35 @@ test("a new copy draws only its background until the first state arrives, not th
   await h.flush();
   expect(h.view.loading()).toBe(false);
   expect(h.find(h.view.render(), "stereo-panels")).toBeDefined();
+});
+
+test("a copy that remembers the last structure draws toolbar and panels at once and fills the rows in place (LPT-1932)", async () => {
+  const stored = JSON.stringify({ state: { v: 1, layout: "columns", side: "left", mode: "split", zoom: null, showToolbar: true, showHeaders: true, compactTools: true }, geometry: null });
+  const h = harness(stored); h.setPaneView(true); h.setRows(["one", "two"]);
+  h.view.init({}, h.cx);
+  expect(h.view.loading()).toBe(false);
+  const lists = (node: any): any[] => [...(node.kind === "list" ? [node] : []), ...node.nodes.flatMap(lists)];
+  const first = h.view.render();
+  expect(h.find(first, "stereo-panels")).toBeDefined();
+  expect(h.find(first, "stereo-action-mode")).toBeDefined();
+  // The rows wait for their first page; the structure around them is already final.
+  expect(lists(first).length).toBe(2);
+  expect(lists(first).every(list => list.styles.opacity?.[0] === 0)).toBe(true);
+  await h.flush();
+  const later = h.view.render();
+  expect(h.find(later, "stereo-panels")).toBeDefined();
+  expect(lists(later).every(list => list.styles.opacity === undefined)).toBe(true);
+});
+
+test("a copy remembers what the bridge reported for the next one, and ignores a stored value that is not a state (LPT-1932)", async () => {
+  const h = harness(); h.setPaneView(true);
+  h.view.init({}, h.cx); await h.flush();
+  const kept = JSON.parse(h.saved() as string);
+  expect(kept.state.layout).toBe("columns");
+  const broken = harness("{\"state\":{\"v\":2}}"); broken.setPaneView(true);
+  broken.view.init({}, broken.cx);
+  expect(broken.view.viewState).toBeNull();
+  expect(broken.view.loading()).toBe(true);
 });
 
 test("a width change keeps the rows on screen, reads them again at once and then drops the old ones (LPT-1932)", async () => {

@@ -25,6 +25,32 @@ const LOADING_MS = 1500; // How long a new copy draws only its background while 
 // like the others instead of jumping from guesses once it is measured.
 /** @type {{cellWidth: number, areaWidth: number, areaHeight: number, controlWidth: number, controlHeight: number, panels: Record<string, {width: number, height: number}>} | null} */
 let lastGeometry = null;
+// The structure the bridge reported last (layout, toolbar, headers, side, zoom), kept in the app's storage too. A copy
+// that starts, in a new pane or after the app restarted, draws the toolbar and the panel headers in their final place
+// from its first frame and fills the rows in place when the bridge answers; otherwise it would draw an empty pane first.
+const LAYOUT_KEY = "stereo-view.layout.v1";
+/** @type {any} */
+let lastViewState = null;
+loadRemembered();
+
+/** Read what an earlier run kept: the last bridge state and the geometry measured with it. */
+function loadRemembered() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? "null");
+    if (!validState(stored?.state)) return;
+    lastViewState = stored.state;
+    const g = stored.geometry;
+    if (g && [g.cellWidth, g.areaWidth, g.areaHeight, g.controlWidth, g.controlHeight].every(n => typeof n === "number" && n > 0) && typeof g.panels === "object" && g.panels) lastGeometry = g;
+  } catch { /* No storage here, or nothing kept yet. */ }
+}
+
+/** Keep the structure and geometry for the next copy, when they changed. */
+function saveRemembered() {
+  try {
+    const text = JSON.stringify({ state: lastViewState, geometry: lastGeometry });
+    if (localStorage.getItem(LAYOUT_KEY) !== text) localStorage.setItem(LAYOUT_KEY, text);
+  } catch { /* Not kept; the next copy waits for the bridge as before. */ }
+}
 const ICON_SIZE = 14; // Toolbar icon edge in logical pixels.
 const NARROW_CONTROLS_WIDTH = 400; // Switch to icons when text controls no longer fit.
 const MIN_ACTIVITY_WIDTH = 200; // Leave room for the heading and controls in a narrow split.
@@ -261,7 +287,8 @@ export default class StereoView extends View {
     this.chat = paneState();
     this.activity = paneState();
     this.combined = paneState();
-    this.viewState = null;
+    // What the bridge reported last stands in until it answers, so the structure is final from the first frame.
+    this.viewState = lastViewState;
     this.statePending = false;
     this.stateGeneration = 0;
     this.surface = null;
@@ -470,7 +497,7 @@ export default class StereoView extends View {
     if (this.connection !== connection.socket) {
       this.connection = connection.socket;
       this.controlMoveKey = undefined;
-      this.viewState = null;
+      this.viewState = lastViewState;
       this.stateGeneration++;
       this.closeSurfaceInput();
       this.surface = null;
@@ -528,6 +555,8 @@ export default class StereoView extends View {
         if (!validState(state)) throw new Error("Invalid bridge state");
         if (bridge()?.socket !== connection.socket || generation !== this.stateGeneration) return;
         this.viewState = state;
+        lastViewState = state;
+        saveRemembered();
         this.controlError = null;
       } catch {
         if (bridge()?.socket === connection.socket && generation === this.stateGeneration) this.controlError = "Could not read Stereo View controls.";
@@ -1143,15 +1172,12 @@ export default class StereoView extends View {
   }
 
   /**
-   * Whether a panel that is about to be shown has not had its first page yet, for a moment only. The panels are laid out
-   * but not drawn until then, so no frame shows a panel empty that is about to have rows.
-   * @param {any} state @param {string} placement
+   * Whether a panel has not had its first page yet, for a moment only. Its toolbar and heading are drawn in their
+   * final place, but its rows stay undrawn until the page is here, so no frame shows rows appear in a panel that moved.
+   * @param {ReturnType<typeof paneState>} pane
    */
-  pendingFirstPage(state, placement) {
-    if (!this.available || this.controlError || !state || Date.now() - this.created >= LOADING_MS) return false;
-    const names = state.mode === "combined" || placement === "combined" ? ["combined"]
-      : placement === "maximize" ? ["activity"] : state.zoom ? [state.zoom] : ["chat", "activity"];
-    return names.some(name => { const pane = /** @type {any} */ (this)[name]; return !!pane?.initial && !pane.error; });
+  firstPagePending(pane) {
+    return this.available && !this.controlError && Date.now() - this.created < LOADING_MS && !!pane.initial && !pane.error;
   }
 
   /** Keep what this copy measured for the copies created after it. */
@@ -1162,6 +1188,7 @@ export default class StereoView extends View {
       if (state.lastSize) panels[name] = { width: state.lastSize.width, height: state.lastSize.height };
     lastGeometry = { cellWidth: this.cellWidth, areaWidth: this.areaWidth, areaHeight: this.areaHeight,
       controlWidth: this.controlWidth, controlHeight: this.controlHeight, panels };
+    saveRemembered();
   }
 
   /** @param {ReturnType<typeof paneState>} state @param {{width: number, height: number}} size @param {any} cx */
@@ -1471,6 +1498,8 @@ export default class StereoView extends View {
       index => `${name}-${index}`,
       range => Array.from({ length: range.end - range.start }, (_, n) => this.entry(state, range.start + n, t)))
       .h(state.height).track_scroll(state.handle);
+    // The heading and the box stay; the rows come in place once their first page is here.
+    if (this.firstPagePending(state)) rows.opacity(0);
     const heading = h_flex().items_center().justify_between().px(8).py(3)
       .child(div().text_color(t.muted).child(title));
     const actions = h_flex().items_center();
@@ -1739,8 +1768,6 @@ export default class StereoView extends View {
         content.child(panels[name]());
       }
     }
-    // The panels are laid out (that starts their first read) but stay undrawn until their first page is here.
-    if (!loading && this.pendingFirstPage(state, placement)) content.opacity(0);
     const body = v_flex().id("stereo-body").flex_1().w_full().min_w(0).min_h(0)
       .on_size_change((size, cx) => {
         const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
