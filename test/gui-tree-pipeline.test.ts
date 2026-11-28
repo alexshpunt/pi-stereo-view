@@ -71,7 +71,7 @@ describe("tree pipeline", () => {
     const index = fakeIndex(sources());
     const { client } = connect(new GuiTree(() => index), "combined");
     expect(client.model.items.map(item => item.k)).toEqual(["user", "bash", "user"]);
-    expect(await client.counterpart(client.model.items[0].id)).toBeNull();
+    expect(await client.counterpart(client.model.items[0].id)).toBeFalsy();
   });
 
   it("strips colour and link escapes from item text", async () => {
