@@ -21,7 +21,7 @@ function fakeIndex(sources: object[]) {
   return { beginFrame() {}, entries: () => entries, set(next: object[]) { sources = next; } } as never;
 }
 /** Pi's tree and the mod's client joined by an in-memory stream, in the shape of herdr-app's `spawnStream`. */
-function connect(tree: GuiTree, pane: "chat" | "activity" = "chat") {
+function connect(tree: GuiTree, pane: "chat" | "activity" | "combined" = "chat") {
   const stream = tree.open(pane);
   const lines: ((line: string) => void)[] = [];
   const out = (messages: unknown) => { for (const message of Array.isArray(messages) ? messages : [messages]) lines.forEach(cb => cb(JSON.stringify(message))); };
@@ -65,6 +65,13 @@ describe("tree pipeline", () => {
     const loaded = await client.get(client.model.items.map(item => item.id));
     expect(loaded).toHaveLength(3);
     expect(client.model.body(1)).toEqual({ a: "ls", o: "a\nb\nc" });
+  });
+
+  it("streams the combined history as a third pane without a counterpart", async () => {
+    const index = fakeIndex(sources());
+    const { client } = connect(new GuiTree(() => index), "combined");
+    expect(client.model.items.map(item => item.k)).toEqual(["user", "bash", "user"]);
+    expect(await client.counterpart(client.model.items[0].id)).toBeNull();
   });
 
   it("strips colour and link escapes from item text", async () => {

@@ -116,7 +116,7 @@ export function createTreePanels(gpui, deps) {
       bar.child(iconButton(ctx, item, "expand", folded ? `Show ${item.x} more lines` : "Fold", folded ? "full" : "compact", false,
         () => { if (folded) entry.view.expand(item.id).then(() => ctx.notify()); else { entry.view.fold(item.id); ctx.notify(); } }));
     }
-    bar.child(iconButton(ctx, item, "goto", "Go to the same point in the other panel", "go-to", false, () => goTo(entry, item, ctx)));
+    if (entry.name !== "combined") bar.child(iconButton(ctx, item, "goto", "Go to the same point in the other panel", "go-to", false, () => goTo(entry, item, ctx)));
     bar.child(iconButton(ctx, item, "copy", copied ? "Copied" : "Copy this item", copied ? "check" : "copy", copied, cx => copyItem(entry, item, cx, ctx)));
     return bar;
   }

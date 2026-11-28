@@ -1429,9 +1429,8 @@ export default class StereoView extends View {
   /** The first frame is complete: tree panes drew from their loaded tree, or the old panes have their first page. */
   preparedEnough() {
     if (this.trees) {
-      const a = this.trees.status("chat"), b = this.trees.status("activity");
       const usable = (/** @type {any} */ s) => !s || s.dead || s.ready;
-      return this.drewTree && usable(a) && usable(b);
+      return this.drewTree && ["chat", "activity", "combined"].every(name => usable(this.trees.status(name)));
     }
     return !this.firstPagePending(this.chat) && !this.firstPagePending(this.activity) || !this.available;
   }
@@ -1598,7 +1597,7 @@ export default class StereoView extends View {
     const hovered = this.hoveredBlock(state);
     // LPT-1943: with the element tree on, the list is drawn from the local tree (no per-scroll request to Pi).
     const frameStart = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const treeRows = this.trees && name !== "combined" ? this.trees.list(name, state, {
+    const treeRows = this.trees ? this.trees.list(name, state, {
       theme: t, lineHeight: LINE_HEIGHT, font: historyFont(), fontSize: historyFontSize(), gutter: ROW_GUTTER,
       notify: () => this.viewCx?.notify(), svg, scrollbarLane: SCROLLBAR_LANE + 2, cellWidth: this.cellWidth,
     }) : null;
@@ -1945,7 +1944,7 @@ export default class StereoView extends View {
         return;
       }
       const pane = this.viewState?.mode === "combined" ? this.combined : this.activePane === "chat" ? this.chat : this.activity;
-      const treePane = this.viewState?.mode === "combined" ? null : this.activePane;
+      const treePane = this.viewState?.mode === "combined" ? "combined" : this.activePane;
       if (this.focus.is_focused() && event.modifiers?.control && event.key?.toLowerCase() === "c" && treePane && this.trees?.hasSelection(treePane)) {
         this.trees.copySelection(treePane, cx); cx.stop_propagation(); return; // LPT-1943: text selected in a tree panel
       }

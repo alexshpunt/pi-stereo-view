@@ -100,7 +100,7 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
         try {
           const raw: unknown = JSON.parse(request.slice(0, end));
           // LPT-1943: a long-lived element-tree stream takes the connection over; it has no request timeout.
-          if (raw && typeof raw === "object" && "op" in raw && raw.op === "open" && "pane" in raw && (raw.pane === "chat" || raw.pane === "activity")) {
+          if (raw && typeof raw === "object" && "op" in raw && raw.op === "open" && "pane" in raw && (raw.pane === "chat" || raw.pane === "activity" || raw.pane === "combined")) {
             socket.removeAllListeners("data");
             socket.resume();
             attachTreeStream(socket, tree, raw.pane, request.slice(end + 1));

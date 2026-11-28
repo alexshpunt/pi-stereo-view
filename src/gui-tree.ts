@@ -1,5 +1,7 @@
 import type { Component } from "@earendil-works/pi-tui";
-import { componentText, contentText, type ContentEntry, type NativeContentIndex, type Pane } from "./content.ts";
+import { componentText, contentText, type ContentEntry, type NativeContentIndex, type Pane as NativePane } from "./content.ts";
+/** The tree panes: Chat and Activity, and Pi's single history for Combined. */
+export type Pane = NativePane | "combined";
 
 /**
  * LPT-1943 element tree: what the GUI needs to draw every native element itself.
@@ -177,7 +179,7 @@ function header(row: { id: string; d: Described }, full: boolean): { item: TreeI
 
 /** The tree of every pane, shared by all open streams. */
 export class GuiTree {
-  private readonly models: Record<Pane, PaneModel> = { activity: new PaneModel("activity"), chat: new PaneModel("chat") };
+  private readonly models: Record<Pane, PaneModel> = { activity: new PaneModel("activity"), chat: new PaneModel("chat"), combined: new PaneModel("combined") };
   private epoch = 0;
   private lastIndex: NativeContentIndex | undefined;
   constructor(private readonly index: () => NativeContentIndex | undefined, private readonly width = () => 100) {}
@@ -187,7 +189,7 @@ export class GuiTree {
     if (!index) throw new Error("History is unavailable");
     if (index !== this.lastIndex) { this.lastIndex = index; this.epoch++; }
     index.beginFrame();
-    return this.models[pane].scan(index.entries(pane));
+    return this.models[pane].scan(index.entries(pane === "combined" ? undefined : pane));
   }
 
   /** A stream: its own idea of what the client already has. */
@@ -203,7 +205,7 @@ export class GuiTree {
   counterpart(pane: Pane, id: string): { pane: Pane; id: string } | undefined {
     const index = this.index();
     const found = this.rows(pane).find(row => row.id === id);
-    if (!index || !found) return undefined;
+    if (!index || !found || pane === "combined") return undefined;
     const target = index.counterpart(found.entry.source, pane);
     if (!target) return undefined;
     const other: Pane = pane === "chat" ? "activity" : "chat";

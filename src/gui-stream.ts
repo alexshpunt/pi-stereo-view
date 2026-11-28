@@ -1,6 +1,6 @@
 import type { Socket } from "node:net";
 import { StringDecoder } from "node:string_decoder";
-import type { Pane } from "./content.ts";
+import type { Pane } from "./gui-tree.ts";
 import type { GuiTree, ServerMessage, TreeStream } from "./gui-tree.ts";
 
 /** Streams wake on any change of the transcript; Pi calls `notifyGuiChange` where it invalidates the GUI. */
