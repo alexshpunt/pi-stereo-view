@@ -317,7 +317,6 @@ export default class StereoView extends View {
       const spawnStream = treeSpawn(mode);
       if (!spawnStream || this.trees) return;
       this.trees = createTreePanels({ div, h_flex, v_flex, v_virtual_list }, { spawnStream, target: () => bridge() });
-      try { show_fps_monitor({ frame_budget: 16 }); } catch { /* TEMPORARY HUD */ }
       cx.notify();
     };
     let mode = null;
@@ -421,6 +420,10 @@ export default class StereoView extends View {
    */
   tick(cx) {
     // LPT-1943: the tree's stream and background measuring change what a frame shows between events.
+    if (this.trees && !this.hudTried) { // TEMPORARY (LPT-1943): the HUD needs a live host call, which a timer callback is
+      this.hudTried = true;
+      try { show_fps_monitor({ frame_budget: 16 }); } catch (error) { writeFile(`${appHome()}/stereo-hud-error.txt`, String(error)).catch(() => {}); }
+    }
     if (this.trees?.wantsRender() && isShown()) cx.notify();
     const shown = isShown();
     const plan = refreshPlan({ shown, prefetchable: !shown && isPrefetchable(), wasShown: this.tickShown, elapsed: Date.now() - this.lastRead });
