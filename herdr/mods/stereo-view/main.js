@@ -369,14 +369,15 @@ export default class StereoView extends View {
   latestControl(name, pane, t) {
     if ((pane.total ?? 0) === 0 || pane.following || this.atBottom(pane)) return null;
     return div().id(`stereo-latest-wrap-${name}`).absolute().left_0().right_0().bottom(LATEST_BOTTOM).flex().justify_center()
+      // The outer box keeps an opaque face so panel text never shows through; the hover tint is a translucent overlay on top of it.
       .child(h_flex().id(`stereo-latest-${name}`).accessibility_label("Jump to latest").tooltip("Jump to latest (End)")
-        .items_center().gap(LATEST_GAP).min_h(LATEST_MIN_HEIGHT).px(10).rounded(12)
-        .bg(t.raised).border_1().border_color(t.border).shadow_md().text_color(t.foreground).cursor_pointer()
-        .hover(s => s.bg(t.hover))
+        .rounded(12).bg(t.raised).border_1().border_color(t.border).shadow_md().text_color(t.foreground).cursor_pointer()
         .on_mouse_down("left", (_event, cx) => cx.stop_propagation()) // Not a press on the panel's text.
         .on_click((_event, cx) => this.jumpToLatest(name, pane, cx))
-        .child(svg("mods/stereo-view/icons/latest.svg").id(`stereo-latest-icon-${name}`).size(ICON_SIZE).text_color(t.foreground))
-        .child("Jump to latest"));
+        .child(h_flex().id(`stereo-latest-face-${name}`).items_center().gap(LATEST_GAP).min_h(LATEST_MIN_HEIGHT).px(10).rounded(11)
+          .hover(s => s.bg(t.hover))
+          .child(svg("mods/stereo-view/icons/latest.svg").id(`stereo-latest-icon-${name}`).size(ICON_SIZE).text_color(t.foreground))
+          .child("Jump to latest")));
   }
 
   /** @param {any} cx */
