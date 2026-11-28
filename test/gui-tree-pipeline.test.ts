@@ -33,6 +33,7 @@ function connect(tree: GuiTree, pane: "chat" | "activity" | "combined" = "chat")
       else if (request.op === "counterpart") out(stream.counterpart(request.rq, request.id));
       else if (request.op === "rows") out(stream.rows(request.rq, request.id, request.width));
       else if (request.op === "resync") out(stream.snapshot());
+      else if (request.op === "cols") for (const chunk of stream.heightChunks(request.cols, 2)) out(chunk);
     },
   });
   const client = new TreeClient(spawnStream, { socket: "unused", pane });
@@ -66,6 +67,29 @@ describe("wrap", () => {
 
 describe("tree pipeline", () => {
   const sources = () => [new UserMessageComponent("hello\nworld"), new BashExecutionComponent("ls", ["a", "b", "c"]), new UserMessageComponent("x".repeat(250))];
+
+  it("sends exact heights that equal what the GUI measures itself", async () => {
+    const many = Array.from({ length: 40 }, (_, i) => i % 3 === 0
+      ? new BashExecutionComponent(`cmd ${i} ${"word ".repeat(i)}`, Array.from({ length: i % 17 }, (_, n) => `line ${n} ${"é ".repeat(n * 5)}`))
+      : new UserMessageComponent(`message ${i}\n${"lorem ipsum ".repeat(i * 3)}\n\n中文 text`));
+    const tree = new GuiTree(() => fakeIndex(many));
+    const { client } = connect(tree);
+    await client.get(client.model.items.map(item => item.id));
+    const withPi = new TreeView(client, { viewport: 30, cols: 37 });
+    withPi.changed({ kind: "snapshot", at: 0, removed: 0, inserted: many.length, last: true });
+    withPi.setCols(37); // sends the width; the fake stream answers at once
+    expect(withPi.awaitingPi).toBe(0);
+    expect(withPi.layout.unmeasured).toBe(0);
+    const local = new TreeLayout(client.model);
+    local.cols = 37;
+    local.rebuild(37);
+    for (let i = 0; i < local.count; i++) local.measure(i);
+    expect(Array.from(withPi.layout.heights)).toEqual(Array.from(local.heights));
+    // A new width is asked for again, and a stale answer for the old width is ignored.
+    withPi.setCols(20);
+    expect(withPi.layout.cols).toBe(20);
+    expect(withPi.layout.unmeasured).toBe(0);
+  });
 
   it("sends headers and tail bodies, then loads the rest on request", async () => {
     const index = fakeIndex(sources());

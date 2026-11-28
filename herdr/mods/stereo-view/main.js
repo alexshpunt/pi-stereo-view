@@ -1414,6 +1414,7 @@ export default class StereoView extends View {
     this.preparing = true;
     this.drewTree = false;
     const startedAt = Date.now();
+    this.prepareStarted = startedAt;
     this.refresh(cx);
     cx.notify();
     /** @param {any} next */
@@ -1429,7 +1430,10 @@ export default class StereoView extends View {
   /** The first frame is complete: tree panes drew from their loaded tree, or the old panes have their first page. */
   preparedEnough() {
     if (this.trees) {
-      const usable = (/** @type {any} */ s) => !s || s.dead || s.ready;
+      // Pi's exact heights have arrived (a still estimated height would move the scrollbar after the first frame);
+      // an old Pi that never answers is waited for 3 s at most.
+      const late = Date.now() - (this.prepareStarted ?? 0) > 3000;
+      const usable = (/** @type {any} */ s) => !s || s.dead || (s.ready && (!s.awaitingPi || late));
       return this.drewTree && ["chat", "activity", "combined"].every(name => usable(this.trees.status(name)));
     }
     return !this.firstPagePending(this.chat) && !this.firstPagePending(this.activity) || !this.available;

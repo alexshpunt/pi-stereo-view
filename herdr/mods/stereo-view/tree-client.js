@@ -63,6 +63,7 @@ export class TreeClient {
       waiter?.resolve(loaded);
       return;
     }
+    if (message.t === "heights") { this.hooks.heights?.(message); return; }
     if (message.t === "cp") {
       const waiter = this.pending.get(message.rq);
       this.pending.delete(message.rq);
@@ -88,6 +89,12 @@ export class TreeClient {
     return new Promise(resolve => { this.pending.set(rq, { resolve }); this.send({ ...request, rq }); });
   }
 
+  /** The GUI's text width: Pi answers with the exact row count of every item at it (`heights` messages). */
+  setCols(cols) {
+    if (this.sentCols === cols) return;
+    this.sentCols = cols;
+    this.send({ op: "cols", cols });
+  }
   /** Ask for bodies; resolves with the ids that arrived. */
   get(ids) { return this.request({ op: "get", ids, full: true }); }
   /** The element of the other pane at the same point of history (Pi decides): { pane, id } or undefined. */

@@ -39,6 +39,7 @@ export function createTreePanels(gpui, deps) {
     const client = new TreeClient(deps.spawnStream, { ...target, on: target.on ?? target.machine, pane: name }, {
       change: change => { entry.view.changed(change); entry.ui.changed(); entry.dirty = true; entry.notify?.(); },
       bodies: () => { entry.ui.changed(); entry.dirty = true; entry.notify?.(); },
+      heights: message => { if (entry.view.applyHeights(message)) { entry.dirty = true; entry.notify?.(); } },
       // A stream that ends stays as a dead entry: the old list draws and nothing retries in a loop.
       exit: (code, why) => { entry.dead = true; entry.deadAt = Date.now(); entry.error = `exit ${code ?? "?"}${why ? `: ${why}` : ""}`; entry.notify?.(); },
       error: text => { entry.error = text; },
@@ -248,7 +249,7 @@ export function createTreePanels(gpui, deps) {
     view(name) { return panes.get(name)?.view; },
     /** Time spent building the items of each visible range (ms), for the live frame check. */
     ranges(name) { return panes.get(name)?.rangeMs?.slice(-300) ?? []; },
-    status(name) { const entry = panes.get(name); return entry ? { prof: entry.prof ? entry.prof.s.map(v => +(v / entry.prof.n).toFixed(3)) : null, ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, top: entry.frame?.top, pending: entry.frame?.pending, dead: !!entry.dead, error: entry.error } : null; },
+    status(name) { const entry = panes.get(name); return entry ? { prof: entry.prof ? entry.prof.s.map(v => +(v / entry.prof.n).toFixed(3)) : null, ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, top: entry.frame?.top, pending: entry.frame?.pending, exact: entry.view.exact, awaitingPi: !!entry.view.awaitingPi, dead: !!entry.dead, error: entry.error } : null; },
     close() { for (const entry of panes.values()) entry.client.close(); panes.clear(); },
 
     /**

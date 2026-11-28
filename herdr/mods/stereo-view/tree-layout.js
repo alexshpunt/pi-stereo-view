@@ -23,6 +23,25 @@ export class TreeLayout {
     /** Items whose height changed since the owner last looked (null: everything may have). */
     this.touched = new Set();
     this.unmeasured = 0;
+    /** Exact content rows from Pi (id -> rows) at `cols`; items with an entry are never measured here. */
+    this.piRows = new Map();
+  }
+
+  /**
+   * Pi's exact heights (`heights` message) for the current width. Items whose body is expanded here are left to the
+   * local measure. Returns false when the message is for another width.
+   */
+  applyPi(cols, ids, rows) {
+    if (cols !== this.cols) return false;
+    for (let k = 0; k < ids.length; k++) {
+      this.piRows.set(ids[k], rows[k]);
+      const i = this.model.indexOf(ids[k]);
+      if (i < 0 || this.measured[i]) continue;
+      const item = this.model.items[i];
+      if (item.k === "rows" || !this.model.bodies.has(item.id) || this.model.full.has(item.id)) continue;
+      this.setHeight(i, this.chrome(item) + rows[k]);
+    }
+    return true;
   }
 
   /** Padding rows plus the "N more lines" marker row of a folded item. */
@@ -37,14 +56,19 @@ export class TreeLayout {
 
   /** Rebuild everything from the model: after a snapshot or a width change. */
   rebuild(cols = this.cols) {
-    if (cols !== this.cols) { this.cols = cols; this.wrapped.clear(); this.fallbackRows.clear(); }
+    if (cols !== this.cols) { this.cols = cols; this.wrapped.clear(); this.fallbackRows.clear(); this.piRows.clear(); }
     const items = this.model.items;
     this.heights = new Int32Array(items.length);
     this.measured = new Uint8Array(items.length);
     this.cursor = 0;
     this.version++;
     this.touched = null; // structure changed: the owner rebuilds whatever it derived
-    for (let i = 0; i < items.length; i++) this.heights[i] = this.estimate(items[i]);
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const exact = this.piRows.get(item.id);
+      if (exact !== undefined && item.k !== "rows" && !this.model.full.has(item.id)) { this.heights[i] = this.chrome(item) + exact; this.measured[i] = 1; }
+      else this.heights[i] = this.estimate(item);
+    }
     this.countUnmeasured();
     this.buildTree();
   }
@@ -80,7 +104,7 @@ export class TreeLayout {
     this.measured = Uint8Array.from(measured);
     this.version++;
     this.touched = null; // structure changed: the owner rebuilds whatever it derived
-    for (let i = 0; i < inserted; i++) this.wrapped.delete(items[at + i].id);
+    for (let i = 0; i < inserted; i++) { this.wrapped.delete(items[at + i].id); this.piRows.delete(items[at + i].id); }
     this.countUnmeasured();
     this.buildTree();
   }

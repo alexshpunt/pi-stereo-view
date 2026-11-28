@@ -1,4 +1,5 @@
 import type { Component } from "@earendil-works/pi-tui";
+import { bodyRows } from "../herdr/mods/stereo-view/wrap.js";
 import { componentText, contentText, type ContentEntry, type NativeContentIndex, type Pane as NativePane } from "./content.ts";
 /** The tree panes: Chat and Activity, and Pi's single history for Combined. */
 export type Pane = NativePane | "combined";
@@ -26,6 +27,8 @@ export interface TreeItem {
 export type ServerMessage =
   | { t: "snap"; pane: Pane; epoch: number; rev: number; total: number; at: number; items: TreeItem[]; last: boolean }
   | { t: "delta"; pane: Pane; epoch: number; rev: number; at: number; remove: number; items: TreeItem[] }
+  /** Exact wrapped rows (without the GUI's chrome rows) of items at `cols` text cells, so the GUI never estimates. */
+  | { t: "heights"; pane: Pane; cols: number; ids: string[]; h: number[]; last: boolean }
   | { t: "bodies"; rq: number; bodies: Record<string, ItemBody | null>; truncated?: string[] }
   | { t: "rows"; rq: number; id: string; lines: readonly string[] }
   | { t: "cp"; rq: number; pane?: Pane; id: string | null };
@@ -54,7 +57,7 @@ const tailHash = (text: string): number => {
   return hash;
 };
 
-interface Described { k: ItemKind; body?: ItemBody; meta?: TreeItem["m"]; chars: number; lines: number; collapsed?: { body: ItemBody; hidden: number } }
+interface Described { k: ItemKind; body?: ItemBody; meta?: TreeItem["m"]; chars: number; lines: number; collapsed?: { body: ItemBody; hidden: number }; rows?: { cols: number; full: boolean; n: number } }
 
 function describe(entry: ContentEntry): Described {
   const source = entry.source as Component & { text?: unknown; command?: unknown; outputLines?: unknown; customComponent?: unknown };
@@ -253,6 +256,32 @@ export class TreeStream {
     const total = rows.length;
     const items = rows.slice(start, newEnd).map((row, i) => header(row, start + i >= total - TAIL || newEnd - start <= TAIL).item);
     return [{ t: "delta", pane: this.pane, epoch, rev: this.rev, at: start, remove: oldEnd - start, items }];
+  }
+
+  /**
+   * Exact heights of every text item at `cols`, in chunks of `chunk` items (the caller yields between them so Pi's
+   * own UI stays responsive). Cached on each item's description: unchanged items cost nothing on a repeat.
+   */
+  *heightChunks(cols: number, chunk = 400): Generator<ServerMessage> {
+    const { rows } = this.tree.scanFor(this.pane);
+    const total = rows.length;
+    for (let at = 0; at < total || at === 0; at += chunk) {
+      const ids: string[] = [];
+      const h: number[] = [];
+      for (let i = at; i < Math.min(total, at + chunk); i++) {
+        const row = rows[i];
+        if (row.d.k === "rows" || !row.d.body) continue;
+        const full = i >= total - TAIL;
+        let cached = row.d.rows;
+        if (!cached || cached.cols !== cols || cached.full !== full) {
+          cached = { cols, full, n: bodyRows(full ? limited(row.d.body).body : collapse(row.d).body, cols) };
+          row.d.rows = cached;
+        }
+        ids.push(row.id); h.push(cached.n);
+      }
+      yield { t: "heights", pane: this.pane, cols, ids, h, last: at + chunk >= total };
+      if (total === 0) break;
+    }
   }
 
   /** Bodies of the asked items; undefined when the item is gone or has no text body. */

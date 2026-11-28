@@ -5,6 +5,8 @@ import { TreeLayout } from "./tree-layout.js";
 /** Background measuring while the pane moves (scroll, drag): frames stay cheap. */
 const MOVING_SLICE_MS = 1;
 const IDLE_SLICE_MS = 10;
+/** Local measuring waits this long for Pi's heights before it starts (an old Pi never answers). */
+const AWAIT_PI_MS = 4000;
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 export class TreeView {
@@ -26,6 +28,8 @@ export class TreeView {
     this.requestedRows = new Set();
     this.dirtyAnchor = false;
     this.lastTop = -1;
+    /** When the width was last sent to Pi and its heights have not all arrived (0: nothing awaited). */
+    this.awaitingPi = 0;
   }
 
   get top() { return this.layout.prefix(this.anchor.index) + this.anchor.offset; }
@@ -60,13 +64,26 @@ export class TreeView {
 
   /** A new text width: estimates are recomputed, the item at the top stays at the top. */
   setCols(cols) {
-    if (cols === this.layout.cols) return;
-    const { index, offset } = this.anchor;
-    const height = this.layout.heights[index] || 1;
-    const fraction = height ? offset / height : 0;
-    this.layout.rebuild(cols);
-    this.requestedRows.clear();
-    this.anchor = { index, offset: Math.min(Math.floor(fraction * (this.layout.heights[index] || 1)), Math.max(0, (this.layout.heights[index] || 1) - 1)) };
+    if (cols !== this.layout.cols) {
+      const { index, offset } = this.anchor;
+      const height = this.layout.heights[index] || 1;
+      const fraction = height ? offset / height : 0;
+      this.layout.rebuild(cols);
+      this.requestedRows.clear();
+      this.anchor = { index, offset: Math.min(Math.floor(fraction * (this.layout.heights[index] || 1)), Math.max(0, (this.layout.heights[index] || 1) - 1)) };
+    }
+    // Pi answers with the exact heights at this width (applyHeights); asked after the rebuild so the answer fits.
+    if (this.client.setCols && this.client.sentCols !== cols) {
+      this.awaitingPi = now();
+      this.client.setCols(cols);
+    }
+  }
+  /** A `heights` message from Pi: exact rows for a chunk of items; keeps the item at the top where it is. */
+  applyHeights(message) {
+    if (!this.layout.applyPi(message.cols, message.ids, message.h)) return false;
+    if (message.last) this.awaitingPi = 0;
+    if (this.following) this.toBottom();
+    return true;
   }
 
   scrollTo(row) {
@@ -120,7 +137,9 @@ export class TreeView {
     const moving = top !== this.lastTop;
     this.lastTop = top;
     const left = (moving ? MOVING_SLICE_MS : Math.max(this.budgetMs, IDLE_SLICE_MS)) - (now() - started);
-    if (left > 0.5 && layout.unmeasured > 0) layout.measureSlice(left);
+    // While Pi computes the exact heights (a fraction of a second) measuring here would only repeat its work.
+    const waitingForPi = this.awaitingPi && now() - this.awaitingPi < AWAIT_PI_MS;
+    if (left > 0.5 && layout.unmeasured > 0 && !waitingForPi) layout.measureSlice(left);
     return { top, total: layout.totalRows, window: windowItems, pending, blank: pending, spentMs: now() - started, measuredCount };
   }
 

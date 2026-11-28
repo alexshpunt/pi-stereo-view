@@ -9,6 +9,7 @@ export function notifyGuiChange(): void { for (const listener of listeners) list
 
 const COALESCE_MS = 16;
 const LINE_LIMIT = 64 * 1024;
+const HEIGHTS_DEBOUNCE_MS = 40;
 
 /**
  * LPT-1943: a long-lived JSON-lines connection for one pane.
@@ -32,12 +33,36 @@ export function attachTreeStream(socket: Socket, tree: GuiTree, pane: Pane, pend
     try { const out = stream.delta(); if (out) send(out); } catch { /* the index may be rebuilding; the next change retries */ }
   };
   const wake = (): void => { if (!timer && !closed) timer = setTimeout(flush, COALESCE_MS); };
+  // Exact heights at the GUI's text width, computed in small slices once the width has stopped changing.
+  let heightsTimer: NodeJS.Timeout | undefined;
+  let heightsJob = 0;
+  const sendHeights = (cols: number): void => {
+    heightsJob++;
+    const job = heightsJob;
+    if (heightsTimer) clearTimeout(heightsTimer);
+    heightsTimer = setTimeout(() => {
+      heightsTimer = undefined;
+      let chunks: Generator<ServerMessage>;
+      try { chunks = stream.heightChunks(cols); } catch { return; }
+      const step = (): void => {
+        if (closed || job !== heightsJob || socket.destroyed) return;
+        if (socket.writableNeedDrain) { socket.once("drain", step); return; }
+        let next: IteratorResult<ServerMessage>;
+        try { next = chunks.next(); } catch { return; }
+        if (next.done) return;
+        send(next.value);
+        if (!(next.value.t === "heights" && next.value.last)) setImmediate(step);
+      };
+      step();
+    }, HEIGHTS_DEBOUNCE_MS);
+  };
   const handle = (line: string): void => {
-    let request: { op?: string; rq?: number; ids?: unknown; id?: unknown; width?: unknown; full?: unknown };
+    let request: { op?: string; rq?: number; ids?: unknown; id?: unknown; width?: unknown; full?: unknown; cols?: unknown };
     try { request = JSON.parse(line); } catch { return; }
     const rq = typeof request.rq === "number" ? request.rq : 0;
     try {
       if (request.op === "get" && Array.isArray(request.ids)) send(stream.bodies(rq, request.ids.filter((id): id is string => typeof id === "string").slice(0, 64), request.full !== false));
+      else if (request.op === "cols" && typeof request.cols === "number") sendHeights(Math.max(8, Math.min(500, Math.floor(request.cols))));
       else if (request.op === "counterpart" && typeof request.id === "string") send(stream.counterpart(rq, request.id));
       else if (request.op === "rows" && typeof request.id === "string") {
         send(stream.rows(rq, request.id, typeof request.width === "number" ? Math.max(8, Math.min(500, Math.floor(request.width))) : tree.defaultWidth()));
@@ -58,6 +83,8 @@ export function attachTreeStream(socket: Socket, tree: GuiTree, pane: Pane, pend
     closed = true;
     listeners.delete(wake);
     if (timer) clearTimeout(timer);
+    heightsJob++;
+    if (heightsTimer) clearTimeout(heightsTimer);
   };
   socket.setTimeout(0);
   socket.setNoDelay(true);

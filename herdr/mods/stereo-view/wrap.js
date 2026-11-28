@@ -86,6 +86,13 @@ export function wrapRows(text, cols) {
   return out;
 }
 
+/** Visual rows of an item body (its text, arguments and output parts) at `cols`: the item's height without chrome. */
+export function bodyRows(body, cols) {
+  let total = 0;
+  for (const key of ["t", "a", "o"]) if (typeof body[key] === "string") total += wrapRows(body[key], cols).length;
+  return total;
+}
+
 /** Row estimate for text that is not loaded yet: logical lines, plus the wraps its length suggests. */
 export function estimateRows(lines, chars, cols) {
   return Math.max(lines, Math.ceil(chars / Math.max(1, cols)));
