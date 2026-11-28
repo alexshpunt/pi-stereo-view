@@ -4,6 +4,7 @@ import { TreeLayout } from "./tree-layout.js";
 
 /** Background measuring while the pane moves (scroll, drag): frames stay cheap. */
 const MOVING_SLICE_MS = 1;
+const IDLE_SLICE_MS = 10;
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 export class TreeView {
@@ -115,10 +116,10 @@ export class TreeView {
       if (item.k === "rows" ? !layout.fallbackRows.has(item.id) : !this.model.bodies.has(item.id)) pending.push(entry.index);
     }
     // Spare budget makes the rest of the pane exact, so far jumps and the scrollbar stop drifting.
-    // While the pane moves the frame stays cheap (1 ms of background work); a still pane spends the whole budget.
+    // While the pane moves the frame stays cheap (1 ms of background work); a still pane measures on in bigger slices.
     const moving = top !== this.lastTop;
     this.lastTop = top;
-    const left = Math.min(this.budgetMs, moving ? MOVING_SLICE_MS : this.budgetMs) - (now() - started);
+    const left = (moving ? MOVING_SLICE_MS : Math.max(this.budgetMs, IDLE_SLICE_MS)) - (now() - started);
     if (left > 0.5 && layout.unmeasured > 0) layout.measureSlice(left);
     return { top, total: layout.totalRows, window: windowItems, pending, blank: pending, spentMs: now() - started, measuredCount };
   }
