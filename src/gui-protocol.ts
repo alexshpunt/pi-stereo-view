@@ -41,8 +41,11 @@ export type GuiSearchRequest = { v: 1; op: "search"; pane: Pane } & (
 export type GuiRequest = GuiPageRequest | GuiSearchRequest | { v: 1; op: "state" } | { v: 1; op: "action"; action: GuiAction } |
   ({ v: 1; op: "setting" } & GuiSetting) |
   { v: 1; op: "image"; id: string; offset: number; length: number } |
-  { v: 1; op: "surface"; width: number } | { v: 1; op: "surface-key"; frame: number; data: string } |
-  { v: 1; op: "surface-mouse"; frame: number; event: { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean } } |
+  { v: 1; op: "overlays" } |
+  { v: 1; op: "overlay-key"; revision: number; id: number; frame: number; data: string } |
+  { v: 1; op: "overlay-mouse"; revision: number; id: number; frame: number; event: { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean } } |
+  { v: 1; op: "surface"; width: number; target?: "dock" } | { v: 1; op: "surface-key"; frame: number; data: string; target?: "dock" } |
+  { v: 1; op: "surface-mouse"; frame: number; target?: "dock"; event: { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean } } |
   { v: 1; op: "view"; pane: GuiPane; top: number; height: number; width: number; following: boolean } |
   { v: 1; op: "mouse"; pane: GuiPane; frame: number; event: GuiMouse };
 
@@ -61,18 +64,38 @@ export function parseGuiRequest(value: unknown): GuiRequest | undefined {
   }
   const integer = (n: unknown, min: number, max: number): n is number =>
     typeof n === "number" && Number.isSafeInteger(n) && n >= min && n <= max;
-  if (request.v === 1 && request.op === "surface" && integer(request.width, 10, 300))
-    return { v: 1, op: "surface", width: request.width };
-  if (request.v === 1 && request.op === "surface-key" && integer(request.frame, 1, Number.MAX_SAFE_INTEGER) &&
-      typeof request.data === "string" && request.data.length > 0 && request.data.length <= 1024 && !request.data.includes("\0"))
-    return { v: 1, op: "surface-key", frame: request.frame, data: request.data };
-  if (request.v === 1 && request.op === "surface-mouse" && integer(request.frame, 1, Number.MAX_SAFE_INTEGER) &&
-      request.event && typeof request.event === "object" && !Array.isArray(request.event)) {
-    const e = request.event as Record<string, unknown>;
-    if ((e.type === "press" || e.type === "release" || e.type === "drag") && e.button === "left" &&
-        integer(e.x, 0, 299) && integer(e.y, 0, 255) && (e.cancel === undefined || (e.type === "release" && typeof e.cancel === "boolean")))
-      return { v: 1, op: "surface-mouse", frame: request.frame, event: { type: e.type, button: "left", x: e.x, y: e.y,
-        ...(e.cancel === undefined ? {} : { cancel: e.cancel }) } };
+  if (request.v === 1 && request.op === "overlays") return { v: 1, op: "overlays" };
+  if (request.v === 1 && (request.op === "overlay-key" || request.op === "overlay-mouse") &&
+      integer(request.revision, 1, Number.MAX_SAFE_INTEGER) && integer(request.id, 1, Number.MAX_SAFE_INTEGER) &&
+      integer(request.frame, 1, Number.MAX_SAFE_INTEGER)) {
+    const base = { v: 1 as const, revision: request.revision, id: request.id, frame: request.frame };
+    if (request.op === "overlay-key" && typeof request.data === "string" && request.data.length > 0 &&
+        request.data.length <= 1024 && !request.data.includes("\0")) return { ...base, op: "overlay-key", data: request.data };
+    if (request.op === "overlay-mouse" && request.event && typeof request.event === "object" && !Array.isArray(request.event)) {
+      const e = request.event as Record<string, unknown>;
+      if ((e.type === "press" || e.type === "release" || e.type === "drag") && e.button === "left" &&
+          integer(e.x, 0, 4095) && integer(e.y, 0, 255) && (e.cancel === undefined || (e.type === "release" && typeof e.cancel === "boolean")))
+        return { ...base, op: "overlay-mouse", event: { type: e.type, button: "left", x: e.x, y: e.y,
+          ...(e.cancel === undefined ? {} : { cancel: e.cancel }) } };
+    }
+    return undefined;
+  }
+  const surfaceTarget = request.target === "dock" ? { target: "dock" as const } : {};
+  if (request.op === "surface" || request.op === "surface-key" || request.op === "surface-mouse") {
+    if (request.v !== 1 || (request.target !== undefined && request.target !== "dock")) return undefined;
+    if (request.op === "surface" && integer(request.width, 10, 300))
+      return { v: 1, op: "surface", width: request.width, ...surfaceTarget };
+    if (request.op === "surface-key" && integer(request.frame, 1, Number.MAX_SAFE_INTEGER) &&
+        typeof request.data === "string" && request.data.length > 0 && request.data.length <= 1024 && !request.data.includes("\0"))
+      return { v: 1, op: "surface-key", frame: request.frame, data: request.data, ...surfaceTarget };
+    if (request.op === "surface-mouse" && integer(request.frame, 1, Number.MAX_SAFE_INTEGER) &&
+        request.event && typeof request.event === "object" && !Array.isArray(request.event)) {
+      const e = request.event as Record<string, unknown>;
+      if ((e.type === "press" || e.type === "release" || e.type === "drag") && e.button === "left" &&
+          integer(e.x, 0, 299) && integer(e.y, 0, 255) && (e.cancel === undefined || (e.type === "release" && typeof e.cancel === "boolean")))
+        return { v: 1, op: "surface-mouse", frame: request.frame, ...surfaceTarget, event: { type: e.type, button: "left", x: e.x, y: e.y,
+          ...(e.cancel === undefined ? {} : { cancel: e.cancel }) } };
+    }
     return undefined;
   }
   if (request.v === 1 && request.op === "image" && typeof request.id === "string" && /^[a-f0-9]{64}$/.test(request.id) &&

@@ -11,15 +11,17 @@ export class GuiSurface {
   private disposed = false;
   private mouseSerial = 0;
   private painted: string[] = [];
+  private structure: Component[] = [];
   private gesture?: { target: Dispatched["target"]; x: number; y: number; moved: boolean };
 
   constructor(private readonly dialog: () => Component | undefined,
     private readonly focus: () => Component | null,
     private readonly requestRender: () => void = () => {},
-    private readonly setFocus: (component: Component) => void = () => {}) {}
+    private readonly setFocus: (component: Component) => void = () => {},
+    private readonly passive = false) {}
 
-  page(width: number): { frame: number; mouseFrame: number; active: boolean; lines: string[] } {
-    if (this.disposed || !Number.isSafeInteger(width) || width < 10 || width > 300) throw new RangeError("Invalid surface width");
+  page(width: number): { frame: number; mouseFrame: number; active: boolean; focused: boolean; lines: string[] } {
+    if (this.disposed || !Number.isSafeInteger(width) || width < 1 || width > 4096) throw new RangeError("Invalid surface width");
     const owner = this.dialog();
     const focused = this.focus() ?? undefined;
     if (owner !== this.owner || focused !== this.focused || width !== this.width) {
@@ -31,9 +33,16 @@ export class GuiSurface {
       this.gesture = undefined;
       this.painted = [];
     }
-    if (!owner) return { frame: this.serial, mouseFrame: this.mouseSerial, active: false, lines: [] };
+    if (!owner) return { frame: this.serial, mouseFrame: this.mouseSerial, active: false, focused: false, lines: [] };
     try {
       const lines = owner.render(width);
+      const structure = descendants(owner);
+      if (!sameComponents(structure, this.structure)) {
+        this.structure = structure;
+        this.serial++;
+        this.mouseSerial++;
+        this.gesture = undefined;
+      }
       if (lines.length > 256 || lines.some(line => typeof line !== "string") ||
           lines.reduce((size, line) => size + Buffer.byteLength(line), 0) > 2 * 1024 * 1024) throw new Error("Surface is too large");
       if (lines.length !== this.painted.length || lines.some((line, index) => line !== this.painted[index])) {
@@ -41,7 +50,7 @@ export class GuiSurface {
         this.mouseSerial++;
         this.gesture = undefined;
       }
-      return { frame: this.serial, mouseFrame: this.mouseSerial, active: true, lines: [...lines] };
+      return { frame: this.serial, mouseFrame: this.mouseSerial, active: true, focused: !!focused && contains(owner, focused), lines: [...lines] };
     } finally {
       // The GUI width can differ from the terminal. Repaint Pi's own geometry.
       this.requestRender();
@@ -52,7 +61,7 @@ export class GuiSurface {
     if (this.disposed || !Number.isSafeInteger(frame) || frame !== this.serial || !this.owner ||
         typeof data !== "string" || data.length < 1 || data.length > 1024 || data.includes("\0")) return false;
     const owner = this.dialog(), focused = this.focus();
-    if (owner !== this.owner || !focused || focused !== this.focused || !contains(owner, focused) ||
+    if (owner !== this.owner || !focused || focused !== this.focused || !sameComponents(descendants(owner), this.structure) || !contains(owner, focused) ||
         typeof focused.handleInput !== "function") return false;
     focused.handleInput(data);
     this.requestRender();
@@ -60,17 +69,18 @@ export class GuiSurface {
   }
 
   /** Send a pointer gesture only to the exact surface that was painted. */
-  mouse(frame: number, input: { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean }): boolean {
-    const owner = this.owner, focused = this.focus();
-    if (this.disposed || !owner || this.dialog() !== owner || !focused || focused !== this.focused ||
-        !contains(owner, focused) || frame !== this.mouseSerial || !Number.isSafeInteger(input.x) ||
+  mouse(frame: number, input: { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean },
+    origin: { x: number; y: number } = { x: 0, y: 0 }): boolean {
+    const owner = this.owner, focused = this.focus() ?? undefined;
+    if (this.disposed || !owner || this.dialog() !== owner || focused !== this.focused ||
+        (!this.passive && (!focused || !contains(owner, focused))) || !sameComponents(descendants(owner), this.structure) || frame !== this.mouseSerial || !Number.isSafeInteger(input.x) ||
         !Number.isSafeInteger(input.y) || input.x < 0 || input.x >= this.width || input.y < 0 ||
         input.y >= this.painted.length || input.button !== "left" || !["press", "release", "drag"].includes(input.type)) return false;
     try {
       const lines = owner.render(this.width);
       if (!this.gesture && (lines.length !== this.painted.length || lines.some((line, i) => line !== this.painted[i]))) return false;
       const event: TuiMouseEvent = { type: input.type, button: input.button, x: input.x, y: input.y,
-        screenX: input.x, screenY: input.y, width: this.width, height: lines.length, shift: false, alt: false, ctrl: false };
+        screenX: input.x + origin.x, screenY: input.y + origin.y, width: this.width, height: lines.length, shift: false, alt: false, ctrl: false };
       if (input.type === "press") {
         const result = dispatchMouseEvent(owner, event);
         if (!result) return false;
@@ -86,7 +96,7 @@ export class GuiSurface {
       const gesture = this.gesture;
       if (!gesture) return false;
       if (input.x !== gesture.x || input.y !== gesture.y) gesture.moved = true;
-      const local = { ...event, x: event.x - gesture.target.originX, y: event.y - gesture.target.originY,
+      const local = { ...event, x: event.screenX - gesture.target.originX, y: event.screenY - gesture.target.originY,
         width: gesture.target.width, height: gesture.target.height };
       gesture.target.component.handleMouse?.(local);
       if (input.type === "release") {
@@ -100,6 +110,22 @@ export class GuiSurface {
   dispose(): void { this.disposed = true; this.owner = undefined; this.focused = undefined; }
 }
 
+function descendants(root: Component): Component[] {
+  const result: Component[] = [], pending = [root], seen = new Set<Component>();
+  while (pending.length && seen.size < 10000) {
+    const component = pending.pop()!;
+    if (seen.has(component)) continue;
+    seen.add(component); result.push(component);
+    const children = (component as Component & { children?: unknown }).children;
+    if (Array.isArray(children)) for (const child of children) {
+      if (child && typeof child === "object") pending.push(child as Component);
+    }
+  }
+  return result;
+}
+function sameComponents(a: Component[], b: Component[]): boolean {
+  return a.length === b.length && a.every((component, index) => component === b[index]);
+}
 /** Focus may belong to a child control, but never to an unrelated Pi overlay or editor. */
 function contains(root: Component, target: Component): boolean {
   const pending: Component[] = [root], seen = new Set<Component>();

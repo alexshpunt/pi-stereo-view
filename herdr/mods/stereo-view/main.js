@@ -1,4 +1,4 @@
-import { View, div, image } from "gpui-kit";
+import { View, div, image, svg } from "gpui-kit";
 import { mkdir, writeFile, unlink } from "fs/promises";
 import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, ScrollHandle, Scrollbar, Input, InputState } from "gpui-base";
 import { appHome, checking, exec, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
@@ -7,18 +7,22 @@ import { createSettingsPanel } from "./settings.js";
 import { createSearchBar } from "./search-bar.js";
 import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
+import { createImagePruner } from "./image-pruner.js";
 
 const LABEL = "herdr.stereo.bridge";
 const LINE_HEIGHT = 17;
 const PAGE = 256;
 const INTERVAL = 700;
+const ICON_SIZE = 14; // Toolbar icon edge in logical pixels.
+const NARROW_CONTROLS_WIDTH = 400; // Switch to icons when text controls no longer fit.
+/** @typedef {{id:number, frame:number, mouseFrame:number, focused:boolean, row:number, col:number, width:number, height:number, lines:string[]}} OverlayLayer */
+/** @typedef {{revision:number, columns:number, rows:number, overlays:OverlayLayer[]}} OverlayPage */
 // GPUI snaps each virtual row to a whole window pixel before scrolling.
 function rowHeight() {
   const zoom = settings().zoom;
   const scale = typeof zoom === "number" && zoom > 0 ? zoom : 1;
   return Math.round(LINE_HEIGHT * scale) / scale;
 }
-let imagesPruned = false;
 // The shell's binary fs bindings can yield empty files. Decode and verify in a
 // local Node process after writing only ASCII through its text binding.
 const IMAGE_DECODE = `const fs=require('node:fs'),crypto=require('node:crypto');
@@ -32,6 +36,7 @@ const IMAGE_PRUNE = `const fs=require('node:fs'),path=require('node:path');const
 const files=fs.readdirSync(dir).filter(n=>/^[0-9a-f]{64}\\.(png|jpg|gif|webp)$/.test(n))
 .map(n=>({n,t:fs.statSync(path.join(dir,n)).mtimeMs})).sort((a,b)=>b.t-a.t);
 for(const f of files.slice(200))fs.unlinkSync(path.join(dir,f.n));`;
+const pruneImages = createImagePruner(() => exec("node", ["-e", IMAGE_PRUNE, `${appHome()}/data/stereo-view/images`], { timeout: 5000 }));
 // Fixed code, not a command or script read from the terminal label. The socket and
 // request are arguments and never interpolated into this source.
 const CLIENT = `const net=require('node:net');
@@ -151,13 +156,22 @@ export default class StereoView extends View {
     this.statePending = false;
     this.stateGeneration = 0;
     this.surface = null;
+    /** @type {OverlayPage | null} */ this.overlays = null;
+    this.overlaysPending = false;
+    this.overlayPress = null;
+    this.controlHeight = 400;
     this.surfacePending = false;
+    this.dock = null;
+    this.dockPending = false;
+    this.dockScroll = ScrollHandle.new();
+    this.dockPress = null;
     this.actions = [];
     this.surfaceInput = null;
     this.surfaceScroll = ScrollHandle.new();
     this.surfacePress = null;
     this.actionPending = false;
     this.areaWidth = 800;
+    this.controlWidth = 800;
     this.hoverPane = null;
     this.hoverKey = "";
     this.hoverAt = 0;
@@ -191,6 +205,7 @@ export default class StereoView extends View {
       this.closeSurfaceInput();
       this.surface = null;
       this.actions = [];
+      this.overlays = null; this.overlayPress = null;
       for (const state of [this.chat, this.activity, this.combined]) {
         state.searchBar?.dispose(); state.searchBar = null; state.searchState = null;
         state.selection.clear(); state.selectionRows.clear(); state.selecting = false;
@@ -201,6 +216,8 @@ export default class StereoView extends View {
     }
     this.fetchState(connection, cx);
     this.fetchSurface(connection, cx);
+    this.fetchOverlays(connection, cx);
+    this.fetchDock(connection, cx);
     if (this.viewState?.mode === "combined") this.fetchPane("combined", this.combined, connection, cx);
     else {
       if (this.viewState?.zoom !== "activity") this.fetchPane("chat", this.chat, connection, cx);
@@ -247,16 +264,66 @@ export default class StereoView extends View {
             !Number.isSafeInteger(surface.mouseFrame) ||
             !Array.isArray(surface.lines) || surface.lines.length > 256 || !surface.lines.every(/** @param {unknown} */ line => typeof line === "string")) throw new Error("Invalid surface");
         if (bridge()?.socket !== connection.socket || !isShown()) return;
-        const opening = surface.active && !this.surface?.active;
-        const closing = !surface.active && this.surface?.active;
         this.surface = { ...surface, width };
-        if (opening) this.openSurfaceInput();
-        if (closing) this.closeSurfaceInput();
+        this.syncSurfaceInput();
       } catch {
         // An unsupported or unavailable surface leaves the terminal as the fallback.
-        this.closeSurfaceInput();
         this.surface = null;
+        this.syncSurfaceInput();
       } finally { this.surfacePending = false; next.notify(); }
+    });
+  }
+
+  /** Read Pi's ordered overlay stack without replacing the history. */
+  /** @param {{socket:string,machine?:string}} connection @param {any} cx */
+  fetchOverlays(connection, cx) {
+    if (this.overlaysPending || this.overlayPress || this.actionPending || this.actions.length) return;
+    this.overlaysPending = true;
+    cx.spawn(async (/** @type {any} */ next) => {
+      try {
+        const result = await exec("node", ["-e", CLIENT, connection.socket, JSON.stringify({ v: 1, op: "overlays" })], { on: connection.machine, timeout: 5000 });
+        if (result.code !== 0) throw new Error("Overlays unavailable");
+        const data = JSON.parse(result.stdout);
+        const integer = (/** @type {unknown} */ n) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
+        if (data.v !== 1 || !integer(data.revision) || !integer(data.columns) || !integer(data.rows) ||
+            !Array.isArray(data.overlays) || data.overlays.length > 100 || data.overlays.some((/** @type {any} */ layer) =>
+              ![layer.id, layer.frame, layer.mouseFrame, layer.row, layer.col, layer.width, layer.height].every(integer) ||
+              layer.id < 1 || layer.frame < 1 || layer.mouseFrame < 1 || layer.width < 1 || layer.width > 4096 ||
+              layer.height < 1 || layer.height > 256 || typeof layer.focused !== "boolean" ||
+              !Array.isArray(layer.lines) || layer.lines.length > layer.height || layer.lines.some((/** @type {unknown} */ line) => typeof line !== "string"))) throw new Error("Invalid overlays");
+        if (bridge()?.socket !== connection.socket || !isShown()) return;
+        this.overlays = data;
+        this.syncSurfaceInput();
+      } catch { this.overlays = null; this.syncSurfaceInput(); }
+      finally { this.overlaysPending = false; next.notify(); }
+    });
+  }
+
+  syncSurfaceInput() {
+    if (this.overlays?.overlays.some(layer => layer.focused) || this.surface?.active || this.dock?.focused) this.openSurfaceInput();
+    else this.closeSurfaceInput();
+  }
+
+  /** Read the non-editor dock while keeping the history visible. */
+  /** @param {{socket: string, machine?: string}} connection @param {any} cx */
+  fetchDock(connection, cx) {
+    if (this.dockPending || this.dockPress || this.actionPending || this.actions.length) return;
+    this.dockPending = true;
+    const width = Math.max(10, Math.min(300, Math.floor((this.areaWidth - 32) / this.cellWidth)));
+    cx.spawn(async (/** @type {any} */ next) => {
+      try {
+        const request = JSON.stringify({ v: 1, op: "surface", target: "dock", width });
+        const result = await exec("node", ["-e", CLIENT, connection.socket, request], { on: connection.machine, timeout: 5000 });
+        if (result.code !== 0) throw new Error("Dock unavailable");
+        const dock = JSON.parse(result.stdout);
+        if (dock.v !== 1 || typeof dock.active !== "boolean" || typeof dock.focused !== "boolean" ||
+            !Number.isSafeInteger(dock.frame) || !Number.isSafeInteger(dock.mouseFrame) ||
+            !Array.isArray(dock.lines) || dock.lines.length > 256 || !dock.lines.every((/** @type {unknown} */ line) => typeof line === "string")) throw new Error("Invalid dock");
+        if (bridge()?.socket !== connection.socket || !isShown()) return;
+        this.dock = { ...dock, width };
+        this.syncSurfaceInput();
+      } catch { this.dock = null; this.syncSurfaceInput(); }
+      finally { this.dockPending = false; next.notify(); }
     });
   }
 
@@ -272,7 +339,7 @@ export default class StereoView extends View {
       if (!value) return;
       clearing = true;
       try { input.set_value(""); } finally { clearing = false; }
-      if (!this.surface?.active) return;
+      if (!this.overlays?.overlays.some(layer => layer.focused) && !this.surface?.active && !this.dock?.focused) return;
       // Bracket multi-character input so pasted control characters do not become keys.
       // Escape bytes could terminate a terminal paste or trigger a control sequence.
       if (value.includes("\0") || value.includes("\x1b")) {
@@ -299,8 +366,13 @@ export default class StereoView extends View {
   /** @param {string} data @param {any} cx */
   sendSurfaceData(data, cx) {
     const connection = bridge();
-    if (!data || !connection || !this.surface?.active) return false;
-    this.actions.push({ request: { v: 1, op: "surface-key", frame: this.surface.frame, data }, connection });
+    const overlay = [...(this.overlays?.overlays ?? [])].reverse().find(layer => layer.focused);
+    const dialog = !overlay && this.surface?.active ? this.surface : null;
+    const dock = !overlay && !dialog && this.dock?.active && this.dock.focused ? this.dock : null;
+    if (!data || !connection || (!overlay && !dialog && !dock)) return false;
+    const request = overlay ? { v: 1, op: "overlay-key", revision: this.overlays.revision, id: overlay.id, frame: overlay.frame, data }
+      : { v: 1, op: "surface-key", frame: (dialog || dock).frame, data, ...(dock ? { target: "dock" } : {}) };
+    this.actions.push({ request, connection });
     this.drainActions(cx);
     return true;
   }
@@ -702,10 +774,7 @@ export default class StereoView extends View {
         const relative = `data/stereo-view/images/${id}.${extension}`;
         const directory = `${appHome()}/data/stereo-view/images`;
         await mkdir(directory, { recursive: true });
-        if (!imagesPruned) {
-          imagesPruned = true;
-          try { await exec("node", ["-e", IMAGE_PRUNE, directory], { timeout: 5000 }); } catch { /* A failed prune only leaves old cache files. */ }
-        }
+        await pruneImages();
         const temporary = `${directory}/${id}-${Math.random().toString(36).slice(2)}.base64`;
         await writeFile(temporary, encoded);
         try {
@@ -760,7 +829,14 @@ export default class StereoView extends View {
 
   /** @param {string} action @param {string} label @param {any} t */
   control(action, label, t) {
-    return div().id(`stereo-action-${action}`).px(6).py(3).cursor_pointer().text_color(t.foreground)
+    const state = this.viewState;
+    const icons = state?.preferences?.buttonStyle === "icons" || this.controlWidth < NARROW_CONTROLS_WIDTH;
+    const icon = action === "mode" ? (state?.mode === "combined" ? "split" : "combine")
+      : action === "layout" ? (state?.layout === "rows" ? "columns" : "rows")
+      : action.startsWith("find-") ? "find"
+      : action.startsWith("zoom-") ? (state?.zoom === action.slice(5) ? "restore" : "maximize")
+      : action === "compact" ? (state?.compactTools ? "full" : "compact") : action;
+    return div().id(`stereo-action-${action}`).accessibility_label(label).tooltip(label).px(6).py(3).cursor_pointer().text_color(t.foreground)
       .hover(s => s.bg(t.hover)).on_click((_event, cx) => {
         if (action === "find-chat" || action === "find-activity") {
           this.openSearch(action === "find-chat" ? "chat" : "activity", cx);
@@ -773,7 +849,7 @@ export default class StereoView extends View {
             next => { this.settingsPanel = undefined; next.notify(); });
           cx.notify();
         } else this.sendAction(action, cx);
-      }).child(label);
+      }).child(icons ? svg(`mods/stereo-view/icons/${icon}.svg`).id(`stereo-icon-${action}`).size(ICON_SIZE).text_color(t.foreground) : label);
   }
 
   chatExtent() {
@@ -903,6 +979,80 @@ export default class StereoView extends View {
         .child(rows).child(Scrollbar.vertical(id).absolute().inset_0()));
   }
 
+  /** @param {"press"|"release"|"drag"} type @param {any} event @param {any} cx */
+  sendDockMouse(type, event, cx) {
+    if (!this.dock?.active || !event.local_position) return;
+    const connection = bridge(); if (!connection) return;
+    const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
+    const x = Math.floor((event.local_position.x / zoom - 8) / this.cellWidth);
+    const y = Math.floor((event.local_position.y / zoom + this.dockScroll.offset().y - 4) / rowHeight());
+    const inside = x >= 0 && x < this.dock.width && y >= 0 && y < this.dock.lines.length;
+    if (type === "press") {
+      if (!inside || this.dockPending) return;
+      this.dockPress = { frame: this.dock.mouseFrame };
+    }
+    if (!this.dockPress) return;
+    const px = Math.max(0, Math.min(this.dock.width - 1, x));
+    const py = Math.max(0, Math.min(this.dock.lines.length - 1, y));
+    this.actions.push({ request: { v: 1, op: "surface-mouse", target: "dock", frame: this.dockPress.frame,
+      event: { type, button: "left", x: px, y: py, ...(type === "release" && !inside ? { cancel: true } : {}) } }, connection });
+    if (type === "release") this.dockPress = null;
+    this.drainActions(cx);
+  }
+
+  /** @param {any} t */
+  renderDock(t) {
+    const body = v_flex().id("stereo-dock").relative().flex_none().max_h(200).overflow_y_scroll()
+      .track_scroll(this.dockScroll).px(8).py(4)
+      .on_mouse_down("left", (event, cx) => this.sendDockMouse("press", event, cx))
+      .on_window_mouse_move((event, cx) => { if (this.dockPress) this.sendDockMouse("drag", event, cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.dockPress) this.sendDockMouse("release", event, cx); });
+    for (const line of this.dock.lines) body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+      .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
+    if (this.dock.focused && this.surfaceInput && !this.overlays?.overlays.some(layer => layer.focused)) body.child(Input.new(this.surfaceInput).w(300).h(30).mt(8).px(6)
+      .border_1().border_color(t.border).bg(t.background).text_color(t.foreground));
+    return body;
+  }
+
+  /** @param {OverlayLayer} layer @param {"press"|"drag"|"release"} type @param {any} event @param {any} cx */
+  sendOverlayMouse(layer, type, event, cx) {
+    if (!event.local_position || !this.overlays) return;
+    const connection = bridge(); if (!connection) return;
+    const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
+    const x = Math.floor(event.local_position.x / zoom / this.cellWidth);
+    const y = Math.floor(event.local_position.y / zoom / rowHeight());
+    const inside = x >= 0 && x < layer.width && y >= 0 && y < layer.height;
+    if (type === "press") {
+      if (!inside || this.overlaysPending) return;
+      this.overlayPress = { id: layer.id, frame: layer.mouseFrame, revision: this.overlays.revision };
+    }
+    const press = this.overlayPress;
+    if (!press || press.id !== layer.id) return;
+    const eventData = { type, button: "left", x: Math.max(0, Math.min(layer.width - 1, x)),
+      y: Math.max(0, Math.min(layer.height - 1, y)), ...(type === "release" && !inside ? { cancel: true } : {}) };
+    this.actions.push({ request: { v: 1, op: "overlay-mouse", revision: press.revision, id: press.id, frame: press.frame, event: eventData }, connection });
+    if (type === "release") this.overlayPress = null;
+    this.drainActions(cx);
+  }
+
+  /** @param {OverlayLayer} layer @param {any} t */
+  renderOverlay(layer, t) {
+    const screen = this.overlays;
+    const width = Math.min(this.controlWidth, layer.width * this.cellWidth);
+    const height = Math.min(this.controlHeight, layer.height * LINE_HEIGHT);
+    const left = Math.max(0, Math.min(this.controlWidth - width, layer.col / Math.max(1, screen.columns) * this.controlWidth));
+    const top = Math.max(0, Math.min(this.controlHeight - height, layer.row / Math.max(1, screen.rows) * this.controlHeight));
+    const body = v_flex().id(`stereo-overlay-${layer.id}`).absolute().left(left).top(top).w(width).h(height)
+      .overflow_hidden().bg(t.surface)
+      .on_mouse_down("left", (event, cx) => { if (layer.focused) this.surfaceInput?.focus(); this.sendOverlayMouse(layer, "press", event, cx); })
+      .on_window_mouse_move((event, cx) => { if (this.overlayPress?.id === layer.id) this.sendOverlayMouse(layer, "drag", event, cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.overlayPress?.id === layer.id) this.sendOverlayMouse(layer, "release", event, cx); });
+    for (const line of layer.lines) body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+      .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
+    if (layer.focused && this.surfaceInput) body.child(Input.new(this.surfaceInput).absolute().w(1).h(1).opacity(0));
+    return body;
+  }
+
   /** @param {any} t */
   renderSurface(t) {
     const body = v_flex().id("stereo-surface").relative().flex_1().min_h(0).overflow_y_scroll().track_scroll(this.surfaceScroll).px(8).py(4)
@@ -913,7 +1063,7 @@ export default class StereoView extends View {
       body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
         .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
     }
-    if (this.surfaceInput) body.child(Input.new(this.surfaceInput).w(300).h(30).mt(8).px(6)
+    if (this.surfaceInput && !this.overlays?.overlays.some(layer => layer.focused)) body.child(Input.new(this.surfaceInput).w(300).h(30).mt(8).px(6)
       .border_1().border_color(t.border).bg(t.background).text_color(t.foreground));
     return body;
   }
@@ -963,6 +1113,13 @@ export default class StereoView extends View {
       }
     }
     const root = v_flex().relative().size_full().min_h(0).bg(t.surface).text_size(12)
+      .on_size_change((size, cx) => {
+        const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
+        const width = size.width / zoom, height = size.height / zoom;
+        if (Math.abs(width - this.controlWidth) >= 1 || Math.abs(height - this.controlHeight) >= 1) {
+          this.controlWidth = width; this.controlHeight = height; cx.notify();
+        }
+      })
       .font_family(typeof settings().font_family === "string" ? /** @type {string} */ (settings().font_family) : "monospace")
       .child(div().id("stereo-cell-probe").absolute().top_0().left_0().opacity(0).whitespace_nowrap()
         .on_size_change((size, cx) => this.measureCell(size, cx)).child("MMMMMMMMMM"))
@@ -970,8 +1127,10 @@ export default class StereoView extends View {
       .child(state?.showToolbar !== false ? toolbar : div().h(0))
       .child(this.controlError ? div().px(8).text_color(t.muted).child(this.controlError) : div().h(0))
       .child(body);
+    if (!this.surface?.active && this.dock?.active && this.dock.lines.length) root.child(this.renderDock(t));
+    for (const layer of this.overlays?.overlays ?? []) root.child(this.renderOverlay(layer, t));
     if (this.focus) root.track_focus(this.focus).on_key_down((event, cx) => {
-      if (this.surface?.active && this.surfaceInput) {
+      if ((this.overlays?.overlays.some(layer => layer.focused) || this.surface?.active || this.dock?.focused) && this.surfaceInput) {
         const key = event.key?.toLowerCase();
         // Text and Enter belong to the native input; it supplies composed text and submit events.
         if (key === "enter" || key === "return" || (event.modifiers?.control && event.modifiers?.alt && event.key_char) ||

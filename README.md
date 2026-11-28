@@ -79,7 +79,7 @@ pi --tui-mode fullscreen
 
 The experimental branch includes a Herdr mod in `herdr/mods/stereo-view`. Copy that folder into the Herdr app's `mods` directory. For a focused Pi terminal, Stereo View tries to open the mod when `herdr-app` is reachable; otherwise open **Stereo View** from the terminal's Herdr apps. The two native panels scroll independently. Select **Terminal** to return to Pi for input and dialogs. Starting a background Pi does not deliberately raise its tab. The normal terminal view remains unchanged without Herdr.
 
-The mod shows Pi-rendered text and colors; entry buttons, links, images and selection are not forwarded. Use the terminal for those interactions. It fetches visible pages rather than eagerly drawing the full history, including within long entries. An individual entry over 3 MiB cannot currently be displayed in the native view. The bridge requires a Unix socket and Node on the terminal's machine; native Windows Pi is not supported. Automatic opening also requires the app command to be reachable from that machine. See the [mod README](herdr/mods/stereo-view/README.md) for the protocol and other limits.
+The mod renders Pi's native history, including colors and images, and forwards supported history controls to the live components. The panels support selection, copying, search and independent scrolling. It fetches visible pages rather than eagerly drawing the full history, including within long entries. The bridge requires a Unix socket and Node on the terminal's machine; native Windows Pi is not supported. Automatic opening also requires the app command to be reachable from that machine. See the [mod README](herdr/mods/stereo-view/README.md) for the protocol and other limits.
 
 ## Use it
 

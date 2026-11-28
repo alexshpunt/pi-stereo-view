@@ -9,7 +9,8 @@ import type { TranscriptLayout } from "./layout.ts";
 
 type GuiControls = { state(): ReturnType<TranscriptLayout["guiState"]>; action(action: GuiAction): void;
   setting(setting: GuiSetting): void; renderer(): ReturnType<TranscriptLayout["guiRenderer"]>;
-  search(): ReturnType<TranscriptLayout["guiSearchModel"]>; surface?(): ReturnType<TranscriptLayout["guiSurface"]> };
+  search(): ReturnType<TranscriptLayout["guiSearchModel"]>; surface?(target?: "dock"): ReturnType<TranscriptLayout["guiSurface"]>;
+  overlays?(): ReturnType<TranscriptLayout["guiOverlays"]> };
 
 const LABEL = "herdr.stereo.bridge";
 const REQUEST_LIMIT = 4096;
@@ -63,17 +64,28 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
             const current = controls?.();
             if (!current) throw new Error("Controls are unavailable");
             if (parsed.op === "state") socket.end(JSON.stringify(current.state()) + "\n");
+            else if (parsed.op === "overlays") {
+              const overlays = current.overlays?.();
+              if (!overlays) throw new Error("Overlays unavailable");
+              const output = JSON.stringify({ v: 1, ...overlays.page() });
+              if (Buffer.byteLength(output) > RESPONSE_LIMIT) throw new Error("Overlays are too large");
+              socket.end(output + "\n");
+            } else if (parsed.op === "overlay-key") {
+              socket.end(JSON.stringify({ v: 1, ok: current.overlays?.()?.key(parsed.revision, parsed.id, parsed.frame, parsed.data) === true }) + "\n");
+            } else if (parsed.op === "overlay-mouse") {
+              socket.end(JSON.stringify({ v: 1, ok: current.overlays?.()?.mouse(parsed.revision, parsed.id, parsed.frame, parsed.event) === true }) + "\n");
+            }
             else if (parsed.op === "surface") {
-              const surface = current.surface?.();
+              const surface = current.surface?.(parsed.target);
               if (!surface) throw new Error("Surface unavailable");
               const output = JSON.stringify({ v: 1, ...surface.page(parsed.width) });
               if (Buffer.byteLength(output) > RESPONSE_LIMIT) throw new Error("Surface is too large");
               socket.end(output + "\n");
             } else if (parsed.op === "surface-key") {
-              const surface = current.surface?.();
+              const surface = current.surface?.(parsed.target);
               socket.end(JSON.stringify({ v: 1, ok: surface?.key(parsed.frame, parsed.data) === true }) + "\n");
             } else if (parsed.op === "surface-mouse") {
-              const surface = current.surface?.();
+              const surface = current.surface?.(parsed.target);
               socket.end(JSON.stringify({ v: 1, ok: surface?.mouse(parsed.frame, parsed.event) === true }) + "\n");
             }
             else if (parsed.op === "image") {

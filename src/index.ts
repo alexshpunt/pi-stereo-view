@@ -386,7 +386,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
           const current = layout;
           return current ? { state: () => current.guiState(), action: action => current.guiAction(action),
             setting: setting => current.guiSetting(setting), renderer: () => current.guiRenderer(),
-            surface: () => current.guiSurface(),
+            surface: target => current.guiSurface(target), overlays: () => current.guiOverlays(),
             search: () => current.guiSearchModel() } : undefined;
         });
         guiBridgeActive = true;

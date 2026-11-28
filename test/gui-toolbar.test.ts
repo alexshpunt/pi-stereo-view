@@ -6,6 +6,8 @@ import { parseAnsi } from "../herdr/mods/stereo-view/ansi.js";
 import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { dialogKey } from "../herdr/mods/stereo-view/dialog-keys.js";
+// @ts-expect-error The mod has no TypeScript declarations.
+import { createImagePruner } from "../herdr/mods/stereo-view/image-pruner.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -15,6 +17,7 @@ function harness() {
   let rows: string[] | undefined;
   let zoom = 1;
   let surface: { active: boolean; frame: number; mouseFrame?: number; lines: string[] } = { active: false, frame: 1, mouseFrame: 1, lines: [] };
+  let overlays: any[] = [];
   const pending: Promise<unknown>[] = [];
   class Element {
     name?: string;
@@ -53,7 +56,7 @@ function harness() {
     on(name: string, callback: (event: any, cx: any) => void) { handlers[name] = callback; },
     focus() { inputFocused = true; }, blur() { inputFocused = false; }, release() {},
   };
-  const ui = { View: class {}, div: el("div"), image: el("image"), h_flex: el("horizontal"), v_flex: el("vertical"),
+  const ui = { View: class {}, div: el("div"), image: el("image"), svg: el("svg"), h_flex: el("horizontal"), v_flex: el("vertical"),
     v_virtual_list: el("list"), VirtualListScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), viewport_size: () => ({ height: 300 }), content_size: () => ({ height: 0 }), scroll_to_bottom() {}, scroll_to_item() {} }) },
     ScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), release() {} }) },
     Scrollbar: { vertical: el("scrollbar") }, Input: { new: () => new Element("input") }, InputState: { new: () => input } };
@@ -82,7 +85,7 @@ function harness() {
   });
   const env = { checking: () => false, exec: async (_cmd: string, args: string[]) => {
     const request = JSON.parse(args[3]); calls.push(request);
-    const data: any = request.op === "surface" ? { v: 1, mouseFrame: 1, ...surface } : request.op === "surface-key" || request.op === "surface-mouse" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
+    const data: any = request.op === "overlays" ? { v: 1, revision: 1, columns: 80, rows: 24, overlays } : request.op === "overlay-key" || request.op === "overlay-mouse" ? { v: 1, ok: true } : request.op === "surface" ? { v: 1, mouseFrame: 1, ...surface } : request.op === "surface-key" || request.op === "surface-mouse" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
       { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
         images: [], jump: request.pane === "activity" ? jump : undefined, lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
@@ -96,7 +99,7 @@ function harness() {
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, dialogKey,
+  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, dialogKey, createImagePruner,
     appHome: () => "/tmp", mkdir: async () => {}, writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -105,10 +108,52 @@ function harness() {
   return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
     setJump(value: { serial: number; top: number }) { jump = value; },
     setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; },
-    setSurface(value: typeof surface) { surface = value; },
+    setSurface(value: typeof surface) { surface = value; }, setOverlays(value: any[]) { overlays = value; },
     typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
     submitSurface() { handlers.submit?.({}, cx); }, surfaceFocused: () => inputFocused };
 }
+
+test("keeps history visible behind Pi overlays and forwards overlay input", async () => {
+  const h = harness();
+  h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 3, col: 4, width: 20, height: 2, lines: ["overlay"] }]);
+  h.view.init({}, h.cx);
+  await h.flush();
+  const root = h.view.render();
+  expect(h.find(root, "stereo-chat-box")).toBeDefined();
+  const layer = h.find(root, "stereo-overlay-7");
+  expect(layer).toBeDefined();
+  h.typeSurface("x");
+  await h.flush();
+  expect(h.calls).toContainEqual({ v: 1, op: "overlay-key", revision: 1, id: 7, frame: 4, data: "x" });
+  layer!.mouseDown!({ local_position: { x: 13, y: 1 } }, h.cx);
+  layer!.windowUp!({ local_position: { x: 13, y: 1 } }, h.cx);
+  await h.flush();
+  expect(h.calls).toContainEqual({ v: 1, op: "overlay-mouse", revision: 1, id: 7, frame: 5,
+    event: { type: "press", button: "left", x: 1, y: 0 } });
+  expect(h.calls).toContainEqual({ v: 1, op: "overlay-mouse", revision: 1, id: 7, frame: 5,
+    event: { type: "release", button: "left", x: 1, y: 0 } });
+});
+
+test("uses icon controls when the saved preference requests icons", async () => {
+  const h = harness();
+  (h.state as any).preferences.buttonStyle = "icons";
+  h.view.init({}, h.cx);
+  await h.flush();
+  expect(h.find(h.view.render(), "stereo-icon-mode")).toBeDefined();
+  (h.state as any).preferences.buttonStyle = "text";
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(h.find(h.view.render(), "stereo-icon-mode")).toBeUndefined();
+});
+
+test("keeps the toolbar usable in a narrow pane", async () => {
+  const h = harness();
+  (h.state as any).preferences.buttonStyle = "text";
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.view.controlWidth = 250;
+  expect(h.find(h.view.render(), "stereo-icon-mode")).toBeDefined();
+});
 
 test("loads the live layout and sends toolbar actions to the same bridge", async () => {
   const h = harness();

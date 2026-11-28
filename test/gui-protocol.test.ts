@@ -32,6 +32,25 @@ test("limits dialog frames and input", () => {
   expect(parseGuiRequest({ ...pointer, event: { ...pointer.event, type: "click" } })).toBeUndefined();
 });
 
+test("targets dock surfaces without allowing arbitrary targets", () => {
+  const page = { v: 1, op: "surface", target: "dock", width: 80 };
+  const key = { v: 1, op: "surface-key", target: "dock", frame: 3, data: "a" };
+  const mouse = { v: 1, op: "surface-mouse", target: "dock", frame: 3,
+    event: { type: "press", button: "left", x: 1, y: 0 } };
+  for (const request of [page, key, mouse]) {
+    expect(parseGuiRequest(request)).toEqual(request);
+    expect(parseGuiRequest({ ...request, target: "unknown" })).toBeUndefined();
+  }
+});
+test("accepts bounded overlay layer requests and rejects invalid identifiers", () => {
+  const page = { v: 1, op: "overlays" };
+  const key = { v: 1, op: "overlay-key", revision: 2, id: 1, frame: 1, data: "a" };
+  const mouse = { v: 1, op: "overlay-mouse", revision: 2, id: 1, frame: 1,
+    event: { type: "press", button: "left", x: 3, y: 1 } };
+  for (const request of [page, key, mouse]) expect(parseGuiRequest(request)).toEqual(request);
+  expect(parseGuiRequest({ ...key, id: 0 })).toBeUndefined();
+  expect(parseGuiRequest({ ...mouse, event: { ...mouse.event, y: 256 } })).toBeUndefined();
+});
 test("accepts only known GUI controls", () => {
   expect(parseGuiRequest({ v: 1, op: "view", pane: "chat", top: 10, height: 20, width: 80, following: false }))
     .toEqual({ v: 1, op: "view", pane: "chat", top: 10, height: 20, width: 80, following: false });

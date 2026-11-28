@@ -2,6 +2,20 @@ import { Container, Text, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { GuiSurface } from "../src/gui-surface.ts";
 
+test("routes a widget click while the editor owns keyboard focus", () => {
+  class Widget extends Text {
+    clicks = 0;
+    handleMouse(event: any) { if (event.type === "click") this.clicks++; return { handled: true }; }
+  }
+  const widget = new Widget("action", 0, 0), editor = new Dialog("editor", 0, 0);
+  const surface = new GuiSurface(() => widget, () => editor, () => {}, () => {}, true);
+  const page = surface.page(40);
+  expect(surface.key(page.frame, "a")).toBe(false);
+  expect(surface.mouse(page.mouseFrame, { type: "press", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(surface.mouse(page.mouseFrame, { type: "release", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(widget.clicks).toBe(1);
+});
+
 class Dialog extends Text {
   inputs: string[] = [];
   handleInput(data: string): void { this.inputs.push(data); }
@@ -53,6 +67,21 @@ test("routes a click only to the unchanged live dialog", () => {
   expect(dialog.clicks).toBe(1);
 });
 
+test("rejects a widget replaced by a different component with identical text", () => {
+  class Widget extends Text {
+    clicks = 0;
+    handleMouse(event: any) { if (event.type === "click") this.clicks++; return { handled: true }; }
+  }
+  const first = new Widget("action", 0, 0), second = new Widget("action", 0, 0);
+  const root = new Container(); root.addChild(first);
+  const editor = new Dialog("editor", 0, 0);
+  const surface = new GuiSurface(() => root, () => editor, () => {}, () => {}, true);
+  const page = surface.page(40);
+  root.clear(); root.addChild(second);
+  expect(surface.mouse(page.mouseFrame, { type: "press", button: "left", x: 0, y: 0 })).toBe(false);
+  expect(second.clicks).toBe(0);
+  expect(surface.page(40).mouseFrame).not.toBe(page.mouseFrame);
+});
 test("rejects a pointer from an older surface even when dialog focus is unchanged", () => {
   const dialog = new Dialog("initial", 0, 0);
   const surface = new GuiSurface(() => dialog, () => dialog);
