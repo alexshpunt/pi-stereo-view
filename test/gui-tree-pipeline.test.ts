@@ -80,6 +80,8 @@ describe("tree pipeline", () => {
     withPi.changed({ kind: "snapshot", at: 0, removed: 0, inserted: many.length, last: true });
     withPi.setCols(37); // sends the width; the fake stream answers at once
     expect(withPi.awaitingPi).toBe(0);
+    expect(withPi.layout.unmeasured).toBeLessThanOrEqual(16); // only the tail (full bodies) is left to the GUI
+    withPi.frame();
     expect(withPi.layout.unmeasured).toBe(0);
     const local = new TreeLayout(client.model);
     local.cols = 37;
@@ -89,7 +91,7 @@ describe("tree pipeline", () => {
     // A new width is asked for again, and a stale answer for the old width is ignored.
     withPi.setCols(20);
     expect(withPi.layout.cols).toBe(20);
-    expect(withPi.layout.unmeasured).toBe(0);
+    expect(withPi.layout.unmeasured).toBeLessThanOrEqual(16);
   });
 
   it("sends headers and tail bodies, then loads the rest on request", async () => {
