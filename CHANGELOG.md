@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Herdr App GUI mod: panels no longer go blank while the window or the divider is resized; the rows stay and are read again at the new width at once. (On a very long Activity history the rows can still take a few seconds to settle, while Pi lays them out again at the new width.)
+- Herdr App GUI mod: a pane's first GUI frame draws its real layout with content instead of the default layout and empty panels, and a pane in TUI mode keeps its history current so the next switch to GUI is complete in one frame.
+
 ## 0.1.29 - 2026-11-25
 
 ### Added
