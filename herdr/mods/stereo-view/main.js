@@ -494,7 +494,7 @@ export default class StereoView extends View {
   }
 
   /** Read again soon, once, after a resize: the panels' width changed, so the rows on screen have the old wrapping. @param {any} cx @param {number} [delay] */
-  scheduleRead(cx, delay = 60) {
+  scheduleRead(cx, delay = 16) {
     if (this.readScheduled) return;
     this.readScheduled = true;
     cx.timer.after(delay, (/** @type {any} */ next) => {
@@ -1113,7 +1113,7 @@ export default class StereoView extends View {
         state.fetching = false;
         cx.notify();
         // The panel was resized while this page was in flight: it is for the old width, so ask again now.
-        if (state.width !== width) this.scheduleRead(cx);
+        if (state.width !== width) this.scheduleRead(cx, 0);
         // Pi has not finished measuring the history at this width (or sent a page not to be drawn): its total can still change.
         else if (state.settling) this.scheduleRead(cx, SETTLE_MS);
       }

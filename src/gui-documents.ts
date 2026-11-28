@@ -9,7 +9,7 @@ type GuiDocument = Pick<NativeDocument, "setViewport" | "beginFrame" | "render" 
   Partial<Pick<NativeDocument, "locate" | "setLazyBudget" | "settling">>;
 
 /** Time per page for measuring offscreen entries while a panel's width has just changed or rows are still being measured. */
-const SETTLE_BUDGET_MS = 16;
+const SETTLE_BUDGET_MS = 30;
 /** The steady budget of a document's pages. */
 const STEADY_BUDGET_MS = 4;
 
@@ -96,7 +96,8 @@ export class GuiDocuments {
     this.viewports[pane] = view;
     this.beforeFrame();
     const document = this.documents[pane];
-    // While the width changes or rows are still unmeasured, measure more of them per page, so the total settles in a few pages.
+    // While the width changes or rows are still unmeasured, the first render measures more of them, so the total settles
+    // in a page or two. Later renders of this page only converge on the tail and leave the rest as it is.
     const previous = this.lastWidths[pane];
     document.setLazyBudget?.(!previous || previous.width !== view.width || previous.settling ? SETTLE_BUDGET_MS : STEADY_BUDGET_MS);
     document.beginFrame();
@@ -112,6 +113,7 @@ export class GuiDocuments {
     if (view.following) {
       // Native layout can change its row count when the viewport moves. Converge on
       // the tail before publishing a frame, but bound work for live components.
+      document.setLazyBudget?.(0);
       for (let attempt = 0; attempt < 3; attempt++) {
         const tail = Math.max(0, lines.length - view.height);
         if (view.top === tail) break;
@@ -123,6 +125,7 @@ export class GuiDocuments {
       // taken from the count before it would lie past the end or over rows not measured yet.
       view.top = Math.max(0, lines.length - view.height);
     }
+    document.setLazyBudget?.(STEADY_BUDGET_MS);
     const settling = document.settling === true;
     this.lastWidths[pane] = { width: view.width, settling };
     const jump = pane === "combined" ? undefined : this.jumps[pane];
