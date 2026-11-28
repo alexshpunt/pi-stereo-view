@@ -17,6 +17,10 @@ const INTERVAL = 700;
 const ICON_SIZE = 14; // Toolbar icon edge in logical pixels.
 const NARROW_CONTROLS_WIDTH = 400; // Switch to icons when text controls no longer fit.
 const MIN_ACTIVITY_WIDTH = 200; // Leave room for the heading and controls in a narrow split.
+const LATEST_BOTTOM = 12; // Gap between the "Jump to latest" control and the panel's bottom edge.
+const LATEST_GAP = 6; // Gap between its arrow and its label.
+const LATEST_MIN_HEIGHT = 24; // Hit area of a control (WCAG 2.5.8).
+const AT_BOTTOM_SLACK = 2; // Pixels short of the end that still count as the bottom.
 /** @typedef {{id:number, frame:number, mouseFrame:number, focused:boolean, row:number, col:number, width:number, height:number, lines:string[]}} OverlayLayer */
 /** @typedef {{revision:number, columns:number, rows:number, overlays:OverlayLayer[]}} OverlayPage */
 // GPUI snaps each virtual row to a whole window pixel before scrolling.
@@ -260,7 +264,7 @@ export default class StereoView extends View {
       if (this.viewState?.mode === "split") this.openSearch(this.activePane, cx);
       return;
     }
-    if (key === "end") { pane.following = true; pane.handle.scroll_to_bottom(); }
+    if (key === "end") this.jumpToLatest(pane === this.chat ? "chat" : pane === this.activity ? "activity" : "combined", pane, cx);
     else {
       pane.following = false;
       const current = Math.floor(pane.handle.offset().y / panelRowHeight(pane));
@@ -269,6 +273,35 @@ export default class StereoView extends View {
       pane.handle.scroll_to_item(Math.max(0, Math.min((pane.total ?? 1) - 1, target)));
     }
     cx.notify();
+  }
+
+  /** Jump straight to the newest line and follow new ones again. @param {string} name @param {ReturnType<typeof paneState>} pane @param {any} cx */
+  jumpToLatest(name, pane, cx) {
+    pane.following = true;
+    pane.handle.scroll_to_bottom();
+    const connection = bridge(); if (connection) this.fetchPane(name, pane, connection, cx);
+    cx.notify();
+  }
+
+  /** @param {ReturnType<typeof paneState>} pane */
+  atBottom(pane) {
+    const viewport = pane.handle.viewport_size().height || pane.height;
+    return pane.handle.offset().y + viewport >= pane.handle.content_size().height - AT_BOTTOM_SLACK;
+  }
+
+  /** The "Jump to latest" control, shown while a panel is not following. It floats over the panel's bottom, outside the scrolled rows.
+   * @param {string} name @param {ReturnType<typeof paneState>} pane @param {any} t */
+  latestControl(name, pane, t) {
+    if ((pane.total ?? 0) === 0 || pane.following || this.atBottom(pane)) return null;
+    return div().id(`stereo-latest-wrap-${name}`).absolute().left_0().right_0().bottom(LATEST_BOTTOM).flex().justify_center()
+      .child(h_flex().id(`stereo-latest-${name}`).accessibility_label("Jump to latest").tooltip("Jump to latest (End)")
+        .items_center().gap(LATEST_GAP).min_h(LATEST_MIN_HEIGHT).px(10).rounded(12)
+        .bg(t.raised).border_1().border_color(t.border).text_color(t.foreground).cursor_pointer()
+        .hover(s => s.bg(t.hover))
+        .on_mouse_down("left", (_event, cx) => cx.stop_propagation()) // Not a press on the panel's text.
+        .on_click((_event, cx) => this.jumpToLatest(name, pane, cx))
+        .child(svg("mods/stereo-view/icons/latest.svg").id(`stereo-latest-icon-${name}`).size(ICON_SIZE).text_color(t.foreground))
+        .child("Jump to latest"));
   }
 
   /** @param {any} cx */
@@ -1192,7 +1225,8 @@ export default class StereoView extends View {
           const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / panelRowHeight(state));
           this.sendMouse(name, state, row, "release", event, cx);
         })
-        .child(rows).child(Scrollbar.vertical(id).absolute().inset_0()));
+        .child(rows).child(Scrollbar.vertical(id).absolute().inset_0())
+        .children([this.latestControl(name, state, t)].filter(Boolean)));
     if (showSurface) panel.child(this.renderSurface(t));
     return panel;
   }
