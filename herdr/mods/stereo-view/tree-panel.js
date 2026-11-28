@@ -20,8 +20,8 @@ export function createTreePanels(gpui, deps) {
     if (!target) return null;
     entry = { name, view: null, client: null, sizes: [], version: -1, lastTotal: 0, notify };
     const client = new TreeClient(deps.spawnStream, { ...target, pane: name }, {
-      change: change => { entry.view.changed(change); entry.notify?.(); },
-      bodies: () => entry.notify?.(),
+      change: change => { entry.view.changed(change); entry.dirty = true; entry.notify?.(); },
+      bodies: () => { entry.dirty = true; entry.notify?.(); },
       // A stream that ends stays as a dead entry: the old list draws and nothing retries in a loop.
       exit: (_code, why) => { entry.dead = true; if (why) entry.error = why; entry.notify?.(); },
       error: text => { entry.error = text; },
@@ -82,6 +82,14 @@ export function createTreePanels(gpui, deps) {
   return {
     /** Whether the pane's tree is in use (its stream exists); the old per-page polling stays off then. */
     active(name) { const entry = panes.get(name); return !!entry && !entry.dead; },
+    /** True while a stream delivered something the next frame must draw, or heights/bodies are still settling. */
+    wantsRender() {
+      for (const entry of panes.values()) {
+        if (entry.dead) continue;
+        if (entry.dirty || !entry.view.model.ready || !entry.view.exact || !entry.view.complete) return true;
+      }
+      return false;
+    },
     /** The tree view of a pane, for operations (scroll to, search) and the benchmark. */
     view(name) { return panes.get(name)?.view; },
     status(name) { const entry = panes.get(name); return entry ? { ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, dead: !!entry.dead, error: entry.error } : null; },
@@ -96,6 +104,7 @@ export function createTreePanels(gpui, deps) {
       const entry = ensure(name, ctx.notify);
       if (!entry || entry.dead || !entry.view.model.ready || !state.handle) return null;
       entry.notify = ctx.notify;
+      entry.dirty = false;
       const { view } = entry;
       const lineHeight = ctx.lineHeight;
       // GPUI owns the scroll offset; the view follows it (rows from the handle), then plans around it.

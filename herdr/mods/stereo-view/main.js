@@ -417,6 +417,8 @@ export default class StereoView extends View {
    * @param {any} cx
    */
   tick(cx) {
+    // LPT-1943: the tree's stream and background measuring change what a frame shows between events.
+    if (this.trees?.wantsRender() && isShown()) cx.notify();
     const shown = isShown();
     const plan = refreshPlan({ shown, prefetchable: !shown && isPrefetchable(), wasShown: this.tickShown, elapsed: Date.now() - this.lastRead });
     this.tickShown = shown;
