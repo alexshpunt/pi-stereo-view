@@ -134,6 +134,7 @@ describe("layout, view and search", () => {
     expect(model.bodies.get(item.id)!.o!.split("\n").length).toBeLessThanOrEqual(10);
     const view = new TreeView(client, { viewport: 10, cols: 40 });
     view.changed({ kind: "snapshot", at: 0, removed: 0, inserted: model.items.length, last: true });
+    view.layout.remeasure(item.id); // the exact folded height, not the estimate
     const folded = view.layout.heights[model.indexOf(item.id)];
     const expanded = await view.expand(item.id);
     expect(expanded).toBe(true);
