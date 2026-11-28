@@ -1600,6 +1600,8 @@ export default class StereoView extends View {
     const treeRows = this.trees ? this.trees.list(name, state, {
       theme: t, lineHeight: LINE_HEIGHT, font: historyFont(), fontSize: historyFontSize(), gutter: ROW_GUTTER,
       notify: () => this.viewCx?.notify(), svg, scrollbarLane: SCROLLBAR_LANE + 2, cellWidth: this.cellWidth,
+      // Pi's own rows (items without a native component, such as notices) keep their colours.
+      ansiRow: (/** @type {string} */ line) => h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap().children(parseAnsi(line).map(run => this.ansiRun(t, run))),
     }) : null;
     if (treeRows) this.drewTree = true;
     if (this.trees) { // TEMPORARY (LPT-1943): per-render timings for the live test, written to the app home
