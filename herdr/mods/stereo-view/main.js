@@ -1586,7 +1586,7 @@ export default class StereoView extends View {
     if (name !== "combined" && this.viewState?.showHeaders !== false) panel.child(heading);
     if (state.searchBar) panel.child(state.searchBar.render(state.searchState ?? {}, t));
     panel
-      .child(state.error ? div().px(8).text_color(t.muted).child(state.error) : div().h(0))
+      .child(state.error && !treeRows ? div().px(8).text_color(t.muted).child(state.error) : div().h(0))
       // The terminal's own background: Pi picks its colors for it, and the terminal view shows the same turn on it.
       .child(v_flex().id(`${id}-box`).relative().flex_1().min_h(0).bg(t.background)
         .on_size_change((size, cx) => this.sizePane(state, size, cx))
