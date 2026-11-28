@@ -92,6 +92,8 @@ export function createTreePanels(gpui, deps) {
     },
     /** The tree view of a pane, for operations (scroll to, search) and the benchmark. */
     view(name) { return panes.get(name)?.view; },
+    /** Time spent building the items of each visible range (ms), for the live frame check. */
+    ranges(name) { return panes.get(name)?.rangeMs?.slice(-300) ?? []; },
     status(name) { const entry = panes.get(name); return entry ? { ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, dead: !!entry.dead, error: entry.error } : null; },
     close() { for (const entry of panes.values()) entry.client.close(); panes.clear(); },
 
@@ -128,7 +130,14 @@ export function createTreePanels(gpui, deps) {
       entry.frame = frame;
       const items = view.model.items;
       return v_virtual_list(`stereo-tree-${name}`, layout.count, entry.sizes, index => items[index]?.id ?? String(index),
-        range => { const out = []; for (let i = range.start; i < range.end; i++) out.push(renderItem(entry, i, ctx)); return out; })
+        range => {
+          const started = typeof performance !== "undefined" ? performance.now() : Date.now();
+          const out = [];
+          for (let i = range.start; i < range.end; i++) out.push(renderItem(entry, i, ctx));
+          const spent = (typeof performance !== "undefined" ? performance.now() : Date.now()) - started;
+          (entry.rangeMs ??= []).push({ spent, items: range.end - range.start }); if (entry.rangeMs.length > 600) entry.rangeMs.splice(0, 300);
+          return out;
+        })
         .h(state.height).track_scroll(state.handle);
     },
   };
