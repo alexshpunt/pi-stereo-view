@@ -29,7 +29,8 @@ function connect(tree: GuiTree, pane: "chat" | "activity" = "chat") {
     onLine: (cb: (line: string) => void) => lines.push(cb), onExit: () => {}, kill: () => {},
     write: (line: string) => {
       const request = JSON.parse(line);
-      if (request.op === "get") out(stream.bodies(request.rq, request.ids));
+      if (request.op === "get") out(stream.bodies(request.rq, request.ids, request.full !== false));
+      else if (request.op === "counterpart") out(stream.counterpart(request.rq, request.id));
       else if (request.op === "rows") out(stream.rows(request.rq, request.id, request.width));
       else if (request.op === "resync") out(stream.snapshot());
     },
@@ -124,8 +125,8 @@ describe("layout, view and search", () => {
   it("folds big items on the wire, expands to the full body and folds back", async () => {
     const big = Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n");
     const tree = new GuiTree(() => fakeIndex([new BashExecutionComponent(big.slice(0, 40), big.split("\n")), new UserMessageComponent("hi")]), () => 80);
-    const { client, model } = connect(tree);
-    await Promise.resolve();
+    const { client } = connect(tree);
+    const model = client.model;
     const item = model.items.find(entry => entry.k === "bash")!;
     expect(item.x).toBeGreaterThan(300);
     expect(model.isFolded(item)).toBe(true);
