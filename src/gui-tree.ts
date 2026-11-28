@@ -51,7 +51,15 @@ function describe(entry: ContentEntry): Described {
   if (entry.kind === "dialogue" && nameOf(source) === "UserMessageComponent" && typeof source.text === "string") {
     return text("user", source.text);
   }
-  if (entry.kind === "dialogue" || entry.kind === "thinking") {
+  if ((entry.kind === "dialogue" || entry.kind === "thinking") && nameOf(source) === "AssistantMessageComponent") {
+    // The pane's view of one assistant message holds its Markdown runs (dialogue) or its thinking blocks (activity).
+    const message = (source as { lastMessage?: { content?: { type: string; text?: string; thinking?: string }[] } }).lastMessage;
+    const children = (entry.component as { contentContainer?: { children?: Component[] } }).contentContainer?.children ?? [];
+    const value = entry.kind === "thinking"
+      ? (message?.content ?? []).filter(block => block.type === "thinking" && block.thinking?.trim()).map(block => block.thinking).join("\n\n")
+      : children.filter(child => nameOf(child) === "Markdown").map(child => componentText(child) ?? "").join("\n\n");
+    if (value) return text(entry.kind === "thinking" ? "think" : "md", value);
+  } else if (entry.kind === "dialogue" || entry.kind === "thinking") {
     const value = componentText(entry.component);
     if (value !== undefined) return text(entry.kind === "thinking" ? "think" : "md", value);
   }
