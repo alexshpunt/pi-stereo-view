@@ -62,7 +62,14 @@ const loadWall = performance.now() - loadStart;
 time("frame", () => view.frame());
 
 let pendingAfterLoad = 0;
-const frameAfter = fn => { fn(); const frame = time("frame", () => view.frame()); pendingAfterLoad += frame.pending.length; };
+// Items drawn by Pi's own rows (no native component yet) are answered over the network; the loops below do not
+// yield, so they are counted apart: a native item without its body on a frame after loading is a failure.
+let fallbackPending = 0;
+const frameAfter = fn => {
+  fn();
+  const frame = time("frame", () => view.frame());
+  for (const index of frame.pending) { if (client.model.items[index].k === "rows") fallbackPending++; else pendingAfterLoad++; }
+};
 
 // Scroll: wheel steps, page keys, scrollbar drags, jumps.
 for (let i = 0; i < 1500; i++) frameAfter(() => time("scroll by 3 rows", () => view.scrollBy(i % 2 ? -3 : 3)));
@@ -77,7 +84,7 @@ for (let i = 0; i < 60; i++) frameAfter(() => time("viewport resize", () => view
 
 // Search in slices of 4 ms; every slice is one frame's work.
 const search = new TreeSearch(client.model);
-search.start("tool");
+search.start("zzzxqnotfound");
 const searchStart = performance.now();
 while (!search.done) { time("search slice", () => search.step(4)); await sleep(0); }
 const searchWall = performance.now() - searchStart;
@@ -105,7 +112,7 @@ for (const [name, values] of Object.entries(samples)) {
   if (!row.ok) failed = true;
   rows.push(row);
 }
-const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), firstFramePending: firstPending, pendingAfterLoad, searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
+const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), firstFramePending: firstPending, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
 if (pendingAfterLoad) failed = true;
 console.log(JSON.stringify(summary));
 console.table(rows.map(({ name, n, p50, p95, max, ok }) => ({ name, n, p50, p95, max, ok })));
