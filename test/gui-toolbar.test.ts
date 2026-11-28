@@ -12,6 +12,8 @@ import { composerAlive, composerFieldCommand, composerRoute } from "../herdr/mod
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "../herdr/mods/stereo-view/history-blocks.js";
+// @ts-expect-error The mod has no TypeScript declarations.
+import { dropStaleRows, paneDimensions, refreshPlan, TICK_MS } from "../herdr/mods/stereo-view/refresh-plan.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -129,7 +131,7 @@ function harness() {
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView, focused: paneFocused }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom, font: terminalFont, font_size: terminalSize }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
+  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, dropStaleRows, paneDimensions, refreshPlan, TICK_MS, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
     appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -158,11 +160,37 @@ test("pane view drops app chrome, starts with a live bridge and pauses in TUI", 
   expect(h.calls.length).toBeGreaterThan(before);
 });
 
-test("a pane created in TUI mode recognizes a live bridge before switching", async () => {
+test("a pane created in TUI mode recognizes a live bridge and reads ahead, so its first GUI frame has content (LPT-1932)", async () => {
   const h = harness(); h.setPaneView(true); h.setShownView("tui");
   h.view.init({}, h.cx);
   expect(h.view.available).toBe(true);
-  expect(h.calls).toHaveLength(0);
+  await h.flush();
+  expect(h.calls.some(call => call.op === "state")).toBe(true);
+  expect(h.calls.some(call => call.op === "view" && call.pane === "chat")).toBe(true);
+  expect(h.view.viewState).not.toBeNull();
+  expect(h.view.chat.total).toBe(1);
+  // A hidden copy never takes the keyboard, and it reads again only after the slow interval.
+  expect(h.view.surfaceInput).toBeNull();
+  const reads = h.calls.length;
+  h.view.tick(h.cx); await h.flush();
+  expect(h.calls.length).toBe(reads);
+});
+
+test("a width change keeps the rows on screen, reads them again at once and then drops the old ones (LPT-1932)", async () => {
+  const h = harness(); h.setRows(Array.from({ length: 5 }, (_, i) => `row ${i}`));
+  h.view.init({}, h.cx); await h.flush();
+  const pane = h.view.chat;
+  expect(pane.items.size).toBe(5);
+  const before = h.calls.length;
+  h.view.sizePane(pane, { width: 900, height: 300 }, h.cx);
+  expect(pane.stale).toBe(true);
+  expect(pane.items.size).toBe(5);
+  await h.flush();
+  const reads = h.calls.slice(before).filter(call => call.op === "view" && call.pane === "chat");
+  expect(reads.length).toBeGreaterThan(0);
+  expect(reads[0].width).toBe(pane.width);
+  expect(pane.stale).toBe(false);
+  expect(pane.items.size).toBe(5);
 });
 
 test("pane focus targets the active panel or the open Pi dialog", async () => {
