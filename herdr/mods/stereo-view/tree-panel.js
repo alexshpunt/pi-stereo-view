@@ -25,7 +25,7 @@ export function createTreePanels(gpui, deps) {
       change: change => { entry.view.changed(change); entry.dirty = true; entry.notify?.(); },
       bodies: () => { entry.dirty = true; entry.notify?.(); },
       // A stream that ends stays as a dead entry: the old list draws and nothing retries in a loop.
-      exit: (_code, why) => { entry.dead = true; if (why) entry.error = why; entry.notify?.(); },
+      exit: (code, why) => { entry.dead = true; entry.error = `exit ${code ?? "?"}${why ? `: ${why}` : ""}`; entry.notify?.(); },
       error: text => { entry.error = text; },
     });
     entry.client = client;
