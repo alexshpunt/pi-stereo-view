@@ -110,7 +110,7 @@ function harness() {
     setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; },
     setSurface(value: typeof surface) { surface = value; }, setOverlays(value: any[]) { overlays = value; },
     typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
-    submitSurface() { handlers.submit?.({}, cx); }, surfaceFocused: () => inputFocused };
+    surfaceFocused: () => inputFocused };
 }
 
 test("keeps history visible behind Pi overlays and forwards overlay input", async () => {
@@ -348,6 +348,36 @@ test("copies a selection spanning uncached history through the bridge", async ()
   await h.flush();
   expect(h.copied).toEqual([rows.join("\n")]);
   expect(h.calls.some(call => call.op === "view" && call.pane === "chat" && !call.following && call.height === 256)).toBe(true);
+});
+
+test("selects the visible history row at fractional desktop scaling", async () => {
+  const h = harness();
+  h.setZoom(1.1);
+  h.view.init({}, h.cx);
+  await h.flush();
+  const pane = h.view.chat;
+  pane.total = 194;
+  pane.revision = 1;
+  pane.frameTop = 0;
+  pane.frameHeight = 194;
+  pane.handle.content_size = () => ({ height: 3292.13 });
+  pane.handle.offset = () => ({ y: 2104.85 });
+  const root = h.view.render();
+  h.find(root, "stereo-chat-box")!.mouseDown!({ local_position: { x: 20, y: 0 } }, h.cx);
+  expect(pane.selection.endpoints()).toEqual([124, 124]);
+  await h.flush();
+});
+
+test("renders a long selected row as a small number of styled spans", () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  const line = "a".repeat(200);
+  h.view.chat.items.set(0, { id: "row", lines: [line] });
+  h.view.chat.selectionRows.set(0, { cells: Array.from(line, (text, start) => ({ text, start, end: start + 1 })), words: [] });
+  h.view.chat.selection.start({ row: 0, col: 0 }, "character");
+  h.view.chat.selection.extend({ row: 0, col: 199 });
+  const row = h.view.entry(h.view.chat, 0, {});
+  expect(row.nodes.length).toBe(1);
 });
 
 test("dragging outside a panel scrolls while retaining the selection", async () => {

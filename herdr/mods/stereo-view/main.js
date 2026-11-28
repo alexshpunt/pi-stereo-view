@@ -23,6 +23,14 @@ function rowHeight() {
   const scale = typeof zoom === "number" && zoom > 0 ? zoom : 1;
   return Math.round(LINE_HEIGHT * scale) / scale;
 }
+/** Use the list's measured item height: desktop DPI changes pixel snapping. */
+function panelRowHeight(state) {
+  const height = state.handle.content_size().height;
+  const measured = state.total > 0 ? height / state.total : 0;
+  return Number.isFinite(measured) && measured >= LINE_HEIGHT * 0.9 && measured <= LINE_HEIGHT * 1.1
+    ? measured : rowHeight();
+}
+
 // The shell's binary fs bindings can yield empty files. Decode and verify in a
 // local Node process after writing only ASCII through its text binding.
 const IMAGE_DECODE = `const fs=require('node:fs'),crypto=require('node:crypto');
@@ -94,8 +102,8 @@ function paneState() {
 function nextPage(state) {
   const offset = state.handle.offset().y;
   const viewport = state.handle.viewport_size().height || state.height;
-  const visible = Math.max(1, Math.ceil(viewport / rowHeight()) + 1);
-  const start = Math.max(0, Math.floor(offset / rowHeight()) - visible);
+  const visible = Math.max(1, Math.ceil(viewport / panelRowHeight(state)) + 1);
+  const start = Math.max(0, Math.floor(offset / panelRowHeight(state)) - visible);
   return { start, count: Math.min(PAGE, visible * 3) };
 }
 
@@ -122,15 +130,18 @@ function selectedRuns(runs, row, selection) {
   if (!selection || !row?.cells?.length) return runs;
   if (row.cells.map(cell => cell.text).join("") !== runs.map(run => run.text).join("")) return runs;
   const result = [];
-  let runIndex = 0, offset = 0;
+  let runIndex = 0, offset = 0, previousRun = -1;
   for (const cell of row.cells) {
     let left = cell.text.length;
     while (left > 0 && runIndex < runs.length) {
       const run = runs[runIndex];
       const length = Math.min(left, run.text.length - offset);
       if (length <= 0) { runIndex++; offset = 0; continue; }
-      result.push({ ...run, text: run.text.slice(offset, offset + length),
-        selected: cell.end > selection.start && cell.start < selection.end });
+      const selected = cell.end > selection.start && cell.start < selection.end;
+      const text = run.text.slice(offset, offset + length);
+      const previous = result[result.length - 1];
+      if (previous && previousRun === runIndex && previous.selected === selected) previous.text += text;
+      else { result.push({ ...run, text, selected }); previousRun = runIndex; }
       offset += length; left -= length;
       if (offset === run.text.length) { runIndex++; offset = 0; }
     }
@@ -443,8 +454,8 @@ export default class StereoView extends View {
     const offset = state.handle.offset().y;
     const viewport = state.handle.viewport_size().height || state.height;
     const following = state.following;
-    const top = Math.max(0, Math.floor(offset / rowHeight()));
-    const height = Math.min(PAGE, Math.max(1, Math.ceil(viewport / rowHeight()) + 1));
+    const top = Math.max(0, Math.floor(offset / panelRowHeight(state)));
+    const height = Math.min(PAGE, Math.max(1, Math.ceil(viewport / panelRowHeight(state)) + 1));
     this.sendSearch(pane, { action: "open", top, height, following }, cx);
     cx.notify();
   }
@@ -511,7 +522,7 @@ export default class StereoView extends View {
     if (!inside && this.hoverPane !== pane) return;
     if (state.pressed || state.fetching || state.revision < 1) return;
     const x = inside ? Math.floor((px - 8) / this.cellWidth) : -1;
-    const y = inside ? Math.floor((state.handle.offset().y + py) / rowHeight()) - state.frameTop : -1;
+    const y = inside ? Math.floor((state.handle.offset().y + py) / panelRowHeight(state)) - state.frameTop : -1;
     if (inside && (x < 0 || x >= state.width || y < 0 || y >= state.frameHeight)) return;
     const key = `${pane}:${x}:${y}`;
     if (this.hoverKey === key || (inside && Date.now() - this.hoverAt < 100)) return;
@@ -532,8 +543,8 @@ export default class StereoView extends View {
       state.autoScrollTimer = false;
       if (!state.pressed || !state.selectionOnly || !state.autoScroll || !state.total) return;
       const viewport = state.handle.viewport_size().height || state.height;
-      const visible = Math.max(1, Math.floor(viewport / rowHeight()));
-      const top = Math.max(0, Math.floor(state.handle.offset().y / rowHeight()));
+      const visible = Math.max(1, Math.floor(viewport / panelRowHeight(state)));
+      const top = Math.max(0, Math.floor(state.handle.offset().y / panelRowHeight(state)));
       const nextTop = Math.max(0, Math.min(Math.max(0, state.total - visible), top + state.autoScroll * 3));
       state.following = false;
       state.handle.scroll_to_item(nextTop);
@@ -686,7 +697,7 @@ export default class StereoView extends View {
         }
         if (geometryChanged && following && state.following && state.total > 0) state.handle.scroll_to_bottom();
         else if (!following && page.scrollShift && state.total > 0)
-          state.handle.scroll_to_item(Math.max(0, Math.min(state.total - 1, Math.floor(currentOffset / rowHeight()) + page.scrollShift)));
+          state.handle.scroll_to_item(Math.max(0, Math.min(state.total - 1, Math.floor(currentOffset / panelRowHeight(state)) + page.scrollShift)));
         state.initial = false;
         state.error = null;
       } catch {
@@ -735,7 +746,7 @@ export default class StereoView extends View {
     if (run.italic) el = el.italic();
     if (run.underline) el = el.underline();
     if (run.dim) el = el.opacity(0.65);
-    if (run.selected) el = el.bg(t.selection ?? t.accent ?? "#526b83");
+    if (run.selected) el = el.bg(t.selection ?? t.accent ?? "#526b83").text_color(t.foreground);
     return el.child(run.text);
   }
 
@@ -936,7 +947,7 @@ export default class StereoView extends View {
           if (!event.local_position) return;
           const z = settings().zoom;
           const zoom = typeof z === "number" && z > 0 ? z : 1;
-          const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / rowHeight());
+          const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / panelRowHeight(state));
           this.sendMouse(name, state, row, "press", event, cx);
         })
         .on_window_mouse_move((event, cx) => {
@@ -946,7 +957,7 @@ export default class StereoView extends View {
           const zoom = typeof z === "number" && z > 0 ? z : 1;
           const y = event.local_position.y / zoom;
           const viewport = state.handle.viewport_size().height || state.height;
-          const row = Math.floor((state.handle.offset().y + y) / rowHeight());
+          const row = Math.floor((state.handle.offset().y + y) / panelRowHeight(state));
           const direction = y < 0 ? -1 : y >= viewport ? 1 : 0;
           if (direction && !state.selectionOnly) {
             // End the native gesture as a drag before paging invalidates its frame.
@@ -973,7 +984,7 @@ export default class StereoView extends View {
           }
           const z = settings().zoom;
           const zoom = typeof z === "number" && z > 0 ? z : 1;
-          const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / rowHeight());
+          const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / panelRowHeight(state));
           this.sendMouse(name, state, row, "release", event, cx);
         })
         .child(rows).child(Scrollbar.vertical(id).absolute().inset_0()));
@@ -1177,8 +1188,8 @@ export default class StereoView extends View {
         if (key === "end") { pane.following = true; pane.handle.scroll_to_bottom(); }
         else {
           pane.following = false;
-          const current = Math.floor(pane.handle.offset().y / rowHeight());
-          const page = Math.max(1, Math.floor((pane.handle.viewport_size().height || pane.height) / rowHeight()) - 1);
+          const current = Math.floor(pane.handle.offset().y / panelRowHeight(pane));
+          const page = Math.max(1, Math.floor((pane.handle.viewport_size().height || pane.height) / panelRowHeight(pane)) - 1);
           const target = key === "home" ? 0 : current + (key === "pageup" ? -page : page);
           pane.handle.scroll_to_item(Math.max(0, Math.min((pane.total ?? 1) - 1, target)));
         }
