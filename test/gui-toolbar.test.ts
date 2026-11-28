@@ -11,7 +11,7 @@ import { composerAlive, composerFieldCommand, composerRoute } from "../herdr/mod
 // @ts-expect-error The mod has no TypeScript declarations.
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
 // @ts-expect-error The mod has no TypeScript declarations.
-import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, padsToEnd } from "../herdr/mods/stereo-view/history-blocks.js";
+import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "../herdr/mods/stereo-view/history-blocks.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -128,7 +128,7 @@ function harness() {
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom, font: terminalFont, font_size: terminalSize }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
+  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
     appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -842,7 +842,7 @@ test("draws history rows in the terminal's monospace font, not the UI font", asy
   const sized = h.view.entry(h.view.chat, 0, {});
   expect(sized.nodes[0].styles.text_size).toEqual([11]);
   expect(sized.styles.h, "a row is as tall as the terminal's own").toEqual([14.5]);
-  expect(sized.nodes[0].styles.line_height).toEqual([14.5]);
+  expect(sized.nodes[0].styles.line_height, "a pixel length: a bare number is a multiple of the text size").toEqual(["14.5px"]);
   h.setFontSize(undefined); h.view.render();
   const probe = h.find(h.view.render(), "stereo-cell-probe")!;
   expect(probe.styles.font_family, "the cell probe measures the same font").toEqual(["Test Mono"]);
@@ -999,7 +999,10 @@ test("uses the saved conversation size and a 20 percent default in columns", asy
   await h.flush();
   h.view.areaWidth = 1600;
   h.view.cellWidth = 10;
-  expect(h.view.chatExtent()).toBe(320);
+  expect(h.view.chatExtent(), "a narrow area: room for the minimum number of cells").toBe(MIN_COLUMN_CELLS * 10 + 24);
+  h.view.areaWidth = 3000;
+  expect(h.view.chatExtent(), "a wide area: 20 percent").toBe(600);
+  h.view.areaWidth = 1600;
   h.view.viewState.preferences.chatWidth = 40;
   expect(h.view.chatExtent()).toBe(416);
 });
@@ -1011,11 +1014,11 @@ test("resizing the divider persists the new conversation width", async () => {
   h.view.areaWidth = 1600;
   h.view.cellWidth = 10;
   const bar = h.view.divider({});
-  bar.mouseDown({ position: { x: 320, y: 0 } }, h.cx);
-  bar.windowMove({ position: { x: 420, y: 0 }, pressed_button: "left" }, h.cx);
+  bar.mouseDown({ position: { x: 424, y: 0 } }, h.cx);
+  bar.windowMove({ position: { x: 520, y: 0 }, pressed_button: "left" }, h.cx);
   bar.windowUp({}, h.cx);
   await h.flush();
-  expect(h.calls).toContainEqual({ v: 1, op: "setting", key: "chatWidth", value: 40 });
+  expect(h.calls).toContainEqual({ v: 1, op: "setting", key: "chatWidth", value: 50 });
 });
 
 test("opens a panel search and sends its query through the bridge", async () => {

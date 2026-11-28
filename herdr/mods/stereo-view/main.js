@@ -9,7 +9,7 @@ import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
 import { composerAlive, composerFieldCommand, composerRoute } from "./composer-route.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
-import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, padsToEnd } from "./history-blocks.js";
+import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "./history-blocks.js";
 
 const LABEL = "herdr.stereo.bridge";
 const DEFAULT_LINE_HEIGHT = 17; // Used until the terminal's text size is known.
@@ -1018,7 +1018,7 @@ export default class StereoView extends View {
   /** @param {any} t @param {any} run @param {boolean} [grow] run on to the row's end, so a block's background has no ragged edge */
   ansiRun(t, run, grow = false) {
     const { fg, bg } = this.runColors(t, run);
-    let el = div().whitespace_nowrap().font_family(historyFont()).text_size(historyFontSize()).line_height(LINE_HEIGHT).text_color(fg);
+    let el = div().whitespace_nowrap().font_family(historyFont()).text_size(historyFontSize()).line_height(`${LINE_HEIGHT}px`).text_color(fg);
     el = grow ? el.flex_grow(1).flex_shrink(0) : el.flex_none();
     if (bg) el = el.bg(bg);
     if (run.bold) el = el.font_semibold();
@@ -1169,7 +1169,7 @@ export default class StereoView extends View {
     const rowTop = block.anchor * panelRowHeight(state) - state.handle.offset().y;
     const viewport = state.handle.viewport_size().height || state.height;
     const barHeight = BLOCK_BUTTON + 2 * BLOCK_BUTTONS_GAP + 2;
-    const top = Math.max(0, Math.min(viewport - barHeight, rowTop + (LINE_HEIGHT - barHeight) / 2));
+    const top = Math.max(0, Math.min(viewport - barHeight, rowTop));
     /** @param {"goTo" | "copy"} which @param {string} label @param {string} icon */
     const button = (which, label, icon) => h_flex().id(`stereo-block-${which}`).accessibility_label(label).tooltip(label)
       .items_center().justify_center().flex_none().w(BLOCK_BUTTON).h(BLOCK_BUTTON).rounded(BLOCK_BUTTON_RADIUS)
@@ -1243,7 +1243,7 @@ export default class StereoView extends View {
     const prefs = this.viewState?.preferences;
     const value = rows
       ? (prefs?.chatHeight == null ? Math.min(total / 2, Math.max(LINE_HEIGHT * 3, (this.chat.total ?? 1) * LINE_HEIGHT + 28)) : prefs.chatHeight * LINE_HEIGHT)
-      : (prefs?.chatWidth == null ? Math.max(24 * this.cellWidth + 16, total * 0.2) : prefs.chatWidth * this.cellWidth + 16);
+      : (prefs?.chatWidth == null ? Math.max(MIN_COLUMN_CELLS * this.cellWidth + ROW_CHROME, total * 0.2) : prefs.chatWidth * this.cellWidth + 16);
     return Math.max(40, Math.min(total - reserve, value));
   }
 
@@ -1309,7 +1309,8 @@ export default class StereoView extends View {
     if (state.searchBar) panel.child(state.searchBar.render(state.searchState ?? {}, t));
     panel
       .child(state.error ? div().px(8).text_color(t.muted).child(state.error) : div().h(0))
-      .child(v_flex().id(`${id}-box`).relative().flex_1().min_h(0)
+      // The terminal's own background: Pi picks its colors for it, and the terminal view shows the same turn on it.
+      .child(v_flex().id(`${id}-box`).relative().flex_1().min_h(0).bg(t.background)
         .on_size_change((size, cx) => this.sizePane(state, size, cx))
         .on_scroll_wheel((_event, cx) => {
           if (name === "chat" || name === "activity") this.activePane = name;
