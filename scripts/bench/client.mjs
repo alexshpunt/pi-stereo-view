@@ -35,7 +35,7 @@ function direct(socket, payload) {
 
 /** One request the way the mod does it: a new `node -e CLIENT` process per request. */
 const source = readFileSync(new URL("../../herdr/mods/stereo-view/main.js", import.meta.url), "utf8");
-const CLIENT = new Function("return `" + source.match(/const CLIENT = `([\s\S]*?)`;/)[1].replace(/\\\\/g, "\\\\\\\\") + "`")();
+const CLIENT = new Function("return `" + source.match(/const CLIENT = `([\s\S]*?)`;/)[1] + "`")();
 function spawned(socket, payload) {
   return new Promise((resolve, reject) => {
     const start = performance.now();
