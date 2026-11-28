@@ -107,16 +107,17 @@ export class TreeView {
     // Heights above the anchor changed: restore the position from the anchor item.
     top = this.top;
     const windowItems = layout.window(top, this.viewport);
-    const pending = [];
+    // `pending`: no full body yet; `blank`: nothing to draw at all (no body and no preview).
+    const pending = [], blank = [];
     for (const entry of windowItems) {
       const item = this.model.items[entry.index];
-      if (item.k === "rows" ? !layout.fallbackRows.has(item.id) : !this.model.bodies.has(item.id)) pending.push(entry.index);
+      if (item.k === "rows" ? !layout.fallbackRows.has(item.id) : !this.model.bodies.has(item.id)) { pending.push(entry.index); if (item.k === "rows" || item.p === undefined) blank.push(entry.index); }
     }
     this.prefetch(visibleFirst, visibleLast);
     // Spare budget makes the rest of the pane exact, so far jumps and the scrollbar stop drifting.
     const left = this.budgetMs - (now() - started);
     if (left > 0.5 && layout.unmeasured > 0) layout.measureSlice(left);
-    return { top, total: layout.totalRows, window: windowItems, pending, spentMs: now() - started, measuredCount };
+    return { top, total: layout.totalRows, window: windowItems, pending, blank, spentMs: now() - started, measuredCount };
   }
 
   wantRows(i) {

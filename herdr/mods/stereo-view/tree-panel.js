@@ -3,6 +3,7 @@
 // a resize never waits for Pi. Item kinds: user, md, think, tool, bash (native), rows (Pi's own rendered rows).
 import { TreeClient } from "./tree-client.js";
 import { TreeView } from "./tree-view.js";
+import { wrapRows } from "./wrap.js";
 
 /**
  * @param {{ div: any, h_flex: any, v_flex: any, v_virtual_list: any }} gpui
@@ -57,7 +58,11 @@ export function createTreePanels(gpui, deps) {
       for (const line of fallback?.lines ?? []) box.child(ctx.ansiRow ? ctx.ansiRow(line) : div().h(ctx.lineHeight).child(line));
       return box;
     }
-    if (!body) return box; // Not loaded: its estimated height keeps the place; bodies are prefetched around the screen.
+    if (!body) {
+      // Not loaded (a far jump): the start of its text stands in, clipped to the estimated height, until the body arrives.
+      if (item.p) for (const el of lines(wrapRows(item.p, layout.cols), ctx, t.foreground)) box.child(el);
+      return box;
+    }
     const rows = layout.rowsOf(item, body).parts;
     if (item.k === "user") {
       box.bg(t.raised ?? t.background);

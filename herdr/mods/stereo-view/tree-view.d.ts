@@ -9,5 +9,5 @@ export class TreeView {
   setViewport(rows: number): void;
   setCols(cols: number): void;
   scrollTo(row: number): void; scrollBy(rows: number): void; toTop(): void; toBottom(): void; toItem(index: number): void;
-  frame(): { top: number; total: number; window: { index: number; row: number }[]; pending: number[]; spentMs: number; measuredCount: number };
+  frame(): { top: number; total: number; window: { index: number; row: number }[]; pending: number[]; blank: number[]; spentMs: number; measuredCount: number };
 }

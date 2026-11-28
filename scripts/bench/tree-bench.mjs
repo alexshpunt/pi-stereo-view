@@ -67,11 +67,12 @@ time("frame", () => view.frame());
 let pendingAfterLoad = 0;
 // Items drawn by Pi's own rows (no native component yet) are answered over the network; the loops below do not
 // yield, so they are counted apart: a native item without its body on a frame after loading is a failure.
-let fallbackPending = 0;
+let fallbackPending = 0, previewOnly = 0;
 const frameAfter = fn => {
   fn();
   const frame = time("frame", () => view.frame());
-  for (const index of frame.pending) { if (client.model.items[index].k === "rows") fallbackPending++; else pendingAfterLoad++; }
+  for (const index of frame.pending) { if (client.model.items[index].k === "rows") fallbackPending++; else previewOnly++; }
+  pendingAfterLoad += frame.blank.filter(index => client.model.items[index].k !== "rows").length;
 };
 
 // Scroll: wheel steps, page keys, scrollbar drags, jumps.
@@ -115,7 +116,7 @@ for (const [name, values] of Object.entries(samples)) {
   if (!row.ok) failed = true;
   rows.push(row);
 }
-const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, bodyCharsHeld: client.model.bodyChars, bodyCharsCap: view.maxChars, itemsWithBody: client.model.bodies.size, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
+const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, bodyCharsHeld: client.model.bodyChars, bodyCharsCap: view.maxChars, itemsWithBody: client.model.bodies.size, pendingAfterLoad, previewOnly, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
 if (pendingAfterLoad) failed = true;
 if (client.model.bodyChars > view.maxChars) failed = true; // memory stays bounded
 console.log(JSON.stringify(summary));

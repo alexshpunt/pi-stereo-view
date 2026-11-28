@@ -1,5 +1,5 @@
 export interface TreeBody { t?: string; a?: string; o?: string }
-export interface TreeHeader { id: string; k: string; n: number; c: number; m?: { name?: string; status?: string }; b?: TreeBody }
+export interface TreeHeader { id: string; k: string; n: number; c: number; m?: { name?: string; status?: string }; b?: TreeBody; p?: string }
 export interface TreeChange { kind: string; at: number; removed: number; inserted: number; last?: boolean; resync?: boolean }
 export class TreeModel {
   epoch: number; rev: number; items: TreeHeader[]; bodies: Map<string, TreeBody>; ready: boolean;

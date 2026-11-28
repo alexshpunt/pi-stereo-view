@@ -18,6 +18,8 @@ export interface TreeItem {
   m?: { name?: string; status?: string };
   /** Body, only when it is small or the item is at the tail. */
   b?: ItemBody;
+  /** Start of the text, so a far jump shows something real before the body arrives. */
+  p?: string;
 }
 export type ServerMessage =
   | { t: "snap"; pane: Pane; epoch: number; rev: number; total: number; at: number; items: TreeItem[]; last: boolean }
@@ -31,6 +33,7 @@ const SNAPSHOT_CHUNK = 1500;
 /** A body above this is cut: the GUI shows the head and the item's real line count. */
 export const BODY_LIMIT = 512 * 1024;
 const ARGS_LIMIT = 64 * 1024;
+const PREVIEW = 240;
 
 const lineCount = (text: string): number => {
   let count = 1;
@@ -133,6 +136,7 @@ function header(row: { id: string; d: Described }, withBody: boolean): { item: T
   const item: TreeItem = { id: row.id, k: row.d.k, n: row.d.lines, c: row.d.chars };
   if (row.d.meta) item.m = row.d.meta;
   let truncated = false;
+  if (row.d.body) { const text = row.d.body.t ?? `${row.d.body.a ?? ""}\n${row.d.body.o ?? ""}`; item.p = text.length > PREVIEW ? text.slice(0, PREVIEW) : text; }
   if (withBody && row.d.body) {
     const cut = limited(row.d.body);
     item.b = cut.body; truncated = cut.truncated;
