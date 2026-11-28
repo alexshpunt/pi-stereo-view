@@ -51,6 +51,28 @@ test("accepts bounded overlay layer requests and rejects invalid identifiers", (
   expect(parseGuiRequest({ ...key, id: 0 })).toBeUndefined();
   expect(parseGuiRequest({ ...mouse, event: { ...mouse.event, y: 256 } })).toBeUndefined();
 });
+test("accepts bounded surface pointer types, buttons, modifiers and wheel steps", () => {
+  for (const target of [{ v: 1, op: "surface-mouse", frame: 1 },
+    { v: 1, op: "overlay-mouse", revision: 1, id: 1, frame: 1 }]) {
+    const events = [
+      { type: "move", button: "none", x: 1, y: 1, shift: true },
+      { type: "wheel", button: "none", x: 1, y: 1, wheelDelta: -3, ctrl: true },
+      { type: "press", button: "right", x: 1, y: 1, clickCount: 2, alt: true },
+      { type: "drag", button: "middle", x: -3, y: 350 },
+      { type: "release", button: "left", x: 400, y: -1, cancel: true },
+    ];
+    for (const event of events) expect(parseGuiRequest({ ...target, event })).toEqual({ ...target, event });
+    for (const event of [
+      { type: "move", button: "left", x: 1, y: 1 },
+      { type: "wheel", button: "none", x: 1, y: 1, wheelDelta: 0 },
+      { type: "wheel", button: "none", x: 1, y: 1, wheelDelta: 1.5 },
+      { type: "press", button: "none", x: 1, y: 1 },
+      { type: "press", button: "left", x: 1, y: 1, clickCount: 4 },
+      { type: "release", button: "left", x: 1, y: 1, shift: 1 },
+    ]) expect(parseGuiRequest({ ...target, event })).toBeUndefined();
+  }
+});
+
 test("accepts only known GUI controls", () => {
   expect(parseGuiRequest({ v: 1, op: "view", pane: "chat", top: 10, height: 20, width: 80, following: false }))
     .toEqual({ v: 1, op: "view", pane: "chat", top: 10, height: 20, width: 80, following: false });

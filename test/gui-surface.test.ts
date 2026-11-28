@@ -46,6 +46,72 @@ test("routes a widget click while the editor owns keyboard focus", () => {
   expect(widget.clicks).toBe(1);
 });
 
+test("delivers wheel and hover with modifiers to the live surface", () => {
+  class Widget extends Text {
+    events: any[] = [];
+    handleMouse(event: any) { this.events.push(event); return { handled: true }; }
+  }
+  const widget = new Widget("action", 0, 0), editor = new Dialog("editor", 0, 0);
+  const surface = new GuiSurface(() => widget, () => editor, () => {}, () => {}, true);
+  const page = surface.page(40);
+  expect(surface.mouse(page.mouseFrame, { type: "move", button: "none", x: 1, y: 0, shift: true } as any)).toBe(true);
+  expect(surface.mouse(page.mouseFrame, { type: "wheel", button: "none", x: 1, y: 0, wheelDelta: -3, ctrl: true } as any)).toBe(true);
+  expect(widget.events.map(({ type, button, wheelDelta, shift, ctrl }) => ({ type, button, wheelDelta, shift, ctrl }))).toEqual([
+    { type: "move", button: "none", wheelDelta: undefined, shift: true, ctrl: false },
+    { type: "wheel", button: "none", wheelDelta: -3, shift: false, ctrl: true },
+  ]);
+  widget.setText("updated");
+  expect(surface.mouse(page.mouseFrame, { type: "move", button: "none", x: 1, y: 0 } as any)).toBe(false);
+});
+
+test("routes a right-button gesture and preserves its click count without accepting mismatched releases", () => {
+  class Widget extends Text {
+    events: any[] = [];
+    handleMouse(event: any) { this.events.push(event); return { handled: true, capture: true }; }
+  }
+  const widget = new Widget("action", 0, 0), editor = new Dialog("editor", 0, 0);
+  const surface = new GuiSurface(() => widget, () => editor, () => {}, () => {}, true);
+  const frame = surface.page(40).mouseFrame;
+  expect(surface.mouse(frame, { type: "press", button: "right", x: 1, y: 0, clickCount: 2 } as any)).toBe(true);
+  expect(surface.mouse(frame, { type: "release", button: "left", x: 1, y: 0 } as any)).toBe(false);
+  expect(surface.mouse(frame, { type: "release", button: "right", x: 1, y: 0 } as any)).toBe(true);
+  expect(widget.events.map(({ type, button, clickCount }) => ({ type, button, clickCount }))).toEqual([
+    { type: "press", button: "right", clickCount: 2 },
+    { type: "release", button: "right", clickCount: undefined },
+    { type: "click", button: "right", clickCount: 2 },
+  ]);
+});
+
+test("keeps button captures independent and never clicks a cancelled or dragged gesture", () => {
+  class Widget extends Text {
+    events: any[] = [];
+    handleMouse(event: any) { this.events.push([event.type, event.button]); return { handled: true, capture: true }; }
+  }
+  const widget = new Widget("action", 0, 0), editor = new Dialog("editor", 0, 0);
+  const surface = new GuiSurface(() => widget, () => editor, () => {}, () => {}, true);
+  const frame = surface.page(40).mouseFrame;
+  expect(surface.mouse(frame, { type: "press", button: "left", x: 0, y: 0 })).toBe(true);
+  expect(surface.mouse(frame, { type: "press", button: "right", x: 1, y: 0 })).toBe(true);
+  expect(surface.mouse(frame, { type: "drag", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(surface.mouse(frame, { type: "release", button: "right", x: 1, y: 0, cancel: true })).toBe(true);
+  expect(surface.mouse(frame, { type: "release", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(widget.events).toEqual([["press", "left"], ["press", "right"], ["drag", "left"], ["release", "right"], ["release", "left"]]);
+});
+
+test("delivers captured drag coordinates beyond the painted surface", () => {
+  class Widget extends Text {
+    events: any[] = [];
+    handleMouse(event: any) { this.events.push(event); return { handled: true, capture: true }; }
+  }
+  const widget = new Widget("action", 0, 0), editor = new Dialog("editor", 0, 0);
+  const surface = new GuiSurface(() => widget, () => editor, () => {}, () => {}, true);
+  const frame = surface.page(40).mouseFrame;
+  expect(surface.mouse(frame, { type: "press", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(surface.mouse(frame, { type: "drag", button: "left", x: -3, y: 9 })).toBe(true);
+  expect(surface.mouse(frame, { type: "release", button: "left", x: -3, y: 9, cancel: true })).toBe(true);
+  expect(widget.events.map(event => [event.type, event.x, event.y])).toEqual([["press", 1, 0], ["drag", -3, 9], ["release", -3, 9]]);
+});
+
 class Dialog extends Text {
   inputs: string[] = [];
   handleInput(data: string): void { this.inputs.push(data); }

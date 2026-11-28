@@ -31,6 +31,18 @@ function panelRowHeight(state) {
     ? measured : rowHeight();
 }
 
+/** Preserve terminal modifiers without sending absent or false fields. @param {any} event */
+function pointerModifiers(event) {
+  const m = event.modifiers;
+  return { ...(m?.shift ? { shift: true } : {}), ...(m?.alt ? { alt: true } : {}), ...(m?.control ? { ctrl: true } : {}) };
+}
+
+/** GPUI's positive scroll delta points up; Pi uses negative logical lines for up. @param {any} event */
+function wheelLines(event) {
+  const value = event.delta_lines?.y ?? (event.delta?.y / rowHeight());
+  if (!Number.isFinite(value) || value === 0) return 0;
+  return -Math.sign(value) * Math.min(100, Math.max(1, Math.round(Math.abs(value)))) * (event.modifiers?.alt ? 5 : 1);
+}
 // The shell's binary fs bindings can yield empty files. Decode and verify in a
 // local Node process after writing only ASCII through its text binding.
 const IMAGE_DECODE = `const fs=require('node:fs'),crypto=require('node:crypto');
@@ -196,6 +208,7 @@ export default class StereoView extends View {
     this.controlWidth = 800;
     this.hoverPane = null;
     this.hoverKey = "";
+    /** @type {string | undefined} */ this.controlMoveKey = undefined;
     this.hoverAt = 0;
     this.imagePaths = imageStore;
     imageViews.add(new WeakRef(this));
@@ -223,6 +236,7 @@ export default class StereoView extends View {
     if (!connection) { this.connection = undefined; cx.notify(); return; }
     if (this.connection !== connection.socket) {
       this.connection = connection.socket;
+      this.controlMoveKey = undefined;
       this.viewState = null;
       this.stateGeneration++;
       this.closeSurfaceInput();
@@ -439,7 +453,7 @@ export default class StereoView extends View {
   /** @param {"surface"|"dock"|"overlay"} kind @param {any} cx */
   cancelControlCapture(kind, cx) {
     const key = kind === "overlay" ? "overlayPress" : kind === "dock" ? "dockPress" : "surfacePress";
-    const press = this[key];
+    /** @type {any} */ const press = this[key];
     if (!press) return;
     this[key] = null;
     const connection = bridge();
@@ -447,14 +461,26 @@ export default class StereoView extends View {
       const request = kind === "overlay"
         ? { v: 1, op: "overlay-mouse", revision: press.revision, id: press.id, frame: press.frame }
         : { v: 1, op: "surface-mouse", ...(kind === "dock" ? { target: "dock" } : {}), frame: press.frame };
-      this.actions.push({ request: { ...request, event: { type: "release", button: "left", x: press.x, y: press.y, cancel: true } }, connection });
+      this.actions.push({ request: { ...request, event: { type: "release", button: press.button ?? "left", x: press.x, y: press.y, cancel: true } }, connection });
       this.drainActions(cx);
     }
     cx.notify();
   }
 
-  /** Forward cell coordinates for the exact dialog frame currently on screen. */
-  /** @param {"press"|"release"|"drag"} type @param {any} event @param {any} cx */
+  /** Queue pointer movement without letting a flood of obsolete positions delay clicks. @param {any} request @param {any} connection @param {any} cx */
+  queueControlMouse(request, connection, cx) {
+    const last = this.actions.at(-1)?.request;
+    if (request.event.type === "move") {
+      const key = JSON.stringify([request.op, request.target, request.id, request.revision, request.frame, request.event]);
+      if (this.controlMoveKey === key) return;
+      this.controlMoveKey = key;
+      if (last?.event?.type === "move" && last.op === request.op && last.target === request.target && last.id === request.id) this.actions.pop();
+    } else this.controlMoveKey = undefined;
+    this.actions.push({ request, connection });
+    this.drainActions(cx);
+  }
+
+  /** Forward cell coordinates for the exact dialog frame currently on screen. @param {string} type @param {any} event @param {any} cx */
   sendSurfaceMouse(type, event, cx) {
     if (!this.surface?.active || !event.local_position) return;
     const connection = bridge(); if (!connection) return;
@@ -463,19 +489,24 @@ export default class StereoView extends View {
     const x = Math.floor((event.local_position.x / zoom - 8) / this.cellWidth);
     const y = Math.floor((event.local_position.y / zoom + this.surfaceScroll.offset().y - 4) / rowHeight());
     const inside = x >= 0 && x < this.surface.width && y >= 0 && y < this.surface.lines.length;
+    const standalone = type === "move" || type === "wheel";
     if (type === "press") {
-      if (!inside || this.surfacePending || !Number.isSafeInteger(this.surface.mouseFrame)) return;
-      this.surfacePress = { frame: this.surface.mouseFrame, x, y };
+      if (!inside || this.surfacePending || this.surfacePress || !Number.isSafeInteger(this.surface.mouseFrame)) return;
+      this.surfacePress = { frame: this.surface.mouseFrame, x, y, button: event.button ?? "left" };
     }
-    if (!this.surfacePress) return;
-    const target = this.surfacePress;
-    // An outside release must end capture without synthesizing a click.
-    const px = Math.max(0, Math.min(this.surface.width - 1, x));
-    const py = Math.max(0, Math.min(this.surface.lines.length - 1, y));
-    this.actions.push({ request: { v: 1, op: "surface-mouse", frame: target.frame,
-      event: { type, button: "left", x: px, y: py, ...(type === "release" && !inside ? { cancel: true } : {}) } }, connection });
+    if (standalone && (!inside || this.surfacePending || this.surfacePress)) return;
+    const target = standalone ? { frame: this.surface.mouseFrame, button: "none" } : this.surfacePress;
+    if (!target) return;
+    const delta = type === "wheel" ? wheelLines(event) : 0;
+    if (type === "wheel" && !delta) return;
+    const px = Math.max(-1000000, Math.min(1000000, x));
+    const py = Math.max(-1000000, Math.min(1000000, y));
+    const data = { type, button: target.button, x: px, y: py, ...pointerModifiers(event),
+      ...(delta ? { wheelDelta: delta } : {}), ...(type === "press" && event.click_count > 1 ? { clickCount: Math.min(3, event.click_count) } : {}),
+      ...(type === "release" && !inside ? { cancel: true } : {}) };
+    this.queueControlMouse({ v: 1, op: "surface-mouse", frame: target.frame, event: data }, connection, cx);
     if (type === "release") this.surfacePress = null;
-    this.drainActions(cx);
+    return true;
   }
 
   /** Queue actions so rapid clicks cannot be reordered by separate bridge processes. */
@@ -670,6 +701,36 @@ export default class StereoView extends View {
     });
   }
 
+  /** The child receives wheel input before the scroll container's own listener. */
+  /** @param {"surface"|"dock"|"overlay"} kind @param {number} row @param {any} event @param {any} cx @param {OverlayLayer} [layer] */
+  rowWheel(kind, row, event, cx, layer) {
+    if (!event.local_position) return;
+    const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
+    const handle = kind === "overlay" && layer ? this.overlayScrolls.get(layer.id) : kind === "dock" ? this.dockScroll : this.surfaceScroll;
+    if (!handle) return;
+    const paddingX = kind === "overlay" ? 0 : 8, paddingY = kind === "overlay" ? 0 : 4;
+    const positioned = { ...event, local_position: { x: event.local_position.x + paddingX * zoom,
+      y: event.local_position.y + (row * rowHeight() - handle.offset().y + paddingY) * zoom } };
+    const sent = kind === "overlay" && layer ? this.sendOverlayMouse(layer, "wheel", positioned, cx) :
+      kind === "dock" ? this.sendDockMouse("wheel", positioned, cx) : this.sendSurfaceMouse("wheel", positioned, cx);
+    if (sent) cx.stop_propagation();
+  }
+
+  /** Scroll the projection only when the painted Pi component did not consume the wheel. @param {any} request */
+  scrollUnhandledWheel(request) {
+    const layer = request.op === "overlay-mouse" ? this.overlays?.overlays.find((/** @type {OverlayLayer} */ item) => item.id === request.id) :
+      request.target === "dock" ? this.dock : this.surface;
+    const handle = request.op === "overlay-mouse" ? this.overlayScrolls.get(request.id) :
+      request.target === "dock" ? this.dockScroll : this.surfaceScroll;
+    if (!layer || !handle || layer.mouseFrame !== request.frame ||
+        (request.op === "overlay-mouse" && this.overlays?.revision !== request.revision)) return;
+    const offset = handle.offset().y, height = handle.viewport_size().height;
+    const delta = request.event.wheelDelta;
+    const edge = delta > 0 ? Math.floor((offset + height - 1) / rowHeight()) : Math.floor(offset / rowHeight());
+    const index = Math.max(0, Math.min(layer.lines.length - 1, edge + delta));
+    handle.scroll_to_item(index);
+  }
+
   /** @param {any} cx */
   drainActions(cx) {
     if (this.actionPending || !this.actions.length) return;
@@ -693,7 +754,8 @@ export default class StereoView extends View {
             if (pane.following) pane.handle.scroll_to_bottom();
             else if (Number.isSafeInteger(reply.restored?.top)) pane.handle.scroll_to_item(reply.restored.top);
           } else if (Number.isSafeInteger(reply.top)) { pane.following = false; pane.handle.scroll_to_item(reply.top); }
-        } else if (reply.ok !== true && !(request.op === "surface-mouse" && reply.ok === false)) throw new Error("Action failed");
+        } else if (reply.ok !== true && !((request.op === "surface-mouse" || request.op === "overlay-mouse") && reply.ok === false)) throw new Error("Action failed");
+        if (reply.ok === false && request.event?.type === "wheel") this.scrollUnhandledWheel(request);
         this.controlError = null;
       } catch {
         if (request.transaction) this.actions = this.actions.filter(item => item.request.transaction !== request.transaction);
@@ -1084,7 +1146,7 @@ export default class StereoView extends View {
         .child(rows).child(Scrollbar.vertical(id).absolute().inset_0()));
   }
 
-  /** @param {"press"|"release"|"drag"} type @param {any} event @param {any} cx */
+  /** @param {string} type @param {any} event @param {any} cx */
   sendDockMouse(type, event, cx) {
     if (!this.dock?.active || !event.local_position) return;
     const connection = bridge(); if (!connection) return;
@@ -1092,17 +1154,24 @@ export default class StereoView extends View {
     const x = Math.floor((event.local_position.x / zoom - 8) / this.cellWidth);
     const y = Math.floor((event.local_position.y / zoom + this.dockScroll.offset().y - 4) / rowHeight());
     const inside = x >= 0 && x < this.dock.width && y >= 0 && y < this.dock.lines.length;
+    const standalone = type === "move" || type === "wheel";
     if (type === "press") {
-      if (!inside || this.dockPending) return;
-      this.dockPress = { frame: this.dock.mouseFrame, x, y };
+      if (!inside || this.dockPending || this.dockPress) return;
+      this.dockPress = { frame: this.dock.mouseFrame, x, y, button: event.button ?? "left" };
     }
-    if (!this.dockPress) return;
-    const px = Math.max(0, Math.min(this.dock.width - 1, x));
-    const py = Math.max(0, Math.min(this.dock.lines.length - 1, y));
-    this.actions.push({ request: { v: 1, op: "surface-mouse", target: "dock", frame: this.dockPress.frame,
-      event: { type, button: "left", x: px, y: py, ...(type === "release" && !inside ? { cancel: true } : {}) } }, connection });
+    if (standalone && (!inside || this.dockPending || this.dockPress)) return;
+    const press = standalone ? { frame: this.dock.mouseFrame, button: "none" } : this.dockPress;
+    if (!press) return;
+    const delta = type === "wheel" ? wheelLines(event) : 0;
+    if (type === "wheel" && !delta) return;
+    const px = Math.max(-1000000, Math.min(1000000, x));
+    const py = Math.max(-1000000, Math.min(1000000, y));
+    const data = { type, button: press.button, x: px, y: py, ...pointerModifiers(event),
+      ...(delta ? { wheelDelta: delta } : {}), ...(type === "press" && event.click_count > 1 ? { clickCount: Math.min(3, event.click_count) } : {}),
+      ...(type === "release" && !inside ? { cancel: true } : {}) };
+    this.queueControlMouse({ v: 1, op: "surface-mouse", target: "dock", frame: press.frame, event: data }, connection, cx);
     if (type === "release") this.dockPress = null;
-    this.drainActions(cx);
+    return true;
   }
 
   /** @param {any} t */
@@ -1110,16 +1179,22 @@ export default class StereoView extends View {
     const body = v_flex().id("stereo-dock").relative().flex_none().max_h(200).overflow_y_scroll()
       .track_scroll(this.dockScroll).px(8).py(4)
       .on_mouse_down("left", (event, cx) => this.sendDockMouse("press", event, cx))
-      .on_window_mouse_move((event, cx) => { if (this.dockPress) event.pressed_button === "left" ? this.sendDockMouse("drag", event, cx) : this.cancelControlCapture("dock", cx); })
-      .on_window_mouse_up("left", (event, cx) => { if (this.dockPress) event.local_position ? this.sendDockMouse("release", event, cx) : this.cancelControlCapture("dock", cx); });
-    for (const line of this.dock.lines) body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+      .on_mouse_down("middle", (event, cx) => this.sendDockMouse("press", event, cx))
+      .on_mouse_down("right", (event, cx) => this.sendDockMouse("press", event, cx))
+      .on_mouse_move((event, cx) => { if (!event.pressed_button) this.sendDockMouse("move", event, cx); })
+      .on_window_mouse_move((event, cx) => { if (this.dockPress) event.pressed_button === this.dockPress.button ? this.sendDockMouse("drag", event, cx) : this.cancelControlCapture("dock", cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.dockPress?.button === "left") event.local_position ? this.sendDockMouse("release", event, cx) : this.cancelControlCapture("dock", cx); })
+      .on_window_mouse_up("middle", (event, cx) => { if (this.dockPress?.button === "middle") event.local_position ? this.sendDockMouse("release", event, cx) : this.cancelControlCapture("dock", cx); })
+      .on_window_mouse_up("right", (event, cx) => { if (this.dockPress?.button === "right") event.local_position ? this.sendDockMouse("release", event, cx) : this.cancelControlCapture("dock", cx); });
+    for (const [index, line] of this.dock.lines.entries()) body.child(h_flex().id(`stereo-dock-row-${index}`).h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+      .on_scroll_wheel((event, cx) => this.rowWheel("dock", index, event, cx))
       .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
     if (this.dock.focused && this.surfaceInput && !this.overlays?.overlays.some(layer => layer.focused)) body.child(Input.new(this.surfaceInput).w(300).h(30).mt(8).px(6)
       .border_1().border_color(t.border).bg(t.background).text_color(t.foreground));
     return body;
   }
 
-  /** @param {OverlayLayer} layer @param {"press"|"drag"|"release"} type @param {any} event @param {any} cx */
+  /** @param {OverlayLayer} layer @param {string} type @param {any} event @param {any} cx */
   sendOverlayMouse(layer, type, event, cx) {
     if (!event.local_position || !this.overlays) return;
     const connection = bridge(); if (!connection) return;
@@ -1131,17 +1206,23 @@ export default class StereoView extends View {
     const inside = event.local_position.x >= 0 && event.local_position.x / zoom < viewportWidth &&
       event.local_position.y >= 0 && event.local_position.y / zoom < viewportHeight &&
       x >= 0 && x < layer.width && y >= 0 && y < layer.height;
+    const standalone = type === "move" || type === "wheel";
     if (type === "press") {
-      if (!inside || this.overlaysPending) return;
-      this.overlayPress = { id: layer.id, frame: layer.mouseFrame, revision: this.overlays.revision, x, y };
+      if (!inside || this.overlaysPending || this.overlayPress) return;
+      this.overlayPress = { id: layer.id, frame: layer.mouseFrame, revision: this.overlays.revision, x, y, button: event.button ?? "left" };
     }
-    const press = this.overlayPress;
+    if (standalone && (!inside || this.overlaysPending || this.overlayPress)) return;
+    const press = standalone ? { id: layer.id, frame: layer.mouseFrame, revision: this.overlays.revision, button: "none" } : this.overlayPress;
     if (!press || press.id !== layer.id) return;
-    const eventData = { type, button: "left", x: Math.max(0, Math.min(layer.width - 1, x)),
-      y: Math.max(0, Math.min(layer.height - 1, y)), ...(type === "release" && !inside ? { cancel: true } : {}) };
-    this.actions.push({ request: { v: 1, op: "overlay-mouse", revision: press.revision, id: press.id, frame: press.frame, event: eventData }, connection });
+    const delta = type === "wheel" ? wheelLines(event) : 0;
+    if (type === "wheel" && !delta) return;
+    const eventData = { type, button: press.button, x: Math.max(-1000000, Math.min(1000000, x)),
+      y: Math.max(-1000000, Math.min(1000000, y)), ...pointerModifiers(event),
+      ...(delta ? { wheelDelta: delta } : {}), ...(type === "press" && event.click_count > 1 ? { clickCount: Math.min(3, event.click_count) } : {}),
+      ...(type === "release" && !inside ? { cancel: true } : {}) };
+    this.queueControlMouse({ v: 1, op: "overlay-mouse", revision: press.revision, id: press.id, frame: press.frame, event: eventData }, connection, cx);
     if (type === "release") this.overlayPress = null;
-    this.drainActions(cx);
+    return true;
   }
 
   /** @param {OverlayLayer} layer @param {any} t */
@@ -1156,9 +1237,15 @@ export default class StereoView extends View {
     const body = v_flex().id(`stereo-overlay-${layer.id}`).absolute().left(left).top(top).w(width).h(height)
       .overflow_y_scrollbar().track_scroll(scroll).bg(t.surface)
       .on_mouse_down("left", (event, cx) => { if (layer.focused) this.surfaceInput?.focus(); this.sendOverlayMouse(layer, "press", event, cx); })
-      .on_window_mouse_move((event, cx) => { if (this.overlayPress?.id === layer.id) event.pressed_button === "left" ? this.sendOverlayMouse(layer, "drag", event, cx) : this.cancelControlCapture("overlay", cx); })
-      .on_window_mouse_up("left", (event, cx) => { if (this.overlayPress?.id === layer.id) event.local_position ? this.sendOverlayMouse(layer, "release", event, cx) : this.cancelControlCapture("overlay", cx); });
-    for (const line of layer.lines) body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+      .on_mouse_down("middle", (event, cx) => this.sendOverlayMouse(layer, "press", event, cx))
+      .on_mouse_down("right", (event, cx) => this.sendOverlayMouse(layer, "press", event, cx))
+      .on_mouse_move((event, cx) => { if (!event.pressed_button) this.sendOverlayMouse(layer, "move", event, cx); })
+      .on_window_mouse_move((event, cx) => { if (this.overlayPress?.id === layer.id) event.pressed_button === this.overlayPress.button ? this.sendOverlayMouse(layer, "drag", event, cx) : this.cancelControlCapture("overlay", cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.overlayPress?.id === layer.id && this.overlayPress.button === "left") event.local_position ? this.sendOverlayMouse(layer, "release", event, cx) : this.cancelControlCapture("overlay", cx); })
+      .on_window_mouse_up("middle", (event, cx) => { if (this.overlayPress?.id === layer.id && this.overlayPress.button === "middle") event.local_position ? this.sendOverlayMouse(layer, "release", event, cx) : this.cancelControlCapture("overlay", cx); })
+      .on_window_mouse_up("right", (event, cx) => { if (this.overlayPress?.id === layer.id && this.overlayPress.button === "right") event.local_position ? this.sendOverlayMouse(layer, "release", event, cx) : this.cancelControlCapture("overlay", cx); });
+    for (const [index, line] of layer.lines.entries()) body.child(h_flex().id(`stereo-overlay-${layer.id}-row-${index}`).h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+      .on_scroll_wheel((event, cx) => this.rowWheel("overlay", index, event, cx, layer))
       .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
     if (layer.focused && this.surfaceInput) body.child(Input.new(this.surfaceInput).w_full().h(30).mt(8).px(6)
       .border_1().border_color(t.border).bg(t.background).text_color(t.foreground));
@@ -1169,10 +1256,16 @@ export default class StereoView extends View {
   renderSurface(t) {
     const body = v_flex().id("stereo-surface").relative().flex_1().min_h(0).overflow_y_scroll().track_scroll(this.surfaceScroll).px(8).py(4)
       .on_mouse_down("left", (event, cx) => { this.surfaceInput?.focus(); this.sendSurfaceMouse("press", event, cx); })
-      .on_window_mouse_move((event, cx) => { if (this.surfacePress) event.pressed_button === "left" ? this.sendSurfaceMouse("drag", event, cx) : this.cancelControlCapture("surface", cx); })
-      .on_window_mouse_up("left", (event, cx) => { if (this.surfacePress) event.local_position ? this.sendSurfaceMouse("release", event, cx) : this.cancelControlCapture("surface", cx); });
-    for (const line of this.surface.lines) {
-      body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+      .on_mouse_down("middle", (event, cx) => this.sendSurfaceMouse("press", event, cx))
+      .on_mouse_down("right", (event, cx) => this.sendSurfaceMouse("press", event, cx))
+      .on_mouse_move((event, cx) => { if (!event.pressed_button) this.sendSurfaceMouse("move", event, cx); })
+      .on_window_mouse_move((event, cx) => { if (this.surfacePress) event.pressed_button === this.surfacePress.button ? this.sendSurfaceMouse("drag", event, cx) : this.cancelControlCapture("surface", cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.surfacePress?.button === "left") event.local_position ? this.sendSurfaceMouse("release", event, cx) : this.cancelControlCapture("surface", cx); })
+      .on_window_mouse_up("middle", (event, cx) => { if (this.surfacePress?.button === "middle") event.local_position ? this.sendSurfaceMouse("release", event, cx) : this.cancelControlCapture("surface", cx); })
+      .on_window_mouse_up("right", (event, cx) => { if (this.surfacePress?.button === "right") event.local_position ? this.sendSurfaceMouse("release", event, cx) : this.cancelControlCapture("surface", cx); });
+    for (const [index, line] of this.surface.lines.entries()) {
+      body.child(h_flex().id(`stereo-surface-row-${index}`).h(LINE_HEIGHT).flex_none().whitespace_nowrap()
+        .on_scroll_wheel((event, cx) => this.rowWheel("surface", index, event, cx))
         .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
     }
     if (this.surfaceInput && !this.overlays?.overlays.some(layer => layer.focused)) body.child(Input.new(this.surfaceInput).w(300).h(30).mt(8).px(6)

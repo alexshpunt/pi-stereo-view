@@ -2,6 +2,14 @@ import type { Component } from "@earendil-works/pi-tui";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import { dispatchMouseEvent, type Dispatched } from "./mouse-dispatch.ts";
 
+export type SurfacePointer = {
+  type: "press" | "release" | "drag" | "move" | "wheel";
+  button: "left" | "middle" | "right" | "none";
+  x: number; y: number;
+  shift?: boolean; alt?: boolean; ctrl?: boolean;
+  wheelDelta?: number; clickCount?: number; cancel?: boolean;
+};
+
 /** A borrowed native dialog. Pi retains its lifecycle and keyboard focus. */
 export class GuiSurface {
   private serial = 0;
@@ -12,7 +20,7 @@ export class GuiSurface {
   private mouseSerial = 0;
   private painted: string[] = [];
   private structure: Component[] = [];
-  private gesture?: { target: Dispatched["target"]; x: number; y: number; moved: boolean };
+  private gestures = new Map<SurfacePointer["button"], { target: Dispatched["target"]; x: number; y: number; moved: boolean; clickCount: number }>();
 
   constructor(private readonly dialog: () => Component | undefined,
     private readonly focus: () => Component | null,
@@ -38,7 +46,7 @@ export class GuiSurface {
       this.width = width;
       this.serial++;
       this.mouseSerial++;
-      this.gesture = undefined;
+      this.gestures.clear();
       this.painted = [];
     }
     if (!owner) return { frame: this.serial, mouseFrame: this.mouseSerial, active: false, focused: false, lines: [] };
@@ -49,14 +57,14 @@ export class GuiSurface {
         this.structure = structure;
         this.serial++;
         this.mouseSerial++;
-        this.gesture = undefined;
+        this.gestures.clear();
       }
       if (lines.length > 256 || lines.some(line => typeof line !== "string") ||
           lines.reduce((size, line) => size + Buffer.byteLength(line), 0) > 2 * 1024 * 1024) throw new Error("Surface is too large");
       if (lines.length !== this.painted.length || lines.some((line, index) => line !== this.painted[index])) {
         this.painted = [...lines];
         this.mouseSerial++;
-        this.gesture = undefined;
+        this.gestures.clear();
       }
       return { frame: this.serial, mouseFrame: this.mouseSerial, active: true, focused: !!focused && contains(owner, focused), lines: [...lines] };
     } finally {
@@ -83,20 +91,35 @@ export class GuiSurface {
     return true;
   }
 
-  /** Send a pointer gesture only to the exact surface that was painted. */
-  mouse(frame: number, input: { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean },
-    origin: { x: number; y: number } = { x: 0, y: 0 }): boolean {
+  /** Send pointer input only to the exact surface that was painted. */
+  mouse(frame: number, input: SurfacePointer, origin: { x: number; y: number } = { x: 0, y: 0 }): boolean {
     const owner = this.owner, focused = this.focus() ?? undefined;
+    const captured = input.type === "drag" || input.type === "release";
+    const button = input.button;
     if (this.disposed || !owner || this.dialog() !== owner || focused !== this.focused ||
-        (!this.passive && (!focused || !contains(owner, focused))) || !sameComponents(descendants(owner), this.structure) || frame !== this.mouseSerial || !Number.isSafeInteger(input.x) ||
-        !Number.isSafeInteger(input.y) || input.x < 0 || input.x >= this.width || input.y < 0 ||
-        input.y >= this.painted.length || input.button !== "left" || !["press", "release", "drag"].includes(input.type)) return false;
+        (!this.passive && (!focused || !contains(owner, focused))) || !sameComponents(descendants(owner), this.structure) ||
+        frame !== this.mouseSerial || !Number.isSafeInteger(input.x) || !Number.isSafeInteger(input.y) ||
+        Math.abs(input.x) > 1000000 || Math.abs(input.y) > 1000000 ||
+        (!captured && (input.x < 0 || input.x >= this.width || input.y < 0 || input.y >= this.painted.length)) ||
+        !["press", "release", "drag", "move", "wheel"].includes(input.type) ||
+        ((input.type === "move" || input.type === "wheel") ? button !== "none" : !["left", "middle", "right"].includes(button)) ||
+        [input.shift, input.alt, input.ctrl].some(value => value !== undefined && typeof value !== "boolean") ||
+        (input.type === "wheel" ? !Number.isSafeInteger(input.wheelDelta) || !input.wheelDelta || Math.abs(input.wheelDelta) > 10000 : input.wheelDelta !== undefined) ||
+        (input.clickCount !== undefined && (![1, 2, 3].includes(input.clickCount) || input.type !== "press")) ||
+        (input.cancel !== undefined && (input.type !== "release" || typeof input.cancel !== "boolean"))) return false;
+    const gesture = captured ? this.gestures.get(button) : undefined;
+    if (captured && !gesture) return false;
     try {
       const lines = owner.render(this.width);
-      if (!this.gesture && (lines.length !== this.painted.length || lines.some((line, i) => line !== this.painted[i]))) return false;
-      const event: TuiMouseEvent = { type: input.type, button: input.button, x: input.x, y: input.y,
-        screenX: input.x + origin.x, screenY: input.y + origin.y, width: this.width, height: lines.length, shift: false, alt: false, ctrl: false };
+      if (!captured && (lines.length !== this.painted.length || lines.some((line, i) => line !== this.painted[i]))) return false;
+      const event: TuiMouseEvent = { type: input.type, button, x: input.x, y: input.y,
+        screenX: input.x + origin.x, screenY: input.y + origin.y, width: this.width, height: lines.length,
+        shift: input.shift ?? false, alt: input.alt ?? false, ctrl: input.ctrl ?? false,
+        ...(input.wheelDelta === undefined ? {} : { wheelDelta: input.wheelDelta }),
+        ...(input.clickCount === undefined ? {} : { clickCount: input.clickCount }) };
+      if (input.type === "move" || input.type === "wheel") return !!dispatchMouseEvent(owner, event);
       if (input.type === "press") {
+        if (this.gestures.has(button)) return false;
         const result = dispatchMouseEvent(owner, event);
         if (!result) return false;
         const target = result.focusTarget ?? result.target.component;
@@ -105,18 +128,17 @@ export class GuiSurface {
           this.focused = this.focus() ?? undefined;
           this.serial++;
         }
-        this.gesture = { target: result.target, x: input.x, y: input.y, moved: false };
+        this.gestures.set(button, { target: result.target, x: input.x, y: input.y, moved: false, clickCount: input.clickCount ?? 1 });
         return true;
       }
-      const gesture = this.gesture;
       if (!gesture) return false;
       if (input.x !== gesture.x || input.y !== gesture.y) gesture.moved = true;
       const local = { ...event, x: event.screenX - gesture.target.originX, y: event.screenY - gesture.target.originY,
         width: gesture.target.width, height: gesture.target.height };
       gesture.target.component.handleMouse?.(local);
       if (input.type === "release") {
-        this.gesture = undefined;
-        if (!gesture.moved && !input.cancel) gesture.target.component.handleMouse?.({ ...local, type: "click", clickCount: 1 });
+        this.gestures.delete(button);
+        if (!gesture.moved && !input.cancel) gesture.target.component.handleMouse?.({ ...local, type: "click", clickCount: gesture.clickCount });
       }
       return true;
     } finally { this.restore(owner); }

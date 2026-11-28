@@ -18,6 +18,8 @@ function harness() {
   let zoom = 1;
   let surface: { active: boolean; frame: number; mouseFrame?: number; lines: string[] } = { active: false, frame: 1, mouseFrame: 1, lines: [] };
   let overlays: any[] = [];
+  let pointerHandled = true;
+  let stopped = 0;
   const pending: Promise<unknown>[] = [];
   class Element {
     name?: string;
@@ -25,6 +27,10 @@ function harness() {
     click?: (...args: any[]) => void;
     mouseDown?: (...args: any[]) => void;
     mouseUp?: (...args: any[]) => void;
+    mouseMove?: (...args: any[]) => void;
+    wheel?: (...args: any[]) => void;
+    mouseDownByButton: Record<string, (...args: any[]) => void> = {};
+    windowUpByButton: Record<string, (...args: any[]) => void> = {};
     windowMove?: (...args: any[]) => void;
     windowUp?: (...args: any[]) => void;
     keyDown?: (...args: any[]) => void;
@@ -38,10 +44,12 @@ function harness() {
           if (prop === "child" && args[0] instanceof Element) target.nodes.push(args[0]);
           if (prop === "children") target.nodes.push(...args[0]);
           if (prop === "on_click") target.click = args[0];
-          if (prop === "on_mouse_down") target.mouseDown = args[1];
+          if (prop === "on_mouse_down") { target.mouseDownByButton[args[0]] = args[1]; if (args[0] === "left") target.mouseDown = args[1]; }
+          if (prop === "on_mouse_move") target.mouseMove = args[0];
+          if (prop === "on_scroll_wheel") target.wheel = args[0];
           if (prop === "on_mouse_up") target.mouseUp = args[1];
           if (prop === "on_window_mouse_move") target.windowMove = args[0];
-          if (prop === "on_window_mouse_up") target.windowUp = args[1];
+          if (prop === "on_window_mouse_up") { target.windowUpByButton[args[0]] = args[1]; if (args[0] === "left") target.windowUp = args[1]; }
           if (prop === "on_key_down") target.keyDown = args[0];
           if (prop === "overflow_y_scrollbar") target.scrollable = true;
           if (prop === "track_scroll") target.scrollHandle = args[0];
@@ -62,11 +70,11 @@ function harness() {
   };
   const ui = { View: class {}, div: el("div"), image: el("image"), svg: el("svg"), h_flex: el("horizontal"), v_flex: el("vertical"),
     v_virtual_list: el("list"), VirtualListScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), viewport_size: () => ({ height: 300 }), content_size: () => ({ height: 0 }), scroll_to_bottom() {}, scroll_to_item() {} }) },
-    ScrollHandle: { new: () => ({ y: 0, offset() { return { y: this.y }; }, release() {} }) },
+    ScrollHandle: { new: () => ({ y: 0, offset() { return { y: this.y }; }, viewport_size: () => ({ height: 34 }), scroll_to_item(index: number) { this.y = index * 17; }, release() {} }) },
     Scrollbar: { vertical: el("scrollbar") }, Input: { new: () => new Element("input") }, InputState: { new: () => input } };
   const opened: string[] = [];
   const copied: string[] = [];
-  const cx = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {}, is_focused: () => true, release() {} }),
+  const cx = { notify() {}, stop_propagation() { stopped++; }, focus_handle: () => ({ focus() {}, is_focused: () => true, release() {} }),
     write_to_clipboard(text: string) { copied.push(text); },
     open_url(url: string) { opened.push(url); }, timer: { every() {}, after(_delay: number, callback: (cx: any) => void) { callback(cx); } }, spawn(fn: (cx: any) => Promise<unknown>) { pending.push(fn(cx)); } };
   const terminal = { address: "m/t", state: "live", pid: 1, labels: { "herdr.stereo.bridge": JSON.stringify({ v: 1, pid: 1, socket: "/tmp/stereo-ABC123/s" }) } };
@@ -93,6 +101,7 @@ function harness() {
       { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
         images: [], jump: request.pane === "activity" ? jump : undefined, lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
+    if ((request.op === "overlay-mouse" || request.op === "surface-mouse") && request.event.type === "wheel") data.ok = pointerHandled;
     if (request.op === "view" && rows) {
       const page = rows.slice(data.top, data.top + data.height);
       Object.assign(data, { lines: page, selection: page.map(line => ({
@@ -114,9 +123,42 @@ function harness() {
     setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; },
     setSurface(value: typeof surface) { surface = value; }, setOverlays(value: any[]) { overlays = value; },
     typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
+    setPointerHandled(value: boolean) { pointerHandled = value; }, stopped: () => stopped,
     surfaceFocused: () => inputFocused };
 }
 
+test("forwards dialog pointer movement, wheel and right-button gestures", async () => {
+  const h = harness(); h.setSurface({ active: true, frame: 8, mouseFrame: 12, lines: ["first", "second"] });
+  h.view.init({}, h.cx); await h.flush();
+  const dialog = h.find(h.view.render(), "stereo-surface")!;
+  const point = { local_position: { x: 20, y: 5 }, modifiers: { shift: true, control: false, alt: false } };
+  dialog.mouseMove!(point, h.cx);
+  h.find(dialog, "stereo-surface-row-0")!.wheel!({ ...point, local_position: { x: 12, y: 1 }, delta_lines: { x: 0, y: 2 }, delta: { x: 0, y: 38 } }, h.cx);
+  dialog.mouseDownByButton.right({ ...point, button: "right" }, h.cx);
+  dialog.windowUpByButton.right({ ...point, button: "right" }, h.cx);
+  await h.flush();
+  const events = h.calls.filter(call => call.op === "surface-mouse").map(call => call.event);
+  expect(events).toEqual([
+    { type: "move", button: "none", x: 1, y: 0, shift: true },
+    { type: "wheel", button: "none", x: 1, y: 0, shift: true, wheelDelta: -2 },
+    { type: "press", button: "right", x: 1, y: 0, shift: true },
+    { type: "release", button: "right", x: 1, y: 0, shift: true },
+  ]);
+});
+test("scrolls a clipped dialog only when its component did not handle the wheel", async () => {
+  const h = harness(); h.setSurface({ active: true, frame: 8, mouseFrame: 12, lines: Array(20).fill("row") });
+  h.view.init({}, h.cx); await h.flush();
+  const dialog = h.find(h.view.render(), "stereo-surface")!;
+  const row = h.find(dialog, "stereo-surface-row-0")!;
+  const event = { local_position: { x: 12, y: 1 }, delta_lines: { x: 0, y: -1 } };
+  row.wheel!(event, h.cx); await h.flush();
+  expect(h.stopped()).toBe(1);
+  expect(h.view.surfaceScroll.y).toBe(0);
+  h.setPointerHandled(false);
+  row.wheel!(event, h.cx); await h.flush();
+  expect(h.stopped()).toBe(2);
+  expect(h.view.surfaceScroll.y).toBeGreaterThan(0);
+});
 test("keeps a visible image while evicting an older offscreen image", async () => {
   const h = harness(); h.view.init({}, h.cx); await h.flush();
   h.view.chat.images = [{ id: "visible", row: 0, rows: 1 }];
@@ -389,6 +431,32 @@ test("cancels a lost dialog pointer capture without clicking", async () => {
   expect(h.calls.filter(call => call.op === "surface-mouse").at(-1).event).toMatchObject({ type: "release", cancel: true });
 });
 
+test("forwards overlay and widget pointer input with the painted target", async () => {
+  const h = harness();
+  h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 3, col: 4, width: 20, height: 2, lines: ["overlay"] }]);
+  h.view.init({}, h.cx); await h.flush();
+  const layer = h.find(h.view.render(), "stereo-overlay-7")!;
+  const point = { local_position: { x: 13, y: 1 }, modifiers: { alt: true } };
+  layer.mouseMove!(point, h.cx);
+  h.find(layer, "stereo-overlay-7-row-0")!.wheel!({ ...point, delta_lines: { x: 0, y: -3 } }, h.cx);
+  layer.mouseDownByButton.middle({ ...point, button: "middle", click_count: 2 }, h.cx);
+  layer.windowUpByButton.middle({ ...point, button: "middle" }, h.cx);
+  h.view.dock = { active: true, width: 20, mouseFrame: 6, lines: ["dock"] };
+  const dock = h.view.renderDock({});
+  dock.mouseMove({ local_position: { x: 20, y: 5 } }, h.cx);
+  h.find(dock, "stereo-dock-row-0")!.wheel!({ local_position: { x: 12, y: 1 }, delta: { x: 0, y: 17 } }, h.cx);
+  await h.flush();
+  expect(h.calls.filter(call => call.op === "overlay-mouse").map(call => call.event)).toEqual([
+    { type: "move", button: "none", x: 1, y: 0, alt: true },
+    { type: "wheel", button: "none", x: 1, y: 0, alt: true, wheelDelta: 15 },
+    { type: "press", button: "middle", x: 1, y: 0, alt: true, clickCount: 2 },
+    { type: "release", button: "middle", x: 1, y: 0, alt: true },
+  ]);
+  expect(h.calls.filter(call => call.op === "surface-mouse" && call.target === "dock").map(call => call.event)).toEqual([
+    { type: "move", button: "none", x: 1, y: 0 },
+    { type: "wheel", button: "none", x: 1, y: 0, wheelDelta: -1 },
+  ]);
+});
 test("lost overlay and dock captures release without clicks", async () => {
   const h = harness();
   h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 3, col: 4, width: 20, height: 2, lines: ["overlay"] }]);

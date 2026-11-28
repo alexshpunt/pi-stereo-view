@@ -1,5 +1,5 @@
 import type { Component } from "@earendil-works/pi-tui";
-import { GuiSurface } from "./gui-surface.ts";
+import { GuiSurface, type SurfacePointer } from "./gui-surface.ts";
 
 type Entry = { component: Component; focusOrder?: number };
 type Layout = { entry: Entry; row: number; col: number; width: number; height: number };
@@ -15,7 +15,6 @@ type Host = {
   resolveFakeCursors?(lines: readonly string[]): string[];
   applyLineResets?(lines: string[]): string[];
 };
-type Pointer = { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean };
 type SurfaceRecord = { id: number; surface: GuiSurface };
 type Snapshot = { entry: Entry; row: number; col: number; width: number; height: number };
 
@@ -94,13 +93,13 @@ export class GuiOverlays {
     return record?.surface.key(frame, data) ?? false;
   }
 
-  mouse(revision: number, id: number, frame: number, event: Pointer): boolean {
+  mouse(revision: number, id: number, frame: number, event: SurfacePointer): boolean {
     if (this.disposed || revision !== this.revision || !this.unchanged(this.layouts())) return false;
     const index = this.snapshot.findIndex(layout => this.records.get(layout.entry)?.id === id);
     if (index < 0) return false;
     const target = this.snapshot[index], x = target.col + event.x, y = target.row + event.y;
-    if (event.x < 0 || event.y < 0 || event.x >= target.width || event.y >= target.height ||
-        (event.type === "press" && this.snapshot.slice(index + 1).some(layer => x >= layer.col && x < layer.col + layer.width &&
+    if (((event.type !== "drag" && event.type !== "release") && (event.x < 0 || event.y < 0 || event.x >= target.width || event.y >= target.height)) ||
+        ((event.type === "press" || event.type === "move" || event.type === "wheel") && this.snapshot.slice(index + 1).some(layer => x >= layer.col && x < layer.col + layer.width &&
           y >= layer.row && y < layer.row + layer.height))) return false;
     return this.records.get(target.entry)?.surface.mouse(frame, event, { x: target.col, y: target.row }) ?? false;
   }

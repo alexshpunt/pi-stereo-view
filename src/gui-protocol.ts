@@ -1,5 +1,6 @@
 import type { Pane } from "./content.ts";
 import type { GuiMouse, GuiPane } from "./gui-documents.ts";
+import type { SurfacePointer } from "./gui-surface.ts";
 import { GO_TO, PI_WINDOWS, TURN_STRIPES, type Preferences } from "./preferences.ts";
 
 export type GuiSetting = { key: keyof Preferences; value: boolean | string | number | null };
@@ -45,9 +46,9 @@ export type GuiRequest = GuiPageRequest | GuiSearchRequest | GuiPasteChunk | { v
   { v: 1; op: "image"; id: string; offset: number; length: number } |
   { v: 1; op: "overlays" } |
   { v: 1; op: "overlay-key"; revision: number; id: number; frame: number; data: string } |
-  { v: 1; op: "overlay-mouse"; revision: number; id: number; frame: number; event: { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean } } |
+  { v: 1; op: "overlay-mouse"; revision: number; id: number; frame: number; event: SurfacePointer } |
   { v: 1; op: "surface"; width: number; target?: "dock" } | { v: 1; op: "surface-key"; frame: number; data: string; target?: "dock" } |
-  { v: 1; op: "surface-mouse"; frame: number; target?: "dock"; event: { type: "press" | "release" | "drag"; button: "left"; x: number; y: number; cancel?: boolean } } |
+  { v: 1; op: "surface-mouse"; frame: number; target?: "dock"; event: SurfacePointer } |
   { v: 1; op: "view"; pane: GuiPane; top: number; height: number; width: number; following: boolean } |
   { v: 1; op: "mouse"; pane: GuiPane; frame: number; event: GuiMouse };
 
@@ -66,6 +67,23 @@ export function parseGuiRequest(value: unknown): GuiRequest | undefined {
   }
   const integer = (n: unknown, min: number, max: number): n is number =>
     typeof n === "number" && Number.isSafeInteger(n) && n >= min && n <= max;
+  const pointer = (value: unknown, maxX: number): SurfacePointer | undefined => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    const e = value as Record<string, unknown>;
+    if (typeof e.type !== "string" || !["press", "release", "drag", "move", "wheel"].includes(e.type) ||
+        typeof e.button !== "string" ||
+        ((e.type === "move" || e.type === "wheel") ? e.button !== "none" : !["left", "middle", "right"].includes(e.button)) ||
+        !integer(e.x, e.type === "drag" || e.type === "release" ? -1000000 : 0, e.type === "drag" || e.type === "release" ? 1000000 : maxX) ||
+        !integer(e.y, e.type === "drag" || e.type === "release" ? -1000000 : 0, e.type === "drag" || e.type === "release" ? 1000000 : 255) ||
+        [e.shift, e.alt, e.ctrl].some(v => v !== undefined && typeof v !== "boolean") ||
+        (e.type === "wheel" ? !integer(e.wheelDelta, -10000, 10000) || e.wheelDelta === 0 : e.wheelDelta !== undefined) ||
+        (e.clickCount !== undefined && (e.type !== "press" || !integer(e.clickCount, 1, 3))) ||
+        (e.cancel !== undefined && (e.type !== "release" || typeof e.cancel !== "boolean"))) return undefined;
+    return { type: e.type, button: e.button, x: e.x, y: e.y,
+      ...(e.shift === undefined ? {} : { shift: e.shift }), ...(e.alt === undefined ? {} : { alt: e.alt }),
+      ...(e.ctrl === undefined ? {} : { ctrl: e.ctrl }), ...(e.wheelDelta === undefined ? {} : { wheelDelta: e.wheelDelta }),
+      ...(e.clickCount === undefined ? {} : { clickCount: e.clickCount }), ...(e.cancel === undefined ? {} : { cancel: e.cancel }) } as SurfacePointer;
+  };
   if (request.v === 1 && (request.op === "surface-paste" || request.op === "overlay-paste") &&
       typeof request.transaction === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(request.transaction) &&
       integer(request.index, 0, 4095) && integer(request.count, 1, 4096) && request.index < request.count &&
@@ -88,12 +106,9 @@ export function parseGuiRequest(value: unknown): GuiRequest | undefined {
     const base = { v: 1 as const, revision: request.revision, id: request.id, frame: request.frame };
     if (request.op === "overlay-key" && typeof request.data === "string" && request.data.length > 0 &&
         request.data.length <= 1024 && !request.data.includes("\0")) return { ...base, op: "overlay-key", data: request.data };
-    if (request.op === "overlay-mouse" && request.event && typeof request.event === "object" && !Array.isArray(request.event)) {
-      const e = request.event as Record<string, unknown>;
-      if ((e.type === "press" || e.type === "release" || e.type === "drag") && e.button === "left" &&
-          integer(e.x, 0, 4095) && integer(e.y, 0, 255) && (e.cancel === undefined || (e.type === "release" && typeof e.cancel === "boolean")))
-        return { ...base, op: "overlay-mouse", event: { type: e.type, button: "left", x: e.x, y: e.y,
-          ...(e.cancel === undefined ? {} : { cancel: e.cancel }) } };
+    if (request.op === "overlay-mouse") {
+      const event = pointer(request.event, 4095);
+      if (event) return { ...base, op: "overlay-mouse", event };
     }
     return undefined;
   }
@@ -105,13 +120,9 @@ export function parseGuiRequest(value: unknown): GuiRequest | undefined {
     if (request.op === "surface-key" && integer(request.frame, 1, Number.MAX_SAFE_INTEGER) &&
         typeof request.data === "string" && request.data.length > 0 && request.data.length <= 1024 && !request.data.includes("\0"))
       return { v: 1, op: "surface-key", frame: request.frame, data: request.data, ...surfaceTarget };
-    if (request.op === "surface-mouse" && integer(request.frame, 1, Number.MAX_SAFE_INTEGER) &&
-        request.event && typeof request.event === "object" && !Array.isArray(request.event)) {
-      const e = request.event as Record<string, unknown>;
-      if ((e.type === "press" || e.type === "release" || e.type === "drag") && e.button === "left" &&
-          integer(e.x, 0, 299) && integer(e.y, 0, 255) && (e.cancel === undefined || (e.type === "release" && typeof e.cancel === "boolean")))
-        return { v: 1, op: "surface-mouse", frame: request.frame, ...surfaceTarget, event: { type: e.type, button: "left", x: e.x, y: e.y,
-          ...(e.cancel === undefined ? {} : { cancel: e.cancel }) } };
+    if (request.op === "surface-mouse" && integer(request.frame, 1, Number.MAX_SAFE_INTEGER)) {
+      const event = pointer(request.event, 299);
+      if (event) return { v: 1, op: "surface-mouse", frame: request.frame, ...surfaceTarget, event };
     }
     return undefined;
   }
