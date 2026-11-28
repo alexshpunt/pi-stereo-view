@@ -70,12 +70,12 @@ export function createTreePanels(gpui, deps) {
     });
   }
 
-  /** The Copy button floating over the right edge of the hovered item. */
-  function copyButton(entry, item, ctx) {
+  /** The Copy button for one item. */
+  function buildCopyButton(entry, item, ctx) {
     const t = ctx.theme;
     const copied = entry.copied?.id === item.id && Date.now() - entry.copied.at < COPIED_MS;
     return h_flex().id(`stereo-tree-copy-${item.id}`).accessibility_label(copied ? "Copied" : "Copy this item").tooltip(copied ? "Copied" : "Copy this item")
-      .absolute().top(2).right(ctx.scrollbarLane ?? 14).items_center().justify_center().w(22).h(22).rounded(4)
+      .items_center().justify_center().w(22).h(22).rounded(4)
       .bg(t.raised ?? t.surface).border_1().border_color(t.border).cursor_pointer().hover(s => s.bg(t.hover))
       .on_mouse_down("left", (_event, cx) => cx.stop_propagation())
       .on_click((_event, cx) => copyItem(entry, item, cx, ctx))
@@ -88,9 +88,7 @@ export function createTreePanels(gpui, deps) {
     const model = view.model, layout = view.layout;
     const item = model.items[index];
     const height = layout.heights[index] * ctx.lineHeight;
-    const box = v_flex().id(`stereo-tree-${entry.name}-${item.id}`).relative().w_full().h(height).flex_none().overflow_hidden().px(ctx.gutter)
-      .on_mouse_move(() => { if (entry.hover !== item.id) { entry.hover = item.id; ctx.notify(); } });
-    if (entry.hover === item.id && item.k !== "rows" && ctx.svg) box.child(copyButton(entry, item, ctx));
+    const box = v_flex().id(`stereo-tree-${entry.name}-${item.id}`).relative().w_full().h(height).flex_none().overflow_hidden().px(ctx.gutter);
     const body = model.bodies.get(item.id);
     const t = ctx.theme;
     if (item.k === "rows") {
@@ -142,6 +140,36 @@ export function createTreePanels(gpui, deps) {
       }
       return false;
     },
+    /**
+     * Follow the pointer to the item it is over (handlers cannot live in the virtual list's rows, so the panel calls this).
+     * @param {string} name @param {{ handle: any }} state @param {number | null} localY pointer y inside the list, or null when outside
+     */
+    track(name, state, localY, notify) {
+      const entry = panes.get(name);
+      if (!entry || entry.dead || !entry.view.model.ready) return;
+      let id = null;
+      if (localY !== null && state.handle) {
+        const lineHeight = entry.lineHeight ?? 1;
+        const row = Math.floor((state.handle.offset().y + localY) / lineHeight);
+        const hit = entry.view.layout.locate(Math.max(0, row));
+        const item = entry.view.model.items[hit.index];
+        if (item && item.k !== "rows") id = item.id;
+      }
+      if (entry.hover !== id) { entry.hover = id; notify?.(); }
+    },
+    /** The Copy button floating over the right edge of the hovered item, or null. */
+    copyButton(name, state, ctx) {
+      const entry = panes.get(name);
+      if (!entry || entry.dead || !entry.hover || !ctx.svg || !state.handle) return null;
+      const index = entry.view.model.indexOf(entry.hover);
+      if (index < 0) return null;
+      const item = entry.view.model.items[index];
+      const size = 22;
+      const viewport = state.handle.viewport_size().height || state.height;
+      const itemTop = entry.view.layout.prefix(index) * ctx.lineHeight - state.handle.offset().y;
+      const top = Math.max(2, Math.min(viewport - size - 2, itemTop + 2));
+      return buildCopyButton(entry, item, ctx).absolute().top(top).right(ctx.scrollbarLane ?? 14);
+    },
     /** The tree view of a pane, for operations (scroll to, search) and the benchmark. */
     view(name) { return panes.get(name)?.view; },
     /** Time spent building the items of each visible range (ms), for the live frame check. */
@@ -158,6 +186,7 @@ export function createTreePanels(gpui, deps) {
       const entry = ensure(name, ctx.notify);
       if (!entry || entry.dead || !entry.view.model.ready || !state.handle) return null;
       entry.notify = ctx.notify;
+      entry.lineHeight = ctx.lineHeight;
       entry.dirty = false;
       const { view } = entry;
       const lineHeight = ctx.lineHeight;

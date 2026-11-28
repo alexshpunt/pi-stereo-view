@@ -1385,6 +1385,11 @@ export default class StereoView extends View {
     return row;
   }
 
+  /** LPT-1943: the Copy button of the item under the pointer in a tree panel. @param {string} name @param {ReturnType<typeof paneState>} state @param {any} t @param {any} treeRows */
+  treeCopy(name, state, t, treeRows) {
+    return treeRows ? this.trees.copyButton(name, state, { theme: t, lineHeight: LINE_HEIGHT, svg, scrollbarLane: SCROLLBAR_LANE + BLOCK_BUTTONS_GAP, notify: () => this.viewCx?.notify() }) : null;
+  }
+
   /**
    * The block under the pointer in one panel, with the row that carries its buttons: its first row on screen.
    * @param {ReturnType<typeof paneState>} state
@@ -1590,6 +1595,7 @@ export default class StereoView extends View {
           state.following = false;
           // The buttons sit on a row's position; hide them until the pointer moves on the scrolled rows.
           if (state.blockHover !== null) { state.blockHover = null; cx.notify(); }
+          this.trees?.track(name, state, null, () => cx.notify());
           cx.timer.after(100, next => {
             const offset = state.handle.offset().y;
             const viewport = state.handle.viewport_size().height || state.height;
@@ -1605,6 +1611,13 @@ export default class StereoView extends View {
           this.sendMouse(name, state, row, "press", event, cx);
         })
         .on_window_mouse_move((event, cx) => {
+          if (!state.pressed && this.trees?.active(name)) {
+            const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
+            const y = event.local_position ? event.local_position.y / zoom : -1;
+            const viewport = state.handle.viewport_size().height || state.height;
+            this.trees.track(name, state, y >= 0 && y < viewport ? y : null, () => cx.notify());
+            return;
+          }
           if (!state.pressed) { this.trackBlockHover(state, event, cx); this.sendHover(name, state, event, cx); return; }
           if (event.pressed_button !== "left") { this.cancelPaneCapture(name, state, cx); return; }
           if (!event.local_position) return;
@@ -1644,7 +1657,7 @@ export default class StereoView extends View {
           this.sendMouse(name, state, row, "release", event, cx);
         })
         .child(rows).child(Scrollbar.vertical(id).absolute().inset_0())
-        .children([...(hovered ? [this.blockButtons(name, state, hovered, t)] : []), this.latestControl(name, state, t)].filter(Boolean)));
+        .children([...(hovered ? [this.blockButtons(name, state, hovered, t)] : []), this.treeCopy(name, state, t, treeRows), this.latestControl(name, state, t)].filter(Boolean)));
     if (showSurface) panel.child(this.renderSurface(t));
     return panel;
   }
