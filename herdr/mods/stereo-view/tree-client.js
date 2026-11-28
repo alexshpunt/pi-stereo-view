@@ -58,6 +58,12 @@ export class TreeClient {
       waiter?.resolve(loaded);
       return;
     }
+    if (message.t === "cp") {
+      const waiter = this.pending.get(message.rq);
+      this.pending.delete(message.rq);
+      waiter?.resolve(message.id ? { pane: message.pane, id: message.id } : undefined);
+      return;
+    }
     if (message.t === "rows") {
       const waiter = this.pending.get(message.rq);
       this.pending.delete(message.rq);
@@ -78,7 +84,9 @@ export class TreeClient {
   }
 
   /** Ask for bodies; resolves with the ids that arrived. */
-  get(ids) { return this.request({ op: "get", ids }); }
+  get(ids) { return this.request({ op: "get", ids, full: true }); }
+  /** The element of the other pane at the same point of history (Pi decides): { pane, id } or undefined. */
+  counterpart(id) { return this.request({ op: "counterpart", id }); }
   /** Pi's own rendered rows of one item at a width: the fallback for items without a native component. */
   rows(id, width) { return this.request({ op: "rows", id, width }); }
 

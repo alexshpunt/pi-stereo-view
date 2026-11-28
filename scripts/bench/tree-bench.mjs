@@ -55,7 +55,7 @@ const snapshotWall = performance.now() - t0;
 const first = time("first frame", () => view.frame());
 const firstPending = first.pending.length;
 
-// Let the background prefetch load every body, frames running as they would.
+// Every body (folded) arrived with the snapshot; frames run while the background measuring makes heights exact.
 const loadStart = performance.now();
 while (!view.settled && performance.now() - loadStart < 120000) { time("frame while loading", () => view.frame()); await sleep(1); }
 const loadWall = performance.now() - loadStart;
@@ -67,12 +67,11 @@ time("frame", () => view.frame());
 let pendingAfterLoad = 0;
 // Items drawn by Pi's own rows (no native component yet) are answered over the network; the loops below do not
 // yield, so they are counted apart: a native item without its body on a frame after loading is a failure.
-let fallbackPending = 0, previewOnly = 0;
+let fallbackPending = 0;
 const frameAfter = fn => {
   fn();
   const frame = time("frame", () => view.frame());
-  for (const index of frame.pending) { if (client.model.items[index].k === "rows") fallbackPending++; else previewOnly++; }
-  pendingAfterLoad += frame.blank.filter(index => client.model.items[index].k !== "rows").length;
+  for (const index of frame.pending) { if (client.model.items[index].k === "rows") fallbackPending++; else pendingAfterLoad++; }
 };
 
 // Scroll: wheel steps, page keys, scrollbar drags, jumps.
@@ -85,6 +84,34 @@ for (let i = 0; i < 90; i++) frameAfter(() => time("jump top/bottom/middle", () 
 // Resize: every width change, the visible window must be exact on the next frame.
 for (let i = 0; i < 60; i++) frameAfter(() => time("resize (setCols)", () => view.setCols(60 + ((i * 37) % 160))));
 for (let i = 0; i < 60; i++) frameAfter(() => time("viewport resize", () => view.setViewport(40 + ((i * 29) % 140))));
+
+// Expand / fold: the full body is one round trip; the frame after it must still fit, and expansions stay bounded.
+const folded = client.model.items.map((item, i) => (item.x ? i : -1)).filter(i => i >= 0);
+const expandWalls = [];
+let expanded = 0;
+for (let n = 0; n < Math.min(300, folded.length); n++) {
+  const index = folded[Math.floor((n / 300) * folded.length)];
+  const id = client.model.items[index].id;
+  view.toItem(index);
+  time("frame before expand", () => view.frame());
+  const started = performance.now();
+  if (await view.expand(id)) expanded++;
+  expandWalls.push(performance.now() - started);
+  frameAfter(() => {});
+  if (n % 3 === 0) frameAfter(() => time("fold", () => view.fold(id)));
+}
+const expandedCharsHeld = client.model.expandedChars;
+if (expandedCharsHeld > view.maxExpandedChars) failed = true;
+
+// Go to: Pi names the counterpart in the other pane.
+const cpWalls = [];
+let cpFound = 0;
+for (let n = 0; n < 20; n++) {
+  const item = client.model.items[Math.floor((n / 20) * client.model.items.length)];
+  const started = performance.now();
+  if (await client.counterpart(item.id)) cpFound++;
+  cpWalls.push(performance.now() - started);
+}
 
 // Search in slices of 4 ms; every slice is one frame's work.
 const search = new TreeSearch(client.model);
@@ -116,9 +143,10 @@ for (const [name, values] of Object.entries(samples)) {
   if (!row.ok) failed = true;
   rows.push(row);
 }
-const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, bodyCharsHeld: client.model.bodyChars, bodyCharsCap: view.maxChars, itemsWithBody: client.model.bodies.size, pendingAfterLoad, previewOnly, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
+const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, bodyCharsHeld: client.model.bodyChars, itemsWithBody: client.model.bodies.size, foldedItems: folded.length, expanded, expandedCharsHeld, expandedCharsCap: view.maxExpandedChars, expandWallMs: { p50: +pct(expandWalls, .5).toFixed(1), p95: +pct(expandWalls, .95).toFixed(1), max: +Math.max(...expandWalls, 0).toFixed(1) }, counterpart: { found: cpFound, p95Ms: +pct(cpWalls, .95).toFixed(1) }, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
 if (pendingAfterLoad) failed = true;
-if (client.model.bodyChars > view.maxChars) failed = true; // memory stays bounded
+// The whole folded tree stays in memory like scrollback: report it, fail when it passes 100 M characters.
+if (client.model.bodyChars > 100_000_000) failed = true;
 console.log(JSON.stringify(summary));
 console.table(rows.map(({ name, n, p50, p95, max, ok }) => ({ name, n, p50, p95, max, ok })));
 if (out) writeFileSync(out, JSON.stringify({ summary, rows }, null, 1));

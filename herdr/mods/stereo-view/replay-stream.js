@@ -11,12 +11,17 @@ export function createReplayStream(recording) {
   /** id -> [start, end) of the recorded `B` line that holds its body; parsed only when asked for. */
   const where = new Map();
   const snaps = [];
+  /** id -> [pane, id] of the other pane, from recorded `C<TAB>id<TAB>pane<TAB>id` lines (Go to). */
+  const counterparts = new Map();
   for (let from = 0; from < recording.length;) {
     let to = recording.indexOf("\n", from);
     if (to < 0) to = recording.length;
     if (recording.charCodeAt(from) === 66 && recording.charCodeAt(from + 1) === 9) { // "B\t"
       const idsEnd = recording.indexOf("\t", from + 2);
       for (const id of recording.slice(from + 2, idsEnd).split(",")) where.set(id, [idsEnd + 1, to]);
+    } else if (recording.charCodeAt(from) === 67 && recording.charCodeAt(from + 1) === 9) { // "C\t"
+      const [, id, pane, other] = recording.slice(from, to).split("\t");
+      counterparts.set(id, [pane, other]);
     } else if (to > from) {
       const line = recording.slice(from, to);
       if (line.startsWith("{\"t\":\"snap\"")) snaps.push(line);
@@ -48,6 +53,9 @@ export function createReplayStream(recording) {
           found[id] = line[id];
         }
         defer(() => emit(JSON.stringify({ t: "bodies", rq: request.rq, bodies: found })));
+      } else if (request.op === "counterpart") {
+        const found = counterparts.get(request.id);
+        defer(() => emit(JSON.stringify({ t: "cp", rq: request.rq, ...(found ? { pane: found[0], id: found[1] } : { id: null }) })));
       } else if (request.op === "rows") defer(() => emit(JSON.stringify({ t: "rows", rq: request.rq, id: request.id, lines: [] })));
       else if (request.op === "resync") defer(() => { for (const line of snaps) emit(line); });
     },

@@ -23,11 +23,14 @@ export class TreeLayout {
     this.unmeasured = 0;
   }
 
-  chrome(item) { return CHROME[item.k] ?? 1; }
+  /** Padding rows plus the "N more lines" marker row of a folded item. */
+  chrome(item) { return (CHROME[item.k] ?? 1) + (this.model.isFolded(item) ? 1 : 0); }
 
   estimate(item) {
     if (item.k === "rows") return this.fallbackRows.get(item.id)?.rows ?? FALLBACK_ROWS;
-    return this.chrome(item) + estimateRows(item.n, item.c, this.cols);
+    // A folded item draws only its first lines: estimate from what is shown, not from the full text.
+    const shown = item.x ? Math.max(1, item.n - item.x) : item.n;
+    return this.chrome(item) + estimateRows(shown, item.x ? Math.min(item.c, shown * 80) : item.c, this.cols);
   }
 
   /** Rebuild everything from the model: after a snapshot or a width change. */
@@ -127,6 +130,15 @@ export class TreeLayout {
     let total = 0;
     for (const key of ["t", "a", "o"]) if (typeof body[key] === "string") total += wrapRows(body[key], this.cols).length;
     return this.setHeight(i, this.chrome(item) + total);
+  }
+
+  /** An item's body changed (expanded or folded): measure it again now. Returns the change in rows. */
+  remeasure(id) {
+    const i = this.model.indexOf(id);
+    if (i < 0) return 0;
+    if (this.measured[i]) { this.measured[i] = 0; this.unmeasured++; }
+    this.wrapped.delete(id);
+    return this.measure(i, true) ?? 0;
   }
 
   /** Measure up to `budgetMs` of items from a moving cursor; returns true when every loaded item is exact. */

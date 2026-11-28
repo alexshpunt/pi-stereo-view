@@ -10,8 +10,11 @@ export class TreeModel {
     /** Item headers in order: { id, k, n, c, m?, b? }. */
     this.items = [];
     this.index = new Map();
-    /** Loaded bodies by id: { t?, a?, o? }. */
+    /** Bodies by id: { t?, a?, o? }. Every item has one: folded (as the TUI shows it) unless it is expanded. */
     this.bodies = new Map();
+    /** Ids whose body in `bodies` is the full one (expanded or never folded); `folded` keeps the folded body meanwhile. */
+    this.full = new Set();
+    this.folded = new Map();
     this.ready = false;
     this.filled = 0;
   }
@@ -55,6 +58,12 @@ export class TreeModel {
 
   place(at, item) {
     this.items[at] = item;
+    this.setBody(item);
+  }
+
+  /** A header arrived with its body: it replaces anything held for the id, including an expansion. */
+  setBody(item) {
+    this.full.delete(item.id); this.folded.delete(item.id);
     if (item.b) { this.bodies.set(item.id, item.b); delete item.b; } else this.bodies.delete(item.id);
   }
 
@@ -63,52 +72,71 @@ export class TreeModel {
     const removed = this.items.slice(message.at, message.at + message.remove);
     const inserted = message.items;
     const keep = new Set(inserted.map(item => item.id));
-    for (const item of removed) if (!keep.has(item.id)) this.bodies.delete(item.id);
-    for (const item of inserted) { if (item.b) { this.bodies.set(item.id, item.b); delete item.b; } else this.bodies.delete(item.id); }
+    for (const item of removed) if (!keep.has(item.id)) { this.bodies.delete(item.id); this.full.delete(item.id); this.folded.delete(item.id); }
+    for (const item of inserted) this.setBody(item);
     this.items.splice(message.at, message.remove, ...inserted);
     this.rev = message.rev;
     this.index = new Map();
     return { kind: "delta", at: message.at, removed: message.remove, inserted: inserted.length };
   }
 
-  /** Bodies came back for a request; truncated ids keep their (cut) text. */
+  /** Whether an item shows its folded body (it has hidden lines and is not expanded). */
+  isFolded(item) { return !!item.x && !this.full.has(item.id); }
+
+  /** Full bodies came back for a request (expand or copy); the folded one is kept to fold again. */
   storeBodies(bodies) {
     const loaded = [];
     for (const id of Object.keys(bodies)) {
       const body = bodies[id];
       if (!body || this.indexOf(id) < 0) continue;
+      if (!this.full.has(id)) { const old = this.bodies.get(id); if (old) this.folded.set(id, old); }
       this.bodies.set(id, body);
+      this.full.add(id);
       loaded.push(id);
     }
     return loaded;
   }
 
-  /** Characters held in loaded bodies. */
+  /** Back to the folded body. Returns whether the item changed. */
+  fold(id) {
+    const folded = this.folded.get(id);
+    if (!folded || !this.full.has(id)) return false;
+    this.bodies.set(id, folded); this.folded.delete(id); this.full.delete(id);
+    return true;
+  }
+
+  /** Characters held in all bodies. */
   get bodyChars() {
     let chars = 0;
     for (const body of this.bodies.values()) chars += (body.t?.length ?? 0) + (body.a?.length ?? 0) + (body.o?.length ?? 0);
     return chars;
   }
 
+  /** Characters held in expanded bodies only (the part that can be dropped again). */
+  get expandedChars() {
+    let chars = 0;
+    for (const id of this.folded.keys()) { const body = this.bodies.get(id); if (body) chars += (body.t?.length ?? 0) + (body.a?.length ?? 0) + (body.o?.length ?? 0); }
+    return chars;
+  }
+
   /**
-   * Keep memory bounded: when loaded bodies exceed `maxChars`, drop those farthest from item `center` until
-   * `maxChars * 0.75` remain. The mod's JS heap is small (a 40 MB pane OOMs it), so bodies are a cache.
-   * Returns the number of bodies dropped.
+   * Keep expansions bounded: above `maxChars` of expanded text, fold the ones farthest from item `center` until
+   * 75% remain. Folded bodies are never dropped (the whole tree stays in memory, like terminal scrollback).
+   * Returns the ids folded.
    */
-  evict(center, maxChars) {
-    let chars = this.bodyChars;
-    if (chars <= maxChars) return 0;
-    const target = maxChars * 0.75;
+  evictExpanded(center, maxChars) {
+    let chars = this.expandedChars;
+    if (chars <= maxChars) return [];
     const order = [];
-    for (const id of this.bodies.keys()) { const at = this.indexOf(id); order.push([at < 0 ? Infinity : Math.abs(at - center), id]); }
-    order.sort((a, b) => b[0] - a[0]);
-    let dropped = 0;
+    for (const id of this.folded.keys()) { const at = this.indexOf(id); order.push([at < 0 ? Infinity : Math.abs(at - center), id]); }
+    order.sort((x, y) => y[0] - x[0]);
+    const dropped = [];
     for (const [, id] of order) {
-      if (chars <= target) break;
+      if (chars <= maxChars * 0.75) break;
       const body = this.bodies.get(id);
-      chars -= (body.t?.length ?? 0) + (body.a?.length ?? 0) + (body.o?.length ?? 0);
-      this.bodies.delete(id);
-      dropped++;
+      chars -= (body?.t?.length ?? 0) + (body?.a?.length ?? 0) + (body?.o?.length ?? 0);
+      this.fold(id);
+      dropped.push(id);
     }
     return dropped;
   }

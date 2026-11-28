@@ -11,6 +11,7 @@ export class TreeLayout {
   setHeight(i: number, rows: number): number;
   measure(i: number, keep?: boolean): number | undefined;
   measureSlice(budgetMs: number): boolean;
+  remeasure(id: string): number;
   unmeasured: number;
   rowsOf(item: { id: string }, body: TreeBody): { parts: { t?: string[]; a?: string[]; o?: string[] }; total: number };
   setFallback(id: string, lines: readonly string[], cols: number): boolean;

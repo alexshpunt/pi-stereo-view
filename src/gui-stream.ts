@@ -33,11 +33,12 @@ export function attachTreeStream(socket: Socket, tree: GuiTree, pane: Pane, pend
   };
   const wake = (): void => { if (!timer && !closed) timer = setTimeout(flush, COALESCE_MS); };
   const handle = (line: string): void => {
-    let request: { op?: string; rq?: number; ids?: unknown; id?: unknown; width?: unknown };
+    let request: { op?: string; rq?: number; ids?: unknown; id?: unknown; width?: unknown; full?: unknown };
     try { request = JSON.parse(line); } catch { return; }
     const rq = typeof request.rq === "number" ? request.rq : 0;
     try {
-      if (request.op === "get" && Array.isArray(request.ids)) send(stream.bodies(rq, request.ids.filter((id): id is string => typeof id === "string").slice(0, 64)));
+      if (request.op === "get" && Array.isArray(request.ids)) send(stream.bodies(rq, request.ids.filter((id): id is string => typeof id === "string").slice(0, 64), request.full !== false));
+      else if (request.op === "counterpart" && typeof request.id === "string") send(stream.counterpart(rq, request.id));
       else if (request.op === "rows" && typeof request.id === "string") {
         send(stream.rows(rq, request.id, typeof request.width === "number" ? Math.max(8, Math.min(500, Math.floor(request.width))) : tree.defaultWidth()));
       } else if (request.op === "resync") send(stream.snapshot());

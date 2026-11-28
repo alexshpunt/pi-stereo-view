@@ -18,14 +18,15 @@ export interface TreeItem {
   m?: { name?: string; status?: string };
   /** Body, only when it is small or the item is at the tail. */
   b?: ItemBody;
-  /** Start of the text, so a far jump shows something real before the body arrives. */
-  p?: string;
+  /** Lines hidden by the collapsed body (what the TUI shows folded); the full body comes with `get` + `full`. */
+  x?: number;
 }
 export type ServerMessage =
   | { t: "snap"; pane: Pane; epoch: number; rev: number; total: number; at: number; items: TreeItem[]; last: boolean }
   | { t: "delta"; pane: Pane; epoch: number; rev: number; at: number; remove: number; items: TreeItem[] }
   | { t: "bodies"; rq: number; bodies: Record<string, ItemBody | null>; truncated?: string[] }
-  | { t: "rows"; rq: number; id: string; lines: readonly string[] };
+  | { t: "rows"; rq: number; id: string; lines: readonly string[] }
+  | { t: "cp"; rq: number; pane?: Pane; id: string | null };
 
 /** Items at the end of a pane that always carry their body: streaming happens there. */
 export const TAIL = 16;
@@ -33,7 +34,11 @@ const SNAPSHOT_CHUNK = 1500;
 /** A body above this is cut: the GUI shows the head and the item's real line count. */
 export const BODY_LIMIT = 512 * 1024;
 const ARGS_LIMIT = 64 * 1024;
-const PREVIEW = 240;
+/** Collapsed form, like the folded rows of the TUI: every item's body is always on the wire, big ones cut. */
+const COLLAPSED_TEXT = 20_000;
+const COLLAPSED_ARGS_LINES = 12;
+const COLLAPSED_OUTPUT_LINES = 10;
+const COLLAPSED_PART_CHARS = 4_000;
 
 const lineCount = (text: string): number => {
   let count = 1;
@@ -47,7 +52,7 @@ const tailHash = (text: string): number => {
   return hash;
 };
 
-interface Described { k: ItemKind; body?: ItemBody; meta?: TreeItem["m"]; chars: number; lines: number }
+interface Described { k: ItemKind; body?: ItemBody; meta?: TreeItem["m"]; chars: number; lines: number; collapsed?: { body: ItemBody; hidden: number } }
 
 function describe(entry: ContentEntry): Described {
   const source = entry.source as Component & { text?: unknown; command?: unknown; outputLines?: unknown; customComponent?: unknown };
@@ -87,6 +92,25 @@ function pair(k: ItemKind, a: string, o: string, meta: TreeItem["m"]): Described
   return { k, body: { a, o }, meta, chars: a.length + o.length, lines: lineCount(a) + (o ? lineCount(o) : 0) };
 }
 const bodyChars = (body: ItemBody): number => (body.t?.length ?? 0) + (body.a?.length ?? 0) + (body.o?.length ?? 0);
+const head = (value: string, lines: number, chars: number): string => {
+  let end = 0;
+  for (let n = 0; n < lines; n++) { const at = value.indexOf("\n", end); if (at < 0) { end = value.length; break; } end = at + 1; }
+  if (end === 0) end = value.length;
+  return value.slice(0, Math.min(end, chars)).replace(/\n$/, "");
+};
+/** The folded body of an item (memoized on its description) and how many lines it hides. */
+function collapse(d: Described): { body: ItemBody; hidden: number } {
+  if (d.collapsed) return d.collapsed;
+  const body = d.body ?? {};
+  let cut: ItemBody;
+  if (body.t !== undefined) cut = { t: body.t.length <= COLLAPSED_TEXT ? body.t : head(body.t, Infinity, COLLAPSED_TEXT) };
+  else cut = { a: head(body.a ?? "", COLLAPSED_ARGS_LINES, COLLAPSED_PART_CHARS), o: head(body.o ?? "", COLLAPSED_OUTPUT_LINES, COLLAPSED_PART_CHARS) };
+  const shown = (cut.t !== undefined ? lineCount(cut.t) : 0) + (cut.a !== undefined ? lineCount(cut.a) : 0) + (cut.o ? lineCount(cut.o) : 0);
+  const stored = bodyChars(cut) < bodyChars(body);
+  const hidden = stored ? Math.max(1, d.lines - shown) : 0;
+  d.collapsed = { body: cut, hidden };
+  return d.collapsed;
+}
 function limited(body: ItemBody): { body: ItemBody; truncated: boolean } {
   if (bodyChars(body) <= BODY_LIMIT) return { body, truncated: false };
   const cut = (value: string | undefined, budget: number): string | undefined => value === undefined || value.length <= budget ? value : value.slice(0, budget);
@@ -132,14 +156,18 @@ class PaneModel {
   }
 }
 
-function header(row: { id: string; d: Described }, withBody: boolean): { item: TreeItem; truncated: boolean } {
+/** `full`: the whole body (the tail, which streams); otherwise the folded one. */
+function header(row: { id: string; d: Described }, full: boolean): { item: TreeItem; truncated: boolean } {
   const item: TreeItem = { id: row.id, k: row.d.k, n: row.d.lines, c: row.d.chars };
   if (row.d.meta) item.m = row.d.meta;
   let truncated = false;
-  if (row.d.body) { const text = row.d.body.t ?? `${row.d.body.a ?? ""}\n${row.d.body.o ?? ""}`; item.p = text.length > PREVIEW ? text.slice(0, PREVIEW) : text; }
-  if (withBody && row.d.body) {
+  if (row.d.body && full) {
     const cut = limited(row.d.body);
     item.b = cut.body; truncated = cut.truncated;
+  } else if (row.d.body) {
+    const folded = collapse(row.d);
+    item.b = folded.body;
+    if (folded.hidden) item.x = folded.hidden;
   }
   return { item, truncated };
 }
@@ -167,6 +195,17 @@ export class GuiTree {
   renderRows(pane: Pane, id: string, width: number): readonly string[] {
     const found = this.rows(pane).find(row => row.id === id);
     return found ? found.entry.component.render(width) : [];
+  }
+  /** The element of the other pane at the same point of history, by Pi's own rule (NativeContentIndex.counterpart). */
+  counterpart(pane: Pane, id: string): { pane: Pane; id: string } | undefined {
+    const index = this.index();
+    const found = this.rows(pane).find(row => row.id === id);
+    if (!index || !found) return undefined;
+    const target = index.counterpart(found.entry.source, pane);
+    if (!target) return undefined;
+    const other: Pane = pane === "chat" ? "activity" : "chat";
+    const row = this.rows(other).find(candidate => candidate.entry.source === target);
+    return row ? { pane: other, id: row.id } : undefined;
   }
   defaultWidth(): number { return this.width(); }
 }
@@ -212,7 +251,7 @@ export class TreeStream {
   }
 
   /** Bodies of the asked items; undefined when the item is gone or has no text body. */
-  bodies(rq: number, ids: readonly string[]): ServerMessage {
+  bodies(rq: number, ids: readonly string[], full = true): ServerMessage {
     const { rows } = this.tree.scanFor(this.pane);
     const wanted = new Set(ids);
     const bodies: Record<string, ItemBody | null> = {};
@@ -220,11 +259,17 @@ export class TreeStream {
     for (const row of rows) {
       if (!wanted.has(row.id)) continue;
       if (!row.d.body) { bodies[row.id] = null; continue; }
+      if (!full) { bodies[row.id] = collapse(row.d).body; continue; }
       const cut = limited(row.d.body);
       bodies[row.id] = cut.body;
       if (cut.truncated) truncated.push(row.id);
     }
     return { t: "bodies", rq, bodies, ...(truncated.length ? { truncated } : {}) };
+  }
+
+  counterpart(rq: number, id: string): ServerMessage {
+    const found = this.tree.counterpart(this.pane, id);
+    return { t: "cp", rq, ...(found ? { pane: found.pane, id: found.id } : { id: null }) };
   }
 
   rows(rq: number, id: string, width: number): ServerMessage {

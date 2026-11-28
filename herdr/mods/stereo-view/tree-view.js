@@ -1,26 +1,25 @@
-// LPT-1943: scroll position, measuring and prefetch for one pane. `frame()` is what a GUI frame calls: it never
+// LPT-1943: scroll position, measuring and expansion for one pane. `frame()` is what a GUI frame calls: it never
 // waits for Pi, never allocates per row beyond the visible window, and spends at most `budgetMs` measuring.
 import { TreeLayout } from "./tree-layout.js";
 
-const BATCH_CHARS = 256 * 1024;
-const BATCH_ITEMS = 48;
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 export class TreeView {
   /** @param client TreeClient; @param viewport rows visible; @param cols text width in cells */
-  constructor(client, { viewport = 40, cols = 100, budgetMs = 4, prefetchScreens = 3, maxChars = 12_000_000 } = {}) {
-    this.maxChars = maxChars;
+  constructor(client, { viewport = 40, cols = 100, budgetMs = 4, maxExpandedChars = 12_000_000 } = {}) {
+    /** Expanded (full) bodies are a bounded cache; folded bodies of the whole pane stay in memory. */
+    this.maxExpandedChars = maxExpandedChars;
     this.client = client;
     this.model = client.model;
     this.layout = new TreeLayout(this.model);
     this.viewport = viewport;
     this.budgetMs = budgetMs;
-    this.prefetchScreens = prefetchScreens;
     this.layout.cols = cols;
     /** The scroll position is an item and a row inside it: measuring other items never moves what is on screen. */
     this.anchor = { index: 0, offset: 0 };
     this.following = true;
-    this.inFlight = false;
+    /** Expansions requested and not yet answered. */
+    this.busy = 0;
     this.requestedRows = new Set();
     this.dirtyAnchor = false;
   }
@@ -30,7 +29,6 @@ export class TreeView {
 
   /** A snapshot or splice arrived (the client calls this from its `change` hook). */
   changed(change) {
-    this.complete = false;
     if (change.kind === "snapshot") {
       if (!change.last) return;
       this.layout.rebuild();
@@ -107,17 +105,16 @@ export class TreeView {
     // Heights above the anchor changed: restore the position from the anchor item.
     top = this.top;
     const windowItems = layout.window(top, this.viewport);
-    // `pending`: no full body yet; `blank`: nothing to draw at all (no body and no preview).
-    const pending = [], blank = [];
+    // `pending`: visible items with nothing to draw yet. Every body is in memory, so only Pi-rows fallbacks can be pending.
+    const pending = [];
     for (const entry of windowItems) {
       const item = this.model.items[entry.index];
-      if (item.k === "rows" ? !layout.fallbackRows.has(item.id) : !this.model.bodies.has(item.id)) { pending.push(entry.index); if (item.k === "rows" || item.p === undefined) blank.push(entry.index); }
+      if (item.k === "rows" ? !layout.fallbackRows.has(item.id) : !this.model.bodies.has(item.id)) pending.push(entry.index);
     }
-    this.prefetch(visibleFirst, visibleLast);
     // Spare budget makes the rest of the pane exact, so far jumps and the scrollbar stop drifting.
     const left = this.budgetMs - (now() - started);
     if (left > 0.5 && layout.unmeasured > 0) layout.measureSlice(left);
-    return { top, total: layout.totalRows, window: windowItems, pending, blank, spentMs: now() - started, measuredCount };
+    return { top, total: layout.totalRows, window: windowItems, pending, blank: pending, spentMs: now() - started, measuredCount };
   }
 
   wantRows(i) {
@@ -129,45 +126,50 @@ export class TreeView {
     this.client.rows(item.id, cols).then(lines => { if (lines) this.layout.setFallback(item.id, lines, cols); });
   }
 
-  /** Bodies near the viewport first, then the rest of the pane as background work. One request at a time. */
-  prefetch(visibleFirst, visibleLast) {
-    if (this.inFlight || this.complete || this.client.closed) return;
-    const items = this.model.items;
-    const ids = [];
-    let chars = 0;
-    const span = Math.max(visibleLast - visibleFirst + 1, 1) * (this.prefetchScreens + 1);
-    // Near the screen a body is always wanted; farther away only while its height is still an estimate.
-    const consider = (i, d) => {
-      const item = items[i];
-      if (!item || item.k === "rows" || this.model.bodies.has(item.id)) return true;
-      if (d > span && this.layout.measured[i]) return true;
-      if (ids.length >= BATCH_ITEMS || (ids.length && chars + item.c > BATCH_CHARS)) return false;
-      ids.push(item.id); chars += item.c;
+  /** Expand a folded item: its full body comes from Pi, then the item is measured again. Resolves when it is drawn. */
+  expand(id) {
+    const item = this.model.items[this.model.indexOf(id)];
+    if (!item || !item.x || this.model.full.has(id) || this.client.closed) return Promise.resolve(false);
+    this.busy++;
+    return this.client.get([id]).then(loaded => {
+      this.busy--;
+      if (!loaded?.includes(id)) return false;
+      this.layout.remeasure(id);
+      this.model.evictExpanded(this.anchor.index, this.maxExpandedChars).forEach(folded => this.layout.remeasure(folded));
       return true;
-    };
-    for (let d = 0; d < items.length && ids.length < BATCH_ITEMS; d++) {
-      const below = visibleFirst + d, above = visibleFirst - 1 - d;
-      if (below < items.length && !consider(below, d)) break;
-      if (above >= 0 && !consider(above, d)) break;
-      if (below >= items.length && above < 0) break;
-    }
-    if (!ids.length) { this.complete = true; return; }
-    this.inFlight = true;
-    this.client.get(ids).then(loaded => { this.inFlight = false; this.loadedBodies(loaded); }, () => { this.inFlight = false; });
+    }, () => { this.busy--; return false; });
   }
 
-  /** Fresh bodies: make their heights exact now (while they are in memory), then drop what is farthest from the screen. */
-  loadedBodies(loaded) {
-    for (const id of loaded ?? []) {
-      const i = this.model.indexOf(id);
-      if (i >= 0 && !this.layout.measured[i]) this.layout.measure(i, false);
-    }
-    this.model.evict(this.anchor.index, this.maxChars);
-    this.complete = false;
+  /** Fold an expanded item again. */
+  fold(id) {
+    if (!this.model.fold(id)) return false;
+    this.layout.remeasure(id);
+    return true;
   }
 
-  /** Every height is exact and nothing near the screen is missing (the benchmark waits for this). */
+  /** The full text of an item for copy: expands nothing, resolves with the body. */
+  fullBody(id) {
+    const i = this.model.indexOf(id);
+    if (i < 0) return Promise.resolve(undefined);
+    const item = this.model.items[i];
+    if (!this.model.isFolded(item)) return Promise.resolve(this.model.bodies.get(id));
+    return this.client.get([id]).then(() => this.model.bodies.get(id), () => undefined).then(body => {
+      // The copy fetched a full body into the model: put it back the way it was unless the user expanded it.
+      this.model.fold(id);
+      return body;
+    });
+  }
+
+  /** Jump to an item by id; false when it is not in the tree. */
+  toItemId(id) {
+    const i = this.model.indexOf(id);
+    if (i < 0) return false;
+    this.toItem(i);
+    return true;
+  }
+
   /** Every height is exact. */
   get exact() { return this.layout.unmeasured === 0; }
-  get settled() { return this.layout.unmeasured === 0 && this.complete === true; }
+  /** Every height is exact and no expansion is in flight (the benchmark waits for this). */
+  get settled() { return this.exact && this.busy === 0; }
 }

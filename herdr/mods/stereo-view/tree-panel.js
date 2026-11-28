@@ -3,7 +3,6 @@
 // a resize never waits for Pi. Item kinds: user, md, think, tool, bash (native), rows (Pi's own rendered rows).
 import { TreeClient } from "./tree-client.js";
 import { TreeView } from "./tree-view.js";
-import { wrapRows } from "./wrap.js";
 import { styleMarkdown } from "./md-style.js";
 
 /**
@@ -53,7 +52,7 @@ export function createTreePanels(gpui, deps) {
     return body.t ?? [body.a, body.o].filter(Boolean).join("\n");
   }
 
-  /** Copy one item; a body that is not in the cache is fetched first. */
+  /** Copy one item's full text; a folded item fetches its full body first. */
   function copyItem(entry, item, cx, ctx) {
     const done = text => {
       entry.copied = { id: item.id, at: Date.now() };
@@ -61,26 +60,49 @@ export function createTreePanels(gpui, deps) {
       cx.timer?.after?.(COPIED_MS, next => next.notify());
       return text;
     };
-    const body = entry.view.model.bodies.get(item.id);
-    if (body) { cx.write_to_clipboard(done(itemText(body))); return; }
     cx.spawn(async next => {
-      await entry.client.get([item.id]);
-      const text = itemText(entry.view.model.bodies.get(item.id));
+      const text = itemText(await entry.view.fullBody(item.id));
       if (text) next.write_to_clipboard(done(text));
     });
   }
 
-  /** The Copy button for one item. */
-  function buildCopyButton(entry, item, ctx) {
+  /** Go to: Pi names the element of the other pane at the same point; that pane scrolls to it locally. */
+  function goTo(entry, item, ctx) {
+    entry.client.counterpart(item.id).then(found => {
+      const other = found && panes.get(found.pane);
+      if (!other?.view.model.ready) return;
+      ctx.beforeGoTo?.(found.pane);
+      other.jump = found.id;
+      other.notify?.();
+      ctx.notify();
+    });
+  }
+
+  /** One small icon button of the floating bar. */
+  function iconButton(ctx, item, which, label, icon, active, onClick) {
+    const t = ctx.theme;
+    return h_flex().id(`stereo-tree-${which}-${item.id}`).accessibility_label(label).tooltip(label)
+      .items_center().justify_center().w(22).h(22).rounded(4).cursor_pointer().hover(s => s.bg(t.hover))
+      .on_mouse_down("left", (_event, cx) => cx.stop_propagation())
+      .on_click((_event, cx) => onClick(cx))
+      .child(ctx.svg(`mods/stereo-view/icons/${icon}.svg`).id(`stereo-tree-${which}-icon-${item.id}`).size(14)
+        .text_color(active ? t.accent ?? t.foreground : t.foreground));
+  }
+
+  /** Expand/fold, Go to and Copy of one item. */
+  function buildBar(entry, item, ctx) {
     const t = ctx.theme;
     const copied = entry.copied?.id === item.id && Date.now() - entry.copied.at < COPIED_MS;
-    return h_flex().id(`stereo-tree-copy-${item.id}`).accessibility_label(copied ? "Copied" : "Copy this item").tooltip(copied ? "Copied" : "Copy this item")
-      .items_center().justify_center().w(22).h(22).rounded(4)
-      .bg(t.raised ?? t.surface).border_1().border_color(t.border).cursor_pointer().hover(s => s.bg(t.hover))
-      .on_mouse_down("left", (_event, cx) => cx.stop_propagation())
-      .on_click((_event, cx) => copyItem(entry, item, cx, ctx))
-      .child(ctx.svg(`mods/stereo-view/icons/${copied ? "check" : "copy"}.svg`).id(`stereo-tree-copy-icon-${item.id}`).size(14)
-        .text_color(copied ? t.accent ?? t.foreground : t.foreground));
+    const model = entry.view.model;
+    const bar = h_flex().id(`stereo-tree-bar-${item.id}`).items_center().gap(2).p(2).rounded(6).bg(t.raised ?? t.surface).border_1().border_color(t.border);
+    if (item.x) {
+      const folded = model.isFolded(item);
+      bar.child(iconButton(ctx, item, "expand", folded ? `Show ${item.x} more lines` : "Fold", folded ? "full" : "compact", false,
+        () => { if (folded) entry.view.expand(item.id).then(() => ctx.notify()); else { entry.view.fold(item.id); ctx.notify(); } }));
+    }
+    bar.child(iconButton(ctx, item, "goto", "Go to the same point in the other panel", "go-to", false, () => goTo(entry, item, ctx)));
+    bar.child(iconButton(ctx, item, "copy", copied ? "Copied" : "Copy this item", copied ? "check" : "copy", copied, cx => copyItem(entry, item, cx, ctx)));
+    return bar;
   }
 
   function renderItem(entry, index, ctx) {
@@ -96,11 +118,7 @@ export function createTreePanels(gpui, deps) {
       for (const line of fallback?.lines ?? []) box.child(ctx.ansiRow ? ctx.ansiRow(line) : div().h(ctx.lineHeight).child(line));
       return box;
     }
-    if (!body) {
-      // Not loaded (a far jump): the start of its text stands in, clipped to the estimated height, until the body arrives.
-      if (item.p) for (const el of lines(wrapRows(item.p, layout.cols), ctx, t.foreground)) box.child(el);
-      return box;
-    }
+    if (!body) return box; // only a Pi-rows item waiting for its rows can lack one
     const rows = layout.rowsOf(item, body).parts;
     if (item.k === "user") {
       box.bg(t.raised ?? t.background);
@@ -126,6 +144,7 @@ export function createTreePanels(gpui, deps) {
       for (const el of lines(rows.a ?? [], ctx, t.muted)) box.child(el);
       for (const el of lines(rows.o ?? [], ctx, t.foreground)) box.child(el);
     }
+    if (model.isFolded(item)) for (const el of lines([`… ${item.x} more line${item.x === 1 ? "" : "s"}`], ctx, t.muted, { italic: true })) box.child(el);
     return box;
   }
 
@@ -136,7 +155,7 @@ export function createTreePanels(gpui, deps) {
     wantsRender() {
       for (const entry of panes.values()) {
         if (entry.dead) continue;
-        if (entry.dirty || !entry.view.model.ready || !entry.view.exact || !entry.view.complete) return true;
+        if (entry.dirty || !entry.view.model.ready || !entry.view.exact || entry.view.busy || entry.jump) return true;
       }
       return false;
     },
@@ -157,18 +176,18 @@ export function createTreePanels(gpui, deps) {
       }
       if (entry.hover !== id) { entry.hover = id; notify?.(); }
     },
-    /** The Copy button floating over the right edge of the hovered item, or null. */
+    /** The buttons (expand, Go to, Copy) floating over the right edge of the hovered item, or null. */
     copyButton(name, state, ctx) {
       const entry = panes.get(name);
       if (!entry || entry.dead || !entry.hover || !ctx.svg || !state.handle) return null;
       const index = entry.view.model.indexOf(entry.hover);
       if (index < 0) return null;
       const item = entry.view.model.items[index];
-      const size = 22;
+      const size = 28;
       const viewport = state.handle.viewport_size().height || state.height;
       const itemTop = entry.view.layout.prefix(index) * ctx.lineHeight - state.handle.offset().y;
       const top = Math.max(2, Math.min(viewport - size - 2, itemTop + 2));
-      return buildCopyButton(entry, item, ctx).absolute().top(top).right(ctx.scrollbarLane ?? 14);
+      return buildBar(entry, item, ctx).absolute().top(top).right(ctx.scrollbarLane ?? 14);
     },
     /** The tree view of a pane, for operations (scroll to, search) and the benchmark. */
     view(name) { return panes.get(name)?.view; },
@@ -193,6 +212,12 @@ export function createTreePanels(gpui, deps) {
       // GPUI owns the scroll offset; the view follows it (rows from the handle), then plans around it.
       view.setViewport(Math.max(1, Math.floor(state.height / lineHeight)));
       if (state.width > 0) view.setCols(Math.max(10, state.width - 2));
+      if (entry.jump) {
+        // Go to: the item's top row, then GPUI follows (the view stops reading the handle for two frames).
+        const index = view.model.indexOf(entry.jump);
+        entry.jump = null;
+        if (index >= 0) { view.toItemId(view.model.items[index].id); state.handle.scroll_to_item?.(index); entry.bottomRequests = 2; }
+      }
       const placed = state.handle.content_size().height > 0;
       if (entry.bottomRequests > 0) entry.bottomRequests--;
       else if (placed && entry.settled) view.scrollTo(Math.round(state.handle.offset().y / lineHeight));

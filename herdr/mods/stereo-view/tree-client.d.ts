@@ -9,6 +9,7 @@ export class TreeClient {
   model: TreeModel; closed: boolean;
   start(): this;
   get(ids: string[]): Promise<string[] | undefined>;
+  counterpart(id: string): Promise<{ pane: string; id: string } | undefined>;
   rows(id: string, width: number): Promise<readonly string[] | undefined>;
   close(): void;
 }
