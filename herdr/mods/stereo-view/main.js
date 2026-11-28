@@ -9,10 +9,12 @@ import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
 import { composerAlive, composerFieldCommand, composerRoute } from "./composer-route.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
-import { blockAround, buttonRow, columnsFit, footerControls, padsEdge } from "./history-blocks.js";
+import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, padsToEnd } from "./history-blocks.js";
 
 const LABEL = "herdr.stereo.bridge";
-const LINE_HEIGHT = 17;
+const DEFAULT_LINE_HEIGHT = 17; // Used until the terminal's text size is known.
+const LINE_HEIGHT_RATIO = 1.32; // Row height per point of terminal text, matching the terminal's own rows.
+let LINE_HEIGHT = DEFAULT_LINE_HEIGHT; // Set by syncTypography from the terminal's text size and line height.
 const PAGE = 256;
 const INTERVAL = 700;
 const ICON_SIZE = 14; // Toolbar icon edge in logical pixels.
@@ -60,6 +62,17 @@ function historyFont() {
 function historyFontSize() {
   const size = settings().font_size;
   return typeof size === "number" && Number.isFinite(size) ? Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, size)) : DEFAULT_FONT_SIZE;
+}
+
+/**
+ * Rows are as tall as the terminal's own: a taller row spreads the same text over fewer lines than the terminal view
+ * shows. Without a terminal text size the fixed default stands.
+ */
+function syncTypography() {
+  const { font_size: size, terminal_line_height: spacing } = settings();
+  if (typeof size !== "number" || !Number.isFinite(size)) { LINE_HEIGHT = DEFAULT_LINE_HEIGHT; return; }
+  const factor = typeof spacing === "number" && Number.isFinite(spacing) ? Math.max(0.8, Math.min(2, spacing)) : 1;
+  LINE_HEIGHT = Math.round(historyFontSize() * LINE_HEIGHT_RATIO * factor * 10) / 10;
 }
 
 /** The controls Pi draws under a block, when this raw row is that footer. @param {string} line */
@@ -217,6 +230,7 @@ function validState(value) {
 export default class StereoView extends View {
   /** @param {any} _props @param {any} cx */
   init(_props, cx) {
+    syncTypography();
     this.chat = paneState();
     this.activity = paneState();
     this.combined = paneState();
@@ -1004,7 +1018,7 @@ export default class StereoView extends View {
   /** @param {any} t @param {any} run @param {boolean} [grow] run on to the row's end, so a block's background has no ragged edge */
   ansiRun(t, run, grow = false) {
     const { fg, bg } = this.runColors(t, run);
-    let el = div().whitespace_nowrap().font_family(historyFont()).text_size(historyFontSize()).text_color(fg);
+    let el = div().whitespace_nowrap().font_family(historyFont()).text_size(historyFontSize()).line_height(LINE_HEIGHT).text_color(fg);
     el = grow ? el.flex_grow(1).flex_shrink(0) : el.flex_none();
     if (bg) el = el.bg(bg);
     if (run.bold) el = el.font_semibold();
@@ -1088,25 +1102,20 @@ export default class StereoView extends View {
   }
 
   /**
-   * One history row. A block's background spans the panel: a blank edge of a run with a background carries it
-   * through the gutter and to the row's end. The footer Pi draws under a block (`[Go to] [Copy]`) is not drawn;
-   * the block's hover buttons stand for it.
+   * One history row. A block's background spans the panel: the blank padding Pi ends a row with, when it has a
+   * background, runs on to the row's end. The footer Pi draws under a block (`[Go to] [Copy]`) is not drawn, only
+   * the turn's colored bar in front of it; the block's hover buttons stand for the controls.
    * @param {ReturnType<typeof paneState>} state @param {number} index @param {any} t
    */
   entry(state, index, t) {
     const item = state.items.get(index);
     if (!item) return div().h(LINE_HEIGHT).flex_none();
     const line = item.lines[0] ?? "";
-    const row = h_flex().relative().w_full().h(LINE_HEIGHT).flex_none().whitespace_nowrap().overflow_hidden();
-    if (!item.footer) {
-      const runs = selectedRuns(parseAnsi(line), state.selectionRows.get(index), state.selection.columns(index));
-      /** @param {any} run @param {"start" | "end"} side */
-      const carried = (run, side) => run && !run.selected && padsEdge(run, side) ? this.runColors(t, run).bg : undefined;
-      const lead = carried(runs[0], "start");
-      const grow = carried(runs[runs.length - 1], "end") !== undefined;
-      row.child(lead ? div().w(ROW_GUTTER).flex_none().bg(lead) : div().w(ROW_GUTTER).flex_none());
-      row.children(runs.map((run, n) => this.ansiRun(t, run, grow && n === runs.length - 1)));
-    }
+    const row = h_flex().relative().w_full().pl(ROW_GUTTER).pr(ROW_GUTTER).h(LINE_HEIGHT).flex_none().whitespace_nowrap().overflow_hidden();
+    let runs = selectedRuns(parseAnsi(line), state.selectionRows.get(index), state.selection.columns(index));
+    if (item.footer) runs = [leadingMarker(runs)].filter(run => run !== undefined);
+    const grow = padsToEnd(runs[runs.length - 1]) && this.runColors(t, runs[runs.length - 1]).bg !== undefined && !runs[runs.length - 1].selected;
+    row.children(runs.map((run, n) => this.ansiRun(t, run, grow && n === runs.length - 1)));
     for (const placement of state.images) {
       const path = this.imagePaths.get(placement.id);
       if (path && index >= placement.row && index < placement.row + placement.rows) {
@@ -1502,6 +1511,7 @@ export default class StereoView extends View {
   }
 
   render() {
+    syncTypography();
     const t = theme();
     const address = terminalAddress();
     if (this.settingsPanel && this.viewState?.preferences) return this.settingsPanel.render(this.viewState.preferences, t);

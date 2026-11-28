@@ -68,15 +68,25 @@ export function buttonRow(block, firstVisible) {
 }
 
 /**
- * Whether a run's text begins or ends in a blank, so its background can run on past that edge without changing
- * what is drawn: Pi pads a block's rows with blanks to the panel's width, and the run's own cells fall short of
- * the panel only by the gutters and by rounding.
+ * Whether a run's background can run on to the row's end: it ends in a blank (Pi pads a block's rows with blanks
+ * to the panel's width, and the run's own cells fall short of the panel by a gutter and by rounding) and it is
+ * more than one cell. A single cell is a marker, such as the colored bar at the start of every row of a turn;
+ * a row holding only that has nothing to carry on.
  * @param {{text: string} | undefined} run
- * @param {"start" | "end"} side
  */
-export function padsEdge(run, side) {
-  if (!run?.text) return false;
-  return /\s/.test(side === "start" ? run.text[0] : run.text[run.text.length - 1]);
+export function padsToEnd(run) {
+  return !!run && run.text.length > 1 && /\s/.test(run.text[run.text.length - 1]);
+}
+
+/**
+ * The marker a row starts with: its first run when that is one cell with a background of its own.
+ * @template {{text: string, bg?: unknown}} Run
+ * @param {Run[]} runs
+ * @returns {Run | undefined}
+ */
+export function leadingMarker(runs) {
+  const first = runs[0];
+  return first && first.text.length === 1 && first.bg !== undefined ? first : undefined;
 }
 
 /** Two panels side by side need this many terminal cells each; below that the view stacks them. */

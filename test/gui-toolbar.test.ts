@@ -11,7 +11,7 @@ import { composerAlive, composerFieldCommand, composerRoute } from "../herdr/mod
 // @ts-expect-error The mod has no TypeScript declarations.
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
 // @ts-expect-error The mod has no TypeScript declarations.
-import { blockAround, buttonRow, columnsFit, footerControls, padsEdge } from "../herdr/mods/stereo-view/history-blocks.js";
+import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, padsToEnd } from "../herdr/mods/stereo-view/history-blocks.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -22,6 +22,7 @@ function harness() {
   let rows: string[] | undefined;
   let zoom = 1;
   let terminalFont: string | undefined = "Test Mono";
+  let terminalSize: number | undefined;
   let surface: { active: boolean; frame: number; mouseFrame?: number; piWindow?: boolean; lines: string[] } = { active: false, frame: 1, mouseFrame: 1, lines: [] };
   let overlays: any[] = [];
   let pointerHandled = true;
@@ -124,10 +125,10 @@ function harness() {
       })) });
     }
     return { code: 0, stdout: JSON.stringify(data) };
-  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom, font: terminalFont, font_size: 11 }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
+  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom, font: terminalFont, font_size: terminalSize }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, blockAround, buttonRow, columnsFit, footerControls, padsEdge, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
+  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
     appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -135,7 +136,7 @@ function harness() {
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
   return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
     setJump(value: { serial: number; top: number }) { jump = value; },
-    setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; }, setFont(value: string | undefined) { terminalFont = value; },
+    setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; }, setFont(value: string | undefined) { terminalFont = value; }, setFontSize(value: number | undefined) { terminalSize = value; },
     setSurface(value: typeof surface) { surface = value; }, setOverlays(value: any[]) { overlays = value; },
     typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
     setPointerHandled(value: boolean) { pointerHandled = value; }, stopped: () => stopped,
@@ -718,7 +719,7 @@ test("renders a long selected row as a small number of styled spans", () => {
   h.view.chat.selection.start({ row: 0, col: 0 }, "character");
   h.view.chat.selection.extend({ row: 0, col: 199 });
   const row = h.view.entry(h.view.chat, 0, {});
-  expect(row.nodes.length).toBe(2); // The gutter and one run.
+  expect(row.nodes.length).toBe(1);
 });
 
 test("dragging outside a panel scrolls while retaining the selection", async () => {
@@ -833,36 +834,55 @@ const BLOCK_ROWS = ["13:52:57", "Run the command", "      [Go to] [Copy]", "", "
 test("draws history rows in the terminal's monospace font, not the UI font", async () => {
   const h = harness(); h.view.init({}, h.cx);
   h.view.chat.items.set(0, { id: "0", lines: ["plain"] });
-  const run = h.view.entry(h.view.chat, 0, {}).nodes[1];
+  const run = h.view.entry(h.view.chat, 0, {}).nodes[0];
   expect(run.styles.font_family).toEqual(["Test Mono"]);
-  expect(run.styles.text_size).toEqual([11]);
+  expect(run.styles.text_size, "no terminal size: the default").toEqual([12]);
+  expect(h.view.entry(h.view.chat, 0, {}).styles.h, "and the default row height").toEqual([17]);
+  h.setFontSize(11); h.view.render();
+  const sized = h.view.entry(h.view.chat, 0, {});
+  expect(sized.nodes[0].styles.text_size).toEqual([11]);
+  expect(sized.styles.h, "a row is as tall as the terminal's own").toEqual([14.5]);
+  expect(sized.nodes[0].styles.line_height).toEqual([14.5]);
+  h.setFontSize(undefined); h.view.render();
   const probe = h.find(h.view.render(), "stereo-cell-probe")!;
   expect(probe.styles.font_family, "the cell probe measures the same font").toEqual(["Test Mono"]);
   h.setFont(undefined);
-  expect(h.view.entry(h.view.chat, 0, {}).nodes[1].styles.font_family, "a layout without a terminal font").toEqual(["JetBrains Mono"]);
+  expect(h.view.entry(h.view.chat, 0, {}).nodes[0].styles.font_family, "a layout without a terminal font").toEqual(["JetBrains Mono"]);
   expect(h.find(h.view.render(), "stereo-cell-probe")!.styles.font_family).toEqual(["JetBrains Mono"]);
 });
 
-test("a block's background spans its row through the gutter and to the right edge", async () => {
+test("a block's background runs on to the row's end, and a turn's bar stays one cell", async () => {
   const h = harness(); h.view.init({}, h.cx);
-  const padded = "\u001b[48;2;10;20;30m  hello  \u001b[0m";
-  h.view.chat.items.set(0, { id: "0", lines: [padded] });
-  const row = h.view.entry(h.view.chat, 0, {});
-  const [gutter, run] = row.nodes;
-  expect(gutter.styles.bg, "the gutter carries the background").toEqual(["#0a141e"]);
-  expect(run.styles.flex_grow, "the run runs on to the row's end").toEqual([1]);
+  const bar = "\u001b[48;2;249;216;222m \u001b[49m";
+  h.view.chat.items.set(0, { id: "0", lines: [`${bar}\u001b[48;2;240;241;235m $ sleep 1   \u001b[0m`] });
+  const [marker, body] = h.view.entry(h.view.chat, 0, {}).nodes;
+  expect(marker.styles.flex_none, "the bar keeps its cell").toBeDefined();
+  expect(marker.styles.flex_grow).toBeUndefined();
+  expect(body.styles.flex_grow, "the padded run runs on to the row's end").toEqual([1]);
+  expect(body.styles.bg).toEqual(["#f0f1eb"]);
 
-  const bar = "\u001b[35m▌\u001b[0m\u001b[48;2;10;20;30m hello  \u001b[0m";
   h.view.chat.items.set(1, { id: "1", lines: [bar] });
-  const [barGutter, , text] = h.view.entry(h.view.chat, 1, {}).nodes;
-  expect(barGutter.styles.bg, "a row that starts with a bar has no gutter background").toBeUndefined();
-  expect(text.styles.flex_grow).toEqual([1]);
+  const only = h.view.entry(h.view.chat, 1, {}).nodes;
+  expect(only, "a row of only the bar").toHaveLength(1);
+  expect(only[0].styles.flex_grow, "the bar alone does not become a band").toBeUndefined();
 
   h.view.chat.items.set(2, { id: "2", lines: ["\u001b[48;2;10;20;30mcode\u001b[0m"] });
-  const [codeGutter, code] = h.view.entry(h.view.chat, 2, {}).nodes;
-  expect(codeGutter.styles.bg, "an inline span keeps its own extent").toBeUndefined();
-  expect(code.styles.flex_none).toBeDefined();
-  expect(code.styles.flex_grow).toBeUndefined();
+  expect(h.view.entry(h.view.chat, 2, {}).nodes[0].styles.flex_grow, "an inline span keeps its own extent").toBeUndefined();
+
+  h.view.chat.items.set(3, { id: "3", lines: [`${bar}text with trailing blanks      `] });
+  expect(h.view.entry(h.view.chat, 3, {}).nodes[1].styles.flex_grow, "padding without a background has nothing to carry").toBeUndefined();
+
+  h.view.chat.items.set(4, { id: "4", lines: ["\u001b[48;2;238;240;242m        \u001b[49m"] });
+  expect(h.view.entry(h.view.chat, 4, {}).nodes[0].styles.flex_grow, "a padding row of a message block").toEqual([1]);
+});
+
+test("a footer row keeps the turn's bar and draws nothing else", async () => {
+  const h = harness(); h.view.init({}, h.cx);
+  const bar = "\u001b[48;2;249;216;222m \u001b[49m";
+  h.view.chat.items.set(0, { id: "0", lines: [`${bar}           [Go to] [Copy]`], footer: footerControls("             [Go to] [Copy]") });
+  const nodes = h.view.entry(h.view.chat, 0, {}).nodes;
+  expect(nodes).toHaveLength(1);
+  expect(nodes[0].styles.bg).toEqual(["#f9d8de"]);
 });
 
 test("a block's footer draws nothing and its controls appear as buttons on hover", async () => {

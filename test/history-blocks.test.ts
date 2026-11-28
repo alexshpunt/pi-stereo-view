@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 // @ts-expect-error The mod has no TypeScript declarations.
-import { blockAround, buttonRow, columnsFit, footerControls, MIN_COLUMN_CELLS, padsEdge } from "../herdr/mods/stereo-view/history-blocks.js";
+import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "../herdr/mods/stereo-view/history-blocks.js";
 
 test("finds the controls of a footer row in both button styles", () => {
   expect(footerControls("                [Go to] [Copy]")).toEqual({ goTo: { column: 16, width: 7 }, copy: { column: 24, width: 6 } });
@@ -44,13 +44,21 @@ test("the buttons sit on the block's first visible row, never outside the block"
   expect(buttonRow(block, 200)).toBe(60);
 });
 
-test("a blank edge lets a run's background run on", () => {
-  expect(padsEdge({ text: "  hello  " }, "start")).toBe(true);
-  expect(padsEdge({ text: "  hello  " }, "end")).toBe(true);
-  expect(padsEdge({ text: "hello" }, "start")).toBe(false);
-  expect(padsEdge({ text: "hello" }, "end")).toBe(false);
-  expect(padsEdge({ text: "" }, "end")).toBe(false);
-  expect(padsEdge(undefined, "end")).toBe(false);
+test("a run's background runs on only when it ends in padding and is more than one cell", () => {
+  expect(padsToEnd({ text: "  hello  " })).toBe(true);
+  expect(padsToEnd({ text: "        " })).toBe(true);
+  expect(padsToEnd({ text: "hello" })).toBe(false);
+  expect(padsToEnd({ text: " " }), "a one-cell marker").toBe(false);
+  expect(padsToEnd({ text: "" })).toBe(false);
+  expect(padsToEnd(undefined)).toBe(false);
+});
+
+test("a row's leading marker is a one-cell run with a background", () => {
+  const bar = { text: " ", bg: { ansi: 5 } };
+  expect(leadingMarker([bar, { text: "text" }])).toBe(bar);
+  expect(leadingMarker([{ text: " " }, bar]), "a blank without a background").toBeUndefined();
+  expect(leadingMarker([{ text: "ab", bg: "#000000" }])).toBeUndefined();
+  expect(leadingMarker([])).toBeUndefined();
 });
 
 test("two columns fit when each holds the minimum number of cells", () => {
