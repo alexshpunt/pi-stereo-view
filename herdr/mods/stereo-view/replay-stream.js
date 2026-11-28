@@ -2,6 +2,9 @@
 // and answers `get` from the recorded bodies. The live app uses it until herdr-app's streaming process API exists;
 // tests and the benchmark can use it too. Same interface: { onLine(cb), onExit(cb), write(line), kill() }.
 
+// The mod shell has no setTimeout: replies are delivered on a microtask, after the caller has subscribed.
+const defer = fn => { Promise.resolve().then(fn); };
+
 /** @param {string} recording JSON lines: snapshot chunks, then body messages. */
 export function createReplayStream(recording) {
   const lineCallbacks = [], exitCallbacks = [];
@@ -19,7 +22,7 @@ export function createReplayStream(recording) {
     onLine(callback) {
       lineCallbacks.push(callback);
       // The snapshot arrives after the caller has subscribed, as from a real process.
-      if (lineCallbacks.length === 1) setTimeout(() => { for (const line of snaps) if (!killed) emit(line); }, 0);
+      if (lineCallbacks.length === 1) defer(() => { for (const line of snaps) if (!killed) emit(line); });
     },
     onExit(callback) { exitCallbacks.push(callback); },
     write(line) {
@@ -29,9 +32,9 @@ export function createReplayStream(recording) {
       if (request.op === "get") {
         const found = {};
         for (const id of request.ids ?? []) if (bodies.has(id)) found[id] = bodies.get(id);
-        setTimeout(() => emit(JSON.stringify({ t: "bodies", rq: request.rq, bodies: found })), 0);
-      } else if (request.op === "rows") setTimeout(() => emit(JSON.stringify({ t: "rows", rq: request.rq, id: request.id, lines: [] })), 0);
-      else if (request.op === "resync") setTimeout(() => { for (const line of snaps) emit(line); }, 0);
+        defer(() => emit(JSON.stringify({ t: "bodies", rq: request.rq, bodies: found })));
+      } else if (request.op === "rows") defer(() => emit(JSON.stringify({ t: "rows", rq: request.rq, id: request.id, lines: [] })));
+      else if (request.op === "resync") defer(() => { for (const line of snaps) emit(line); });
     },
     kill() { killed = true; for (const callback of exitCallbacks) callback(0); },
   };
