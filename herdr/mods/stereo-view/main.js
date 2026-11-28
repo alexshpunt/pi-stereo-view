@@ -321,7 +321,9 @@ export default class StereoView extends View {
     try { mode = localStorage.getItem("stereo-view.tree"); } catch { /* no storage */ }
     if (mode === "live" || mode?.startsWith("replay:")) startTrees(mode);
     // Development switch without a UI: the mode in a file of the app's home (read once).
-    else readFile(`${appHome()}/stereo-tree.txt`, "utf8").then(text => startTrees(text.trim()), () => {});
+    else readFile(`${appHome()}/stereo-tree.txt`, "utf8").then(text => startTrees(text.trim()), error => {
+      writeFile(`${appHome()}/stereo-tree-status.json`, JSON.stringify({ switchError: String(error) })).catch(() => {}); // TEMPORARY (LPT-1943)
+    });
     this.chat = paneState();
     this.activity = paneState();
     this.combined = paneState();
@@ -1541,6 +1543,10 @@ export default class StereoView extends View {
       theme: t, lineHeight: LINE_HEIGHT, font: historyFont(), fontSize: historyFontSize(), gutter: ROW_GUTTER,
       notify: () => this.viewCx?.notify(),
     }) : null;
+    if (this.trees && !(Date.now() - (this.treeStatusAt ?? 0) < 1000)) { // TEMPORARY (LPT-1943): status for the live test
+      this.treeStatusAt = Date.now();
+      writeFile(`${appHome()}/stereo-tree-status.json`, JSON.stringify({ name, drawn: !!treeRows, chat: this.trees.status("chat"), activity: this.trees.status("activity"), width: state.width, height: state.height })).catch(() => {});
+    }
     const rows = treeRows ?? v_virtual_list(id, state.total ?? 0, LINE_HEIGHT,
       index => `${name}-${index}`,
       range => Array.from({ length: range.end - range.start }, (_, n) => this.entry(state, range.start + n, t)))
