@@ -24,8 +24,32 @@ export function stringWidth(text) {
   return width;
 }
 
+const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
+
 /** Wrap one logical line (no "\n") to `cols` cells: break at spaces when possible, inside a word otherwise. */
 export function wrapLine(line, cols, out) {
+  // Most lines are printable ASCII (one cell per character): native string searches instead of a loop per character.
+  if (PRINTABLE_ASCII.test(line)) { wrapAscii(line, cols, out); return; }
+  wrapGeneral(line, cols, out);
+}
+
+/** The same breaks as `wrapGeneral` for printable ASCII. */
+export function wrapAscii(line, cols, out) {
+  const length = line.length;
+  let start = 0;
+  if (length <= cols) { out.push(line); return; }
+  while (start < length) {
+    const end = start + cols;
+    if (end >= length) { out.push(line.slice(start)); return; }
+    const lastSpace = line.lastIndexOf(" ", end - 1);
+    const atSpace = line.charCodeAt(end) === 32;
+    if (lastSpace > start && !atSpace) { out.push(line.slice(start, lastSpace)); start = lastSpace + 1; }
+    else { out.push(line.slice(start, end)); start = atSpace ? end + 1 : end; }
+  }
+}
+
+/** Any text: code points, wide characters and combining marks. */
+export function wrapGeneral(line, cols, out) {
   if (line.length <= cols && stringWidth(line) <= cols) { out.push(line); return; }
   let start = 0;
   while (start < line.length) {

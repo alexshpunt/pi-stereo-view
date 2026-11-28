@@ -5,7 +5,7 @@ import { TreeModel } from "../herdr/mods/stereo-view/tree-model.js";
 import { TreeLayout } from "../herdr/mods/stereo-view/tree-layout.js";
 import { TreeView } from "../herdr/mods/stereo-view/tree-view.js";
 import { TreeSearch } from "../herdr/mods/stereo-view/tree-search.js";
-import { cellWidth, wrapRows } from "../herdr/mods/stereo-view/wrap.js";
+import { cellWidth, wrapAscii, wrapGeneral, wrapRows } from "../herdr/mods/stereo-view/wrap.js";
 import { styleMarkdown } from "../herdr/mods/stereo-view/md-style.js";
 
 class UserMessageComponent { constructor(public text: string) {} render() { return [this.text]; } }
@@ -48,6 +48,19 @@ describe("wrap", () => {
     expect(cellWidth("世".codePointAt(0)!)).toBe(2);
     expect(wrapRows("世世世", 4)).toEqual(["世世", "世"]);
     expect(wrapRows("a\n\nb", 10)).toEqual(["a", "", "b"]);
+  });
+  it("breaks printable ASCII like the general path", () => {
+    let seed = 7;
+    const random = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let n = 0; n < 4000; n++) {
+      const length = Math.floor(random() * 120);
+      let line = "";
+      for (let i = 0; i < length; i++) line += random() < 0.22 ? " " : String.fromCharCode(97 + Math.floor(random() * 26));
+      const cols = 1 + Math.floor(random() * 30);
+      const fast: string[] = [], slow: string[] = [];
+      wrapAscii(line, cols, fast); wrapGeneral(line, cols, slow);
+      expect(fast, JSON.stringify({ line, cols })).toEqual(slow);
+    }
   });
 });
 
