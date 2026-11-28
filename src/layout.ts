@@ -10,6 +10,7 @@ import { contains, GuiSurface } from "./gui-surface.ts";
 import { GuiOverlays } from "./gui-overlays.ts";
 import { GuiCombinedDocument } from "./gui-combined.ts";
 import { GuiHistorySearch } from "./gui-search.ts";
+import { notifyGuiChange } from "./gui-stream.ts";
 import { parseHex, turnColor, pointerMotionAvailable, type TurnMix } from "./turns.ts";
 import { NativeContentIndex } from "./content.ts";
 import { NestedCalls } from "./nested-calls.ts";
@@ -252,7 +253,7 @@ export class TranscriptLayout {
     if (!this.guiDocuments && this.guiFactory) this.guiDocuments = this.guiFactory();
     return this.guiDocuments;
   }
-  invalidateGui(): void { this.guiDocuments?.invalidate(); this.guiSearch?.markDirty(); }
+  invalidateGui(): void { notifyGuiChange(); this.guiDocuments?.invalidate(); this.guiSearch?.markDirty(); }
   private surface?: SplitSurface;
   private disposeDocuments?: () => void;
   private activePane: Pane = "chat";

@@ -71,12 +71,12 @@ export function imageCount(content: unknown): number {
 }
 
 const nameOf = (component: Component): string => component.constructor.name;
-const contentText = (content: unknown): string => typeof content === "string" ? content :
+export const contentText = (content: unknown): string => typeof content === "string" ? content :
   Array.isArray(content) ? content.filter(block => block?.type === "text" && typeof block.text === "string")
     .map(block => block.text).join("\n") : "";
 
 /** Native text renderers retain their source before terminal wrapping and padding. */
-function componentText(component: Component): string | undefined {
+export function componentText(component: Component): string | undefined {
   if (!(component instanceof Text) && !(component instanceof Markdown)) return undefined;
   const text: unknown = Reflect.get(component, "text");
   return typeof text === "string" ? stripTerminalSequences(text) : undefined;

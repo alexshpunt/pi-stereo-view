@@ -4,6 +4,8 @@ import { createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { GuiContent, type GuiPage } from "./gui-content.ts";
+import { attachTreeStream } from "./gui-stream.ts";
+import { GuiTree } from "./gui-tree.ts";
 import type { NativeContentIndex } from "./content.ts";
 import { parseGuiRequest, type GuiAction, type GuiSetting } from "./gui-protocol.ts";
 import type { TranscriptLayout } from "./layout.ts";
@@ -47,6 +49,7 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
   const sockets = new Set<Socket>();
   let currentIndex: NativeContentIndex | undefined;
   let content: GuiContent | undefined;
+  const tree = new GuiTree(index);
   type PasteChunk = Extract<import("./gui-protocol.ts").GuiRequest, { op: "surface-paste" | "overlay-paste" }>;
   type PendingPaste = { key: string; surface: object; frame: number; count: number; next: number; bytes: number; pieces: string[]; expires: number };
   const pastes = new Map<string, PendingPaste>();
@@ -96,6 +99,13 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
         let pasteTransaction: string | undefined;
         try {
           const raw: unknown = JSON.parse(request.slice(0, end));
+          // LPT-1943: a long-lived element-tree stream takes the connection over; it has no request timeout.
+          if (raw && typeof raw === "object" && "op" in raw && raw.op === "open" && "pane" in raw && (raw.pane === "chat" || raw.pane === "activity")) {
+            socket.removeAllListeners("data");
+            socket.resume();
+            attachTreeStream(socket, tree, raw.pane, request.slice(end + 1));
+            return;
+          }
           if (raw && typeof raw === "object" && "transaction" in raw && typeof raw.transaction === "string") pasteTransaction = raw.transaction;
           const parsed = parseGuiRequest(raw);
           if (!parsed) throw new Error("Invalid request");
