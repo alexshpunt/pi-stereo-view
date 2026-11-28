@@ -6,6 +6,8 @@ describe("composer navigation", () => {
   it("accepts a navigation request only for its own pane", () => {
     expect(composerRoute("composer:pane%2Fone:pageup", "pane/one")).toBe("pageup");
     expect(composerRoute("composer:pane%2Fone:pageup", "pane/two")).toBeUndefined();
+    expect(composerRoute("composer:pane%2Fone:dialog-focus", "pane/one")).toBe("dialog-focus");
+    expect(composerRoute("composer:pane%2Fone:dialog-focus", "pane/two")).toBeUndefined();
     expect(composerRoute("composer:pane%2Fone:delete", "pane/one")).toBeUndefined();
     expect(composerRoute("composer:%invalid:pageup", "pane/one")).toBeUndefined();
     for (const action of ["pageup", "pagedown", "home", "end", "search"]) {

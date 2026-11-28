@@ -1,4 +1,4 @@
-const ACTIONS = new Set(["pageup", "pagedown", "home", "end", "search"]);
+const ACTIONS = new Set(["pageup", "pagedown", "home", "end", "search", "dialog-focus"]);
 
 /** Accept a broadcast only when it names this exact pane and a known action. */
 export function composerRoute(command, pane) {

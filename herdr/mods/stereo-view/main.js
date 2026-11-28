@@ -230,9 +230,10 @@ export default class StereoView extends View {
     cx.spawn(async (cx) => {
       for (;;) {
         const action = composerRoute(await nextCommand(), props()?.pane);
-        if (action && isShown() && !this.surface?.active && !this.overlays?.overlays.some(layer => layer.focused) && !this.dock?.focused) {
-          this.navigate(action, cx);
-        }
+        if (!action || !isShown()) continue;
+        const dialog = this.surface?.active || this.overlays?.overlays.some(layer => layer.focused) || this.dock?.focused;
+        if (action === "dialog-focus" && dialog) this.surfaceInput?.focus();
+        else if (action !== "dialog-focus" && !dialog) this.navigate(action, cx);
       }
     });
     cx.timer.every(INTERVAL, (/** @type {any} */ cx) => this.refresh(cx));
