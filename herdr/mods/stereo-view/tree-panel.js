@@ -14,7 +14,7 @@ export function createTreePanels(gpui, deps) {
   const { div, h_flex, v_flex, v_virtual_list } = gpui;
   const COPIED_MS = 1500;
   /** The host's virtual list takes at most 10000 sizes: past this many items, runs of `group` items share one list entry. */
-  const MAX_ENTRIES = 8000;
+  const MAX_ENTRIES = 400;
   /** @type {Map<string, any>} */
   const panes = new Map();
 
