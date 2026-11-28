@@ -124,7 +124,8 @@ describe("layout, view and search", () => {
 
   it("folds big items on the wire, expands to the full body and folds back", async () => {
     const big = Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n");
-    const tree = new GuiTree(() => fakeIndex([new BashExecutionComponent(big.slice(0, 40), big.split("\n")), ...Array.from({ length: 20 }, (_, i) => new UserMessageComponent(`hi ${i}`))]), () => 80); // the last 16 items are the tail and are never folded
+    const index = fakeIndex([new BashExecutionComponent(big.slice(0, 40), big.split("\n")), ...Array.from({ length: 20 }, (_, i) => new UserMessageComponent(`hi ${i}`))]); // the last 16 items are the tail and are never folded
+    const tree = new GuiTree(() => index, () => 80);
     const { client } = connect(tree);
     const model = client.model;
     const item = model.items.find(entry => entry.k === "bash")!;
@@ -134,7 +135,6 @@ describe("layout, view and search", () => {
     const view = new TreeView(client, { viewport: 10, cols: 40 });
     view.changed({ kind: "snapshot", at: 0, removed: 0, inserted: model.items.length, last: true });
     const folded = view.layout.heights[model.indexOf(item.id)];
-    console.log("DEBUG", item.id, JSON.stringify(tree.open("chat").bodies(1, [item.id])).slice(0, 200), model.indexOf(item.id));
     const expanded = await view.expand(item.id);
     expect(expanded).toBe(true);
     expect(model.isFolded(item)).toBe(false);
