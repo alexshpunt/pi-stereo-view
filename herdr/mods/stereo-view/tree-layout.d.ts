@@ -13,6 +13,8 @@ export class TreeLayout {
   measureSlice(budgetMs: number): boolean;
   remeasure(id: string): number;
   unmeasured: number;
+  piRows: Map<string, number>;
+  applyPi(cols: number, ids: string[], rows: number[]): boolean;
   rowsOf(item: { id: string }, body: TreeBody): { parts: { t?: string[]; a?: string[]; o?: string[] }; total: number };
   setFallback(id: string, lines: readonly string[], cols: number): boolean;
   window(top: number, rows: number): { index: number; row: number }[];

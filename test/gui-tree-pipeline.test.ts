@@ -76,6 +76,7 @@ describe("tree pipeline", () => {
     const { client } = connect(tree);
     await client.get(client.model.items.map(item => item.id));
     const withPi = new TreeView(client, { viewport: 30, cols: 37 });
+    (client as unknown as { hooks: { heights: (message: never) => void } }).hooks.heights = message => withPi.applyHeights(message);
     withPi.changed({ kind: "snapshot", at: 0, removed: 0, inserted: many.length, last: true });
     withPi.setCols(37); // sends the width; the fake stream answers at once
     expect(withPi.awaitingPi).toBe(0);

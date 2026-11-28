@@ -11,6 +11,8 @@ export class TreeClient {
   line(line: string): void;
   get(ids: string[]): Promise<string[] | undefined>;
   counterpart(id: string): Promise<{ pane: string; id: string } | undefined>;
+  sentCols?: number;
+  setCols(cols: number): void;
   rows(id: string, width: number): Promise<readonly string[] | undefined>;
   close(): void;
 }
