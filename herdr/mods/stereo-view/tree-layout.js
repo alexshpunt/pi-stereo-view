@@ -18,6 +18,8 @@ export class TreeLayout {
     this.wrapped = new Map();
     this.fallbackRows = new Map();
     this.cursor = 0;
+    /** Bumps whenever any height changes: a renderer re-sends item sizes only then. */
+    this.version = 0;
   }
 
   chrome(item) { return CHROME[item.k] ?? 1; }
@@ -34,6 +36,7 @@ export class TreeLayout {
     this.heights = new Int32Array(items.length);
     this.measured = new Uint8Array(items.length);
     this.cursor = 0;
+    this.version++;
     for (let i = 0; i < items.length; i++) this.heights[i] = this.estimate(items[i]);
     this.buildTree();
   }
@@ -59,6 +62,7 @@ export class TreeLayout {
     measured.splice(at, removed, ...new Array(inserted).fill(0));
     this.heights = Int32Array.from(heights);
     this.measured = Uint8Array.from(measured);
+    this.version++;
     for (let i = 0; i < inserted; i++) this.wrapped.delete(items[at + i].id);
     this.buildTree();
   }
@@ -93,7 +97,7 @@ export class TreeLayout {
     const delta = rows - this.heights[i];
     this.heights[i] = rows;
     this.measured[i] = 1;
-    if (delta) for (let k = i + 1; k <= this.heights.length; k += k & -k) this.tree[k] += delta;
+    if (delta) { this.version++; for (let k = i + 1; k <= this.heights.length; k += k & -k) this.tree[k] += delta; }
     return delta;
   }
 

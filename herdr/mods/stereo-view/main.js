@@ -10,6 +10,9 @@ import { dialogKey } from "./dialog-keys.js";
 import { composerAlive, composerFieldCommand, composerRoute } from "./composer-route.js";
 import { dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT } from "./refresh-plan.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
+import * as hostApi from "herdr";
+import { createTreePanels } from "./tree-panel.js";
+import { replaySpawn } from "./replay-stream.js";
 import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "./history-blocks.js";
 
 const LABEL = "herdr.stereo.bridge";
@@ -204,6 +207,22 @@ function terminalAddress() {
   return cut < 0 || origin.includes("/") ? origin : `${pane.slice(0, cut + 1)}${origin}`;
 }
 
+/**
+ * LPT-1943 element-tree GUI, behind a switch while it is built: localStorage `stereo-view.tree` = "live" (herdr-app's
+ * streaming process API) or "replay:<base url>" (recordings of a stream, for tests until that API is released).
+ * @returns {((command: string, args: string[], options?: any) => any) | null}
+ */
+function treeSpawn() {
+  let mode = null;
+  try { mode = localStorage.getItem("stereo-view.tree"); } catch { return null; }
+  if (mode === "live") {
+    const spawn = /** @type {any} */ (hostApi).spawnStream;
+    return typeof spawn === "function" ? spawn : null;
+  }
+  if (mode?.startsWith("replay:")) return replaySpawn(mode.slice(7), async url => (await fetch(url)).text());
+  return null;
+}
+
 function bridge() {
   const address = terminalAddress();
   const terminal = terminals().find(t => t.address === address);
@@ -291,6 +310,10 @@ export default class StereoView extends View {
   /** @param {any} _props @param {any} cx */
   init(_props, cx) {
     syncTypography();
+    this.viewCx = cx;
+    const spawnStream = treeSpawn();
+    /** The element-tree panels (LPT-1943); null while the switch is off. */
+    this.trees = spawnStream ? createTreePanels({ div, h_flex, v_flex, v_virtual_list }, { spawnStream, target: () => bridge() }) : null;
     this.chat = paneState();
     this.activity = paneState();
     this.combined = paneState();
@@ -1061,6 +1084,7 @@ export default class StereoView extends View {
   /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {{socket: string, machine?: string, address: string}} connection @param {any} cx */
   fetchPane(pane, state, connection, cx) {
     if (state.fetching || state.copying || (state.pressed && !state.selectionOnly) || this.actionPending || this.actions.length) return;
+    if (this.trees?.active(pane)) return; // The element tree supplies this pane's rows.
     const following = state.following;
     const { start, count } = nextPage(state);
     const width = state.width;
@@ -1504,12 +1528,17 @@ export default class StereoView extends View {
   panel(name, title, state, t, showSurface = false) {
     const id = `stereo-${name}`;
     const hovered = this.hoveredBlock(state);
-    const rows = v_virtual_list(id, state.total ?? 0, LINE_HEIGHT,
+    // LPT-1943: with the element tree on, the list is drawn from the local tree (no per-scroll request to Pi).
+    const treeRows = this.trees && name !== "combined" ? this.trees.list(name, state, {
+      theme: t, lineHeight: LINE_HEIGHT, font: historyFont(), fontSize: historyFontSize(), gutter: ROW_GUTTER,
+      notify: () => this.viewCx?.notify(),
+    }) : null;
+    const rows = treeRows ?? v_virtual_list(id, state.total ?? 0, LINE_HEIGHT,
       index => `${name}-${index}`,
       range => Array.from({ length: range.end - range.start }, (_, n) => this.entry(state, range.start + n, t)))
       .h(state.height).track_scroll(state.handle);
     // The heading and the box stay; the rows come in place once their first page is here.
-    if (this.firstPagePending(state)) rows.opacity(0);
+    if (!treeRows && this.firstPagePending(state)) rows.opacity(0);
     const heading = h_flex().items_center().justify_between().px(8).py(3)
       .child(div().text_color(t.muted).child(title));
     const actions = h_flex().items_center();
@@ -1547,7 +1576,7 @@ export default class StereoView extends View {
           });
         })
         .on_mouse_down("left", (event, cx) => {
-          if (!event.local_position) return;
+          if (!event.local_position || this.trees?.active(name)) return;
           const z = settings().zoom;
           const zoom = typeof z === "number" && z > 0 ? z : 1;
           const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / panelRowHeight(state));

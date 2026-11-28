@@ -1,7 +1,7 @@
 import type { TreeModel, TreeBody } from "./tree-model.js";
 export class TreeLayout {
   constructor(model: TreeModel);
-  cols: number; heights: Int32Array; measured: Uint8Array;
+  cols: number; version: number; heights: Int32Array; measured: Uint8Array;
   fallbackRows: Map<string, { rows: number; lines: readonly string[] }>;
   readonly count: number; readonly totalRows: number;
   rebuild(cols?: number): void;
