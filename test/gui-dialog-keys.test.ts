@@ -13,6 +13,7 @@ test("translates navigation and editing keys for Pi dialogs", () => {
 
 test("sends typed text and ignores system shortcuts", () => {
   expect(dialogKey({ key: "a", key_char: "А" })).toBe("А");
+  expect(dialogKey({ key: "s", key_char: "" })).toBe("s");
   expect(dialogKey({ key: "x", modifiers: { alt: true } })).toBe("\x1bx");
   expect(dialogKey({ key: "s", modifiers: { platform: true } })).toBeUndefined();
 });

@@ -10,7 +10,7 @@ export function dialogKey(event) {
   if (special[key]) return special[key];
   if (modifiers.control && /^[a-z]$/.test(key)) return String.fromCharCode(key.charCodeAt(0) - 96);
   if (modifiers.control || modifiers.platform) return undefined;
-  const text = typeof event.key_char === "string" ? event.key_char : key.length === 1 ? event.key : undefined;
+  const text = typeof event.key_char === "string" && event.key_char ? event.key_char : key.length === 1 ? event.key : undefined;
   if (!text) return undefined;
   return (modifiers.alt ? "\x1b" : "") + text;
 }

@@ -72,6 +72,9 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
             } else if (parsed.op === "surface-key") {
               const surface = current.surface?.();
               socket.end(JSON.stringify({ v: 1, ok: surface?.key(parsed.frame, parsed.data) === true }) + "\n");
+            } else if (parsed.op === "surface-mouse") {
+              const surface = current.surface?.();
+              socket.end(JSON.stringify({ v: 1, ok: surface?.mouse(parsed.frame, parsed.event) === true }) + "\n");
             }
             else if (parsed.op === "image") {
               const chunk = current.renderer()?.imageChunk(parsed.id, parsed.offset, parsed.length);

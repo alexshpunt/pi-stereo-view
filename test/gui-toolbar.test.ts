@@ -14,7 +14,7 @@ function harness() {
   let jump: { serial: number; top: number } | undefined;
   let rows: string[] | undefined;
   let zoom = 1;
-  let surface = { active: false, frame: 1, lines: [] as string[] };
+  let surface: { active: boolean; frame: number; mouseFrame?: number; lines: string[] } = { active: false, frame: 1, mouseFrame: 1, lines: [] };
   const pending: Promise<unknown>[] = [];
   class Element {
     name?: string;
@@ -44,9 +44,19 @@ function harness() {
     }
   }
   const el = (kind: string) => () => new Element(kind);
+  const handlers: Record<string, (event: any, cx: any) => void> = {};
+  let inputValue = "";
+  let inputFocused = false;
+  const input = {
+    value: () => inputValue,
+    set_value(value: string) { inputValue = value; handlers.change?.({}, cx); },
+    on(name: string, callback: (event: any, cx: any) => void) { handlers[name] = callback; },
+    focus() { inputFocused = true; }, blur() { inputFocused = false; }, release() {},
+  };
   const ui = { View: class {}, div: el("div"), image: el("image"), h_flex: el("horizontal"), v_flex: el("vertical"),
     v_virtual_list: el("list"), VirtualListScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), viewport_size: () => ({ height: 300 }), content_size: () => ({ height: 0 }), scroll_to_bottom() {}, scroll_to_item() {} }) },
-    Scrollbar: { vertical: el("scrollbar") } };
+    ScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), release() {} }) },
+    Scrollbar: { vertical: el("scrollbar") }, Input: { new: () => new Element("input") }, InputState: { new: () => input } };
   const opened: string[] = [];
   const copied: string[] = [];
   const cx = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {}, is_focused: () => true, release() {} }),
@@ -72,7 +82,7 @@ function harness() {
   });
   const env = { checking: () => false, exec: async (_cmd: string, args: string[]) => {
     const request = JSON.parse(args[3]); calls.push(request);
-    const data: any = request.op === "surface" ? { v: 1, ...surface } : request.op === "surface-key" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
+    const data: any = request.op === "surface" ? { v: 1, mouseFrame: 1, ...surface } : request.op === "surface-key" || request.op === "surface-mouse" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
       { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
         images: [], jump: request.pane === "activity" ? jump : undefined, lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
@@ -95,7 +105,9 @@ function harness() {
   return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
     setJump(value: { serial: number; top: number }) { jump = value; },
     setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; },
-    setSurface(value: typeof surface) { surface = value; } };
+    setSurface(value: typeof surface) { surface = value; },
+    typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
+    submitSurface() { handlers.submit?.({}, cx); }, surfaceFocused: () => inputFocused };
 }
 
 test("loads the live layout and sends toolbar actions to the same bridge", async () => {
@@ -161,6 +173,7 @@ test("shows Pi's active dialog and forwards keys until it closes", async () => {
   expect(h.find(root, "stereo-surface")).toBeDefined();
   root.keyDown!({ key: "down", modifiers: {} }, h.cx);
   root.keyDown!({ key: "enter", modifiers: {} }, h.cx);
+  h.submitSurface();
   await h.flush();
   expect(h.calls.filter(call => call.op === "surface-key")).toEqual([
     { v: 1, op: "surface-key", frame: 8, data: "\x1b[B" },
@@ -170,6 +183,52 @@ test("shows Pi's active dialog and forwards keys until it closes", async () => {
   h.view.refresh(h.cx);
   await h.flush();
   expect(h.find(h.view.render(), "stereo-chat-box")).toBeDefined();
+});
+
+test("uses native text input to send typed and pasted dialog text once", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.setSurface({ active: true, frame: 5, lines: ["question"] });
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(h.surfaceFocused()).toBe(true);
+  h.typeSurface("é");
+  h.typeSurface("pasted text");
+  await h.flush();
+  expect(h.calls.filter(call => call.op === "surface-key").map(call => call.data))
+    .toEqual(["é", "\x1b[200~pasted text\x1b[201~"]);
+  h.setSurface({ active: false, frame: 6, lines: [] });
+  h.view.refresh(h.cx);
+  await h.flush();
+  expect(h.surfaceFocused()).toBe(false);
+});
+
+test("does not forward an escape-bearing paste as terminal commands", async () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  await h.flush();
+  h.setSurface({ active: true, frame: 5, lines: ["question"] });
+  h.view.refresh(h.cx);
+  await h.flush();
+  h.typeSurface("hello\x1b[201~\r");
+  await h.flush();
+  expect(h.calls.filter(call => call.op === "surface-key")).toEqual([]);
+  expect(h.view.controlError).toBeTruthy();
+});
+
+test("sends dialog pointer gestures using the painted frame", async () => {
+  const h = harness(); h.view.init({}, h.cx); await h.flush();
+  h.setSurface({ active: true, frame: 8, mouseFrame: 12, lines: ["first", "second"] });
+  h.view.refresh(h.cx); await h.flush();
+  const dialog = h.find(h.view.render(), "stereo-surface")!;
+  dialog.mouseDown!({ local_position: { x: 20, y: 10 } }, h.cx);
+  dialog.windowUp!({ local_position: { x: 20, y: 10 } }, h.cx);
+  await h.flush();
+  expect(h.calls.filter(call => call.op === "surface-mouse")).toEqual([
+    { v: 1, op: "surface-mouse", frame: 12, event: { type: "press", button: "left", x: 1, y: 0 } },
+    { v: 1, op: "surface-mouse", frame: 12, event: { type: "release", button: "left", x: 1, y: 0 } },
+  ]);
 });
 
 test("clicks the visible row at fractional app zoom after scrolling", async () => {

@@ -82,6 +82,15 @@ export function parseAnsi(line) {
   const input = String(line).replace(/\t/g, "    ");
   for (let i = 0; i < input.length; i += 1) {
     const ch = input[i];
+    // APC strings include Pi's zero-width cursor markers; their payload is never text.
+    if (ch === "\u009f" || (ch === "\u001b" && input[i + 1] === "_")) {
+      let end = i + (ch === "\u009f" ? 1 : 2);
+      while (end < input.length && input[end] !== "\u0007" && input[end] !== "\u009c" &&
+        !(input[end] === "\u001b" && input[end + 1] === "\\")) end++;
+      if (end === input.length) break;
+      i = end + (input[end] === "\u001b" ? 1 : 0);
+      continue;
+    }
     if (ch === "\u009d" || (ch === "\u001b" && input[i + 1] === "]")) {
       const start = i + (ch === "\u009d" ? 1 : 2);
       let end = start;

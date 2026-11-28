@@ -33,6 +33,37 @@ test("shows the live dialog and forwards keys only while its owner keeps focus",
   expect(first.inputs).toEqual(["a", "b"]);
 });
 
+test("routes a click only to the unchanged live dialog", () => {
+  class Clickable extends Dialog {
+    clicks = 0;
+    handleMouse(event: any) {
+      if (event.type === "click") this.clicks++;
+      return { handled: true, capture: event.type === "press" };
+    }
+  }
+  const dialog = new Clickable("choice", 0, 0);
+  const surface = new GuiSurface(() => dialog, () => dialog);
+  const page = surface.page(40);
+  expect(surface.mouse(page.mouseFrame, { type: "press", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(surface.mouse(page.mouseFrame, { type: "release", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(dialog.clicks).toBe(1);
+  expect(surface.mouse(page.mouseFrame, { type: "release", button: "left", x: 1, y: 0 })).toBe(false);
+  expect(surface.mouse(page.mouseFrame, { type: "press", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(surface.mouse(page.mouseFrame, { type: "release", button: "left", x: 1, y: 0, cancel: true })).toBe(true);
+  expect(dialog.clicks).toBe(1);
+});
+
+test("rejects a pointer from an older surface even when dialog focus is unchanged", () => {
+  const dialog = new Dialog("initial", 0, 0);
+  const surface = new GuiSurface(() => dialog, () => dialog);
+  const old = surface.page(40);
+  dialog.setText("changed");
+  const updated = surface.page(40);
+  expect(updated.frame).toBe(old.frame);
+  expect(updated.mouseFrame).not.toBe(old.mouseFrame);
+  expect(surface.mouse(old.mouseFrame, { type: "press", button: "left", x: 0, y: 0 })).toBe(false);
+});
+
 test("rejects old frames after a dialog is replaced and bounds incoming data", () => {
   const first = new Dialog("first", 0, 0), second = new Dialog("second", 0, 0);
   let current: Component | undefined = first;

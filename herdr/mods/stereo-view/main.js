@@ -1,6 +1,6 @@
 import { View, div, image } from "gpui-kit";
 import { mkdir, writeFile, unlink } from "fs/promises";
-import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, Scrollbar } from "gpui-base";
+import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, ScrollHandle, Scrollbar, Input, InputState } from "gpui-base";
 import { appHome, checking, exec, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
 import { parseAnsi } from "./ansi.js";
 import { createSettingsPanel } from "./settings.js";
@@ -146,6 +146,9 @@ export default class StereoView extends View {
     this.surface = null;
     this.surfacePending = false;
     this.actions = [];
+    this.surfaceInput = null;
+    this.surfaceScroll = ScrollHandle.new();
+    this.surfacePress = null;
     this.actionPending = false;
     this.areaWidth = 800;
     this.hoverPane = null;
@@ -178,6 +181,7 @@ export default class StereoView extends View {
       this.connection = connection.socket;
       this.viewState = null;
       this.stateGeneration++;
+      this.closeSurfaceInput();
       this.surface = null;
       this.actions = [];
       for (const state of [this.chat, this.activity, this.combined]) {
@@ -223,7 +227,7 @@ export default class StereoView extends View {
   /** Read Pi's live dialog without replacing its owner in the terminal. */
   /** @param {{socket: string, machine?: string}} connection @param {any} cx */
   fetchSurface(connection, cx) {
-    if (this.surfacePending || this.actionPending || this.actions.length) return;
+    if (this.surfacePending || this.surfacePress || this.actionPending || this.actions.length) return;
     this.surfacePending = true;
     const width = Math.max(10, Math.min(300, Math.floor((this.areaWidth - 32) / this.cellWidth)));
     cx.spawn(async (/** @type {any} */ next) => {
@@ -233,25 +237,96 @@ export default class StereoView extends View {
         if (result.code !== 0) throw new Error("Surface unavailable");
         const surface = JSON.parse(result.stdout);
         if (surface.v !== 1 || typeof surface.active !== "boolean" || !Number.isSafeInteger(surface.frame) ||
+            !Number.isSafeInteger(surface.mouseFrame) ||
             !Array.isArray(surface.lines) || surface.lines.length > 256 || !surface.lines.every(/** @param {unknown} */ line => typeof line === "string")) throw new Error("Invalid surface");
         if (bridge()?.socket !== connection.socket || !isShown()) return;
         const opening = surface.active && !this.surface?.active;
-        this.surface = surface;
-        if (opening) this.focus?.focus();
+        const closing = !surface.active && this.surface?.active;
+        this.surface = { ...surface, width };
+        if (opening) this.openSurfaceInput();
+        if (closing) this.closeSurfaceInput();
       } catch {
         // An unsupported or unavailable surface leaves the terminal as the fallback.
+        this.closeSurfaceInput();
         this.surface = null;
       } finally { this.surfacePending = false; next.notify(); }
     });
   }
 
-  /** @param {any} event @param {any} cx */
-  sendSurfaceKey(event, cx) {
-    const data = dialogKey(event), connection = bridge();
+  /** Capture platform text input and paste without drawing a second editor. */
+  openSurfaceInput() {
+    if (this.surfaceInput) return;
+    const input = InputState.new({ placeholder: "Type or paste into Pi" });
+    this.surfaceInput = input;
+    let clearing = false;
+    input.on("change", (_event, cx) => {
+      if (clearing || this.surfaceInput !== input) return;
+      const value = input.value();
+      if (!value) return;
+      clearing = true;
+      try { input.set_value(""); } finally { clearing = false; }
+      if (!this.surface?.active) return;
+      // Bracket multi-character input so pasted control characters do not become keys.
+      // Escape bytes could terminate a terminal paste or trigger a control sequence.
+      if (value.includes("\0") || value.includes("\x1b")) {
+        this.controlError = "Could not send this text to the dialog."; cx.notify(); return;
+      }
+      const characters = Array.from(value);
+      const data = characters.length === 1 ? value : `\x1b[200~${value}\x1b[201~`;
+      const parts = Array.from(data);
+      for (let i = 0; i < parts.length; i += 256) this.sendSurfaceData(parts.slice(i, i + 256).join(""), cx);
+    });
+    input.on("submit", (_event, cx) => { this.sendSurfaceData("\r", cx); });
+    input.focus();
+  }
+
+  closeSurfaceInput() {
+    this.surfacePress = null;
+    const input = this.surfaceInput;
+    if (!input) return;
+    this.surfaceInput = null;
+    input.blur();
+    input.release();
+  }
+
+  /** @param {string} data @param {any} cx */
+  sendSurfaceData(data, cx) {
+    const connection = bridge();
     if (!data || !connection || !this.surface?.active) return false;
     this.actions.push({ request: { v: 1, op: "surface-key", frame: this.surface.frame, data }, connection });
     this.drainActions(cx);
     return true;
+  }
+
+  /** @param {any} event @param {any} cx */
+  sendSurfaceKey(event, cx) {
+    const data = dialogKey(event);
+    return data ? this.sendSurfaceData(data, cx) : false;
+  }
+
+  /** Forward cell coordinates for the exact dialog frame currently on screen. */
+  /** @param {"press"|"release"|"drag"} type @param {any} event @param {any} cx */
+  sendSurfaceMouse(type, event, cx) {
+    if (!this.surface?.active || !event.local_position) return;
+    const connection = bridge(); if (!connection) return;
+    const zoomValue = settings().zoom;
+    const zoom = typeof zoomValue === "number" && zoomValue > 0 ? zoomValue : 1;
+    const x = Math.floor((event.local_position.x / zoom - 8) / this.cellWidth);
+    const y = Math.floor((event.local_position.y / zoom + this.surfaceScroll.offset().y - 4) / rowHeight());
+    const inside = x >= 0 && x < this.surface.width && y >= 0 && y < this.surface.lines.length;
+    if (type === "press") {
+      if (!inside || this.surfacePending || !Number.isSafeInteger(this.surface.mouseFrame)) return;
+      this.surfacePress = { frame: this.surface.mouseFrame, x, y };
+    }
+    if (!this.surfacePress) return;
+    const target = this.surfacePress;
+    // An outside release must end capture without synthesizing a click.
+    const px = Math.max(0, Math.min(this.surface.width - 1, x));
+    const py = Math.max(0, Math.min(this.surface.lines.length - 1, y));
+    this.actions.push({ request: { v: 1, op: "surface-mouse", frame: target.frame,
+      event: { type, button: "left", x: px, y: py, ...(type === "release" && !inside ? { cancel: true } : {}) } }, connection });
+    if (type === "release") this.surfacePress = null;
+    this.drainActions(cx);
   }
 
   /** Queue actions so rapid clicks cannot be reordered by separate bridge processes. */
@@ -452,7 +527,7 @@ export default class StereoView extends View {
             if (pane.following) pane.handle.scroll_to_bottom();
             else if (Number.isSafeInteger(reply.restored?.top)) pane.handle.scroll_to_item(reply.restored.top);
           } else if (Number.isSafeInteger(reply.top)) { pane.following = false; pane.handle.scroll_to_item(reply.top); }
-        } else if (reply.ok !== true) throw new Error("Action failed");
+        } else if (reply.ok !== true && !(request.op === "surface-mouse" && reply.ok === false)) throw new Error("Action failed");
         this.controlError = null;
       } catch {
         if (bridge()?.socket === connection.socket) this.controlError = "Could not change Stereo View controls.";
@@ -819,12 +894,16 @@ export default class StereoView extends View {
 
   /** @param {any} t */
   renderSurface(t) {
-    const body = v_flex().id("stereo-surface").flex_1().min_h(0).overflow_y_scroll().px(8).py(4)
-      .on_mouse_down("left", (_event, cx) => { this.focus?.focus(); cx.notify(); });
+    const body = v_flex().id("stereo-surface").relative().flex_1().min_h(0).overflow_y_scroll().track_scroll(this.surfaceScroll).px(8).py(4)
+      .on_mouse_down("left", (event, cx) => { this.surfaceInput?.focus(); this.sendSurfaceMouse("press", event, cx); })
+      .on_window_mouse_move((event, cx) => { if (this.surfacePress) this.sendSurfaceMouse("drag", event, cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.surfacePress) this.sendSurfaceMouse("release", event, cx); });
     for (const line of this.surface.lines) {
       body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
         .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
     }
+    if (this.surfaceInput) body.child(Input.new(this.surfaceInput).w(300).h(30).mt(8).px(6)
+      .border_1().border_color(t.border).bg(t.background).text_color(t.foreground));
     return body;
   }
 
@@ -881,8 +960,15 @@ export default class StereoView extends View {
       .child(this.controlError ? div().px(8).text_color(t.muted).child(this.controlError) : div().h(0))
       .child(body);
     if (this.focus) root.track_focus(this.focus).on_key_down((event, cx) => {
-      if (this.focus.is_focused() && this.surface?.active && this.sendSurfaceKey(event, cx)) {
-        cx.stop_propagation(); return;
+      if (this.surface?.active && this.surfaceInput) {
+        const key = event.key?.toLowerCase();
+        // Text and Enter belong to the native input; it supplies composed text and submit events.
+        if (key === "enter" || key === "return" || (event.modifiers?.control && event.modifiers?.alt && event.key_char) ||
+            (key === "v" && event.modifiers?.control && !event.modifiers?.alt) ||
+            (!event.modifiers?.control && !event.modifiers?.alt &&
+            !event.modifiers?.platform && (key?.length === 1 || event.key_char))) return;
+        if (this.sendSurfaceKey(event, cx)) cx.stop_propagation();
+        return;
       }
       const pane = this.viewState?.mode === "combined" ? this.combined : this.activePane === "chat" ? this.chat : this.activity;
       if (this.focus.is_focused() && event.modifiers?.control && event.key?.toLowerCase() === "c") {

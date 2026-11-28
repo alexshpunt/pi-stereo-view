@@ -3,6 +3,11 @@ import { expect, test } from "vitest";
 // @ts-expect-error The parser does not have TypeScript declarations.
 import { parseAnsi, plainAnsi } from "../herdr/mods/stereo-view/ansi.js";
 
+test("hides Pi cursor markers while retaining the visible cursor cell", () => {
+  expect(plainAnsi("> \x1b_pi:c\x07\x1b_pi:fc\x07 \x1b_pi:/fc\x07" )).toBe(">  ");
+  expect(plainAnsi("a\x1b_private\x1b\\b")).toBe("ab");
+});
+
 test("preserves hyperlinks across color changes and closes them independently of style", () => {
   const input = "before \x1b]8;id=abc;https://example.com/a;b\x1b\\red\x1b[31m alert\x1b[0m normal\x1b]8;;\x07 after";
   const runs = parseAnsi(input);

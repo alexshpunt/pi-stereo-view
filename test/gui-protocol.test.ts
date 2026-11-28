@@ -26,6 +26,10 @@ test("limits dialog frames and input", () => {
   expect(parseGuiRequest({ v: 1, op: "surface-key", frame: -1, data: "a" })).toBeUndefined();
   expect(parseGuiRequest({ v: 1, op: "surface-key", frame: 1, data: "x".repeat(1025) })).toBeUndefined();
   expect(parseGuiRequest({ v: 1, op: "surface-key", frame: 1, data: "\0" })).toBeUndefined();
+  const pointer = { v: 1, op: "surface-mouse", frame: 3, event: { type: "press", button: "left", x: 5, y: 2 } };
+  expect(parseGuiRequest(pointer)).toEqual(pointer);
+  expect(parseGuiRequest({ ...pointer, event: { ...pointer.event, x: 300 } })).toBeUndefined();
+  expect(parseGuiRequest({ ...pointer, event: { ...pointer.event, type: "click" } })).toBeUndefined();
 });
 
 test("accepts only known GUI controls", () => {

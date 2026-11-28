@@ -426,7 +426,7 @@ export class TranscriptLayout {
       return !!editor && !!editorSlot && editorSlot.children.length === 1 && editorSlot.children[0] !== editor;
     };
     this.guiDialog = new GuiSurface(() => dialogPresent() ? editorSlot?.children[0] : undefined,
-      () => host.getFocusedComponent(), () => host.requestRender());
+      () => host.getFocusedComponent(), () => host.requestRender(), component => host.setFocus(component));
     // Updated once per frame, whatever the setting, so a chain of Pi's windows is followed through every swap.
     let piWindowOpen = false;
     const projectedDock = supportedDock ? new VStack(entries.filter((_, i) => i !== 2 && i !== 4).map(entry =>
