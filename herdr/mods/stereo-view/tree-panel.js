@@ -248,7 +248,7 @@ export function createTreePanels(gpui, deps) {
     view(name) { return panes.get(name)?.view; },
     /** Time spent building the items of each visible range (ms), for the live frame check. */
     ranges(name) { return panes.get(name)?.rangeMs?.slice(-300) ?? []; },
-    status(name) { const entry = panes.get(name); return entry ? { prof: entry.prof ? entry.prof.s.map(v => +(v / entry.prof.n).toFixed(3)) : null, ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, dead: !!entry.dead, error: entry.error } : null; },
+    status(name) { const entry = panes.get(name); return entry ? { prof: entry.prof ? entry.prof.s.map(v => +(v / entry.prof.n).toFixed(3)) : null, ready: entry.view.model.ready, items: entry.view.layout.count, totalRows: entry.view.layout.totalRows, top: entry.frame?.top, pending: entry.frame?.pending, dead: !!entry.dead, error: entry.error } : null; },
     close() { for (const entry of panes.values()) entry.client.close(); panes.clear(); },
 
     /**
