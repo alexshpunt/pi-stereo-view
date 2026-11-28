@@ -121,3 +121,20 @@ test("keeps a captured drag when the pointer crosses another overlay", () => {
   expect(surface.mouse(page.revision, first.id, first.mouseFrame, { ...event, type: "release", x: 10 })).toBe(true);
   expect(events).toEqual(["press", "drag", "release"]);
 });
+test("projects focus only inside a visible overlay that takes keys", () => {
+  const keyed = new Overlay("keyed", 0, 0);
+  const inert = new Text("inert", 0, 0);
+  const hidden = new Overlay("hidden", 0, 0);
+  const layouts = [
+    { entry: { component: keyed }, row: 1, col: 1, width: 10, height: 1 },
+    { entry: { component: inert }, row: 2, col: 1, width: 10, height: 1 },
+  ];
+  const host = { terminal: { columns: 80, rows: 24 }, renderedOverlayLayouts: layouts,
+    getFocusedComponent: (): Component => keyed, requestRender() {}, setFocus(_component: Component) {} };
+  const surface = new GuiOverlays(host);
+  expect(surface.projects(keyed)).toBe(true);
+  expect(surface.projects(inert)).toBe(false);
+  expect(surface.projects(hidden)).toBe(false);
+  surface.dispose();
+  expect(surface.projects(keyed)).toBe(false);
+});

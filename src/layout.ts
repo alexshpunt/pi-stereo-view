@@ -6,7 +6,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { NativeDocument, type DocumentTurns, type Pane } from "./native.ts";
 import { GuiDocuments } from "./gui-documents.ts";
-import { GuiSurface } from "./gui-surface.ts";
+import { contains, GuiSurface } from "./gui-surface.ts";
 import { GuiOverlays } from "./gui-overlays.ts";
 import { GuiCombinedDocument } from "./gui-combined.ts";
 import { GuiHistorySearch } from "./gui-search.ts";
@@ -239,6 +239,13 @@ export class TranscriptLayout {
   private guiDock?: GuiSurface;
   private guiOverlayLayers?: GuiOverlays;
   guiOverlays(): GuiOverlays | undefined { return this.guiOverlayLayers; }
+  /** Whether the GUI can show and drive the component that has Pi's focus. */
+  guiProjectable(focused: Component): boolean {
+    if (!this.host || this.host.layoutRoot !== this.mounted) return true;
+    if (focused === this.search?.bar.input || focused === this.getEditor()) return true;
+    const dock = this.original?.children[1];
+    return (!!dock && contains(dock, focused)) || (this.guiOverlayLayers?.projects(focused) ?? false);
+  }
   guiSurface(target?: "dock"): GuiSurface | undefined { return target === "dock" ? this.guiDock : this.guiDialog; }
   guiSearchModel(): GuiHistorySearch | undefined { this.guiRenderer(); return this.guiSearch; }
   guiRenderer(): GuiDocuments | undefined {

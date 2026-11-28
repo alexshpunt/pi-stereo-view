@@ -1,5 +1,5 @@
 import type { Component } from "@earendil-works/pi-tui";
-import { GuiSurface, type SurfacePointer } from "./gui-surface.ts";
+import { contains, GuiSurface, type SurfacePointer } from "./gui-surface.ts";
 
 type Entry = { component: Component; focusOrder?: number };
 type Layout = { entry: Entry; row: number; col: number; width: number; height: number };
@@ -78,6 +78,12 @@ export class GuiOverlays {
         row, col, width, height, lines: lines.slice(0, height) };
     });
     return { revision: this.revision, columns: this.columns, rows: this.rows, overlays };
+  }
+
+  /** Whether the focused component sits in a visible overlay that can take the keys the GUI sends. */
+  projects(focused: Component): boolean {
+    return !this.disposed && this.layouts().some(layout => contains(layout.entry.component, focused)) &&
+      typeof (focused as Component & { handleInput?: unknown }).handleInput === "function";
   }
 
   /** Validate the visible overlay and its focused component without delivering input. */

@@ -166,7 +166,7 @@ function sameComponents(a: Component[], b: Component[]): boolean {
   return a.length === b.length && a.every((component, index) => component === b[index]);
 }
 /** Focus may belong to a child control, but never to an unrelated Pi overlay or editor. */
-function contains(root: Component, target: Component): boolean {
+export function contains(root: Component, target: Component): boolean {
   const pending: Component[] = [root], seen = new Set<Component>();
   while (pending.length && seen.size < 10000) {
     const component = pending.pop()!;

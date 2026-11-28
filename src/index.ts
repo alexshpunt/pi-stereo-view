@@ -13,6 +13,7 @@ import { observeNativeEditor } from "./native-editor.ts";
 import { NestedCalls } from "./nested-calls.ts";
 import { ProblemReporter } from "./report.ts";
 import { startGuiBridge } from "./gui-bridge.ts";
+import { GuiHold, HOLD_LABEL, publishTerminalLabel } from "./gui-hold.ts";
 
 const DELAYS = [1, 2, 3, 5, 10, 30];
 /**
@@ -45,6 +46,7 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   const nativeEditor = observeNativeEditor();
   let unsubscribeInput: (() => void) | undefined;
   let stopGuiBridge: (() => Promise<void>) | undefined;
+  let guiHold: GuiHold | undefined;
   let writes = Promise.resolve();
   let preferences: Preferences = { ...defaults };
   const file = path.join(getAgentDir(), "transcript.json");
@@ -386,6 +388,11 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
             surface: target => current.guiSurface(target), overlays: () => current.guiOverlays(),
             search: () => current.guiSearchModel() } : undefined;
         });
+        // Herdr shows the terminal while Pi's screen is one the GUI cannot draw.
+        guiHold = new GuiHold(() => host as (TUI & { getFocusedComponent(): import("@earendil-works/pi-tui").Component | null }) | undefined,
+          focused => layout?.guiProjectable(focused) ?? true,
+          reason => publishTerminalLabel(terminal, HOLD_LABEL, reason));
+        await guiHold.start().catch(() => undefined);
         // A bare HC_TERMINAL_ID is not a machine-qualified App identity.
         // Leave the current tab alone until the App can verify the caller.
       } catch (error) { ctx.ui.notify("Native Stereo View is unavailable: " + String(error), "warning"); }
@@ -441,6 +448,8 @@ export default async function transcript(pi: ExtensionAPI): Promise<void> {
   pi.on("session_tree", (_event, ctx) => { layout?.invalidateGui(); closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
   pi.on("session_compact", (_event, ctx) => { layout?.invalidateGui(); closeSearch(); nested.restore(ctx.sessionManager.getBranch()); timestamps?.reset(); host?.requestRender(); });
   pi.on("session_shutdown", async () => {
+    await guiHold?.dispose();
+    guiHold = undefined;
     await stopGuiBridge?.();
     stopGuiBridge = undefined;
     releaseStartup();
