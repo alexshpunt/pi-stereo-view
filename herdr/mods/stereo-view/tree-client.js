@@ -36,6 +36,7 @@ export class TreeClient {
 
   start() {
     const { socket, pane, on, cwd } = this.target;
+    this.startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     this.process = this.spawnStream("node", ["-e", RELAY, socket, pane], { on, cwd });
     this.process.onLine(line => this.line(line));
     // herdr-app passes `{ code, signal, stderr, killed, error }`; the replay and test fakes pass a plain code.
@@ -50,6 +51,9 @@ export class TreeClient {
   line(line) {
     if (!line) return;
     const started = typeof performance !== "undefined" ? performance.now() : Date.now();
+    this.marks ??= { start: this.startedAt }; // TEMPORARY LPT-1943: where cold-start time goes
+    this.marks.first ??= Math.round(started - this.startedAt);
+    this.marks.bytes = (this.marks.bytes ?? 0) + line.length;
     let message;
     try { message = JSON.parse(line); } catch { this.hooks.error?.("Bad line from the relay"); return; }
     const parseMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - started;
@@ -63,7 +67,7 @@ export class TreeClient {
       waiter?.resolve(loaded);
       return;
     }
-    if (message.t === "heights") { this.hooks.heights?.(message); return; }
+    if (message.t === "heights") { if (message.last) this.marks.heights = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - this.startedAt); this.hooks.heights?.(message); return; }
     if (message.t === "cp") {
       const waiter = this.pending.get(message.rq);
       this.pending.delete(message.rq);
@@ -77,6 +81,7 @@ export class TreeClient {
       return;
     }
     const change = this.model.apply(message);
+    if (message.t === "snap" && message.last) this.marks.snapshot = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - this.startedAt);
     if (change?.resync) { this.send({ op: "resync" }); return; }
     if (change) this.hooks.change?.(change);
   }
