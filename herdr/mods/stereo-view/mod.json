@@ -4,6 +4,8 @@
   "pane_view": {
     "id": "gui",
     "label": "GUI",
+    "pendingUntilReady": true,
+    "readyTimeout": 1500,
     "when": [{ "label": "herdr.stereo.bridge" }]
   },
   "app": {

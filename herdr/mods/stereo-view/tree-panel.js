@@ -21,7 +21,7 @@ export function createTreePanels(gpui, deps) {
     const target = deps.target(name);
     if (!target) return null;
     entry = { name, view: null, client: null, sizes: [], version: -1, lastTotal: 0, notify };
-    const client = new TreeClient(deps.spawnStream, { ...target, pane: name }, {
+    const client = new TreeClient(deps.spawnStream, { ...target, on: target.on ?? target.machine, pane: name }, {
       change: change => { entry.view.changed(change); entry.dirty = true; entry.notify?.(); },
       bodies: () => { entry.dirty = true; entry.notify?.(); },
       // A stream that ends stays as a dead entry: the old list draws and nothing retries in a loop.

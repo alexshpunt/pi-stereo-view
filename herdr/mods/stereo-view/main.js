@@ -392,6 +392,8 @@ export default class StereoView extends View {
     cx.spawn(async (/** @type {any} */ cx) => {
       for (;;) {
         const command = await nextCommand();
+        // pendingUntilReady: the pane waits (terminal shown) until this copy says its first frame is complete.
+        if (command === "prepare") { this.prepare(cx); continue; }
         if (!isShown()) continue;
         if (command === "focus" && props()?.view === "gui") {
           // Herdr's own focus command replaces the claim a freshly shown GUI makes.
@@ -1385,6 +1387,39 @@ export default class StereoView extends View {
     return row;
   }
 
+  /**
+   * LPT-1943: herdr-app asks for the first frame ("prepare", also on every switch to GUI) and keeps the terminal on
+   * screen until `ready()`. Refresh, render once the content is here, then call ready(): the switch shows the finished
+   * picture, never a loading frame. A ready() while the pane is not waiting is ignored by the app.
+   * @param {any} cx
+   */
+  prepare(cx) {
+    const ready = /** @type {any} */ (hostApi).ready;
+    if (typeof ready !== "function") return;
+    this.preparing = true;
+    this.drewTree = false;
+    this.refresh(cx);
+    cx.notify();
+    /** @param {any} next */
+    const poll = next => {
+      if (!this.preparing) return;
+      if (this.preparedEnough()) { this.preparing = false; ready(); return; }
+      next.notify();
+      next.timer.after(16, poll);
+    };
+    cx.timer.after(16, poll);
+  }
+
+  /** The first frame is complete: tree panes drew from their loaded tree, or the old panes have their first page. */
+  preparedEnough() {
+    if (this.trees) {
+      const a = this.trees.status("chat"), b = this.trees.status("activity");
+      const usable = (/** @type {any} */ s) => !s || s.dead || s.ready;
+      return this.drewTree && usable(a) && usable(b);
+    }
+    return !this.firstPagePending(this.chat) && !this.firstPagePending(this.activity) || !this.available;
+  }
+
   /** LPT-1943: the Copy button of the item under the pointer in a tree panel. @param {string} name @param {ReturnType<typeof paneState>} state @param {any} t @param {any} treeRows */
   treeCopy(name, state, t, treeRows) {
     return treeRows ? this.trees.copyButton(name, state, { theme: t, lineHeight: LINE_HEIGHT, svg, scrollbarLane: SCROLLBAR_LANE + BLOCK_BUTTONS_GAP, notify: () => this.viewCx?.notify() }) : null;
@@ -1551,6 +1586,7 @@ export default class StereoView extends View {
       theme: t, lineHeight: LINE_HEIGHT, font: historyFont(), fontSize: historyFontSize(), gutter: ROW_GUTTER,
       notify: () => this.viewCx?.notify(), svg, scrollbarLane: SCROLLBAR_LANE + 2,
     }) : null;
+    if (treeRows) this.drewTree = true;
     if (this.trees) { // TEMPORARY (LPT-1943): per-render timings for the live test, written to the app home
       const end = typeof performance !== "undefined" ? performance.now() : Date.now();
       (this.treeFrames ??= []).push({ name, at: end, spent: end - frameStart });

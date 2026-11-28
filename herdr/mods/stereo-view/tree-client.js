@@ -38,7 +38,12 @@ export class TreeClient {
     const { socket, pane, on, cwd } = this.target;
     this.process = this.spawnStream("node", ["-e", RELAY, socket, pane], { on, cwd });
     this.process.onLine(line => this.line(line));
-    this.process.onExit((code, why) => { this.closed = true; for (const [, p] of this.pending) p.resolve(undefined); this.pending.clear(); this.hooks.exit?.(code, why); });
+    // herdr-app passes `{ code, signal, stderr, killed, error }`; the replay and test fakes pass a plain code.
+    this.process.onExit((info, text) => {
+      const code = info !== null && typeof info === "object" ? info.code : info;
+      const why = info !== null && typeof info === "object" ? (info.error ?? (info.stderr ? String(info.stderr).slice(-300) : undefined)) : text;
+      this.closed = true; for (const [, p] of this.pending) p.resolve(undefined); this.pending.clear(); this.hooks.exit?.(code, why);
+    });
     return this;
   }
 

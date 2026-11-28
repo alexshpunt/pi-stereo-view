@@ -1,6 +1,6 @@
 import type { TreeModel } from "./tree-model.js";
 export const RELAY: string;
-export interface StreamProcess { onLine(cb: (line: string) => void): void; onExit(cb: (code?: number | null, why?: string) => void): void; write(line: string): void; kill(): void }
+export interface StreamProcess { onLine(cb: (line: string) => void): void; onExit(cb: (info?: number | null | { code?: number | null; signal?: string | null; stderr?: string; killed?: boolean; error?: string }, why?: string) => void): void; write(line: string): void; kill(): void }
 export type SpawnStream = (command: string, args: string[], options?: { on?: string; cwd?: string }) => StreamProcess;
 export class TreeClient {
   constructor(spawnStream: SpawnStream, target: { socket: string; pane: string; on?: string; cwd?: string }, hooks?: {
