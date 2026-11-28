@@ -8,6 +8,7 @@ import { createSearchBar } from "./search-bar.js";
 import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
 import { composerAlive, composerFieldCommand, composerRoute } from "./composer-route.js";
+import { dropStaleRows, paneDimensions, refreshPlan, TICK_MS } from "./refresh-plan.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
 import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "./history-blocks.js";
 
@@ -16,10 +17,13 @@ const DEFAULT_LINE_HEIGHT = 17; // Used until the terminal's text size is known.
 const LINE_HEIGHT_RATIO = 1.32; // Row height per point of terminal text, matching the terminal's own rows.
 let LINE_HEIGHT = DEFAULT_LINE_HEIGHT; // Set by syncTypography from the terminal's text size and line height.
 const PAGE = 256;
-const INTERVAL = 700;
 /** How many times a GUI that has just appeared hands the keyboard to the composer, and for how long it tries (LPT-1930). */
 const KEYBOARD_TRIES = 3;
 const KEYBOARD_CLAIM_MS = 15000;
+// What the last copy measured. A copy created later (a new pane) starts from it, so its first frame is laid out
+// like the others instead of jumping from guesses once it is measured.
+/** @type {{cellWidth: number, areaWidth: number, areaHeight: number, controlWidth: number, controlHeight: number, panels: Record<string, {width: number, height: number}>} | null} */
+let lastGeometry = null;
 const ICON_SIZE = 14; // Toolbar icon edge in logical pixels.
 const NARROW_CONTROLS_WIDTH = 400; // Switch to icons when text controls no longer fit.
 const MIN_ACTIVITY_WIDTH = 200; // Leave room for the heading and controls in a narrow split.
@@ -143,6 +147,20 @@ function isShown() {
   return !!tab && (!tab.zoomed || ownPane.zoomed);
 }
 
+/** Whether the copy's data is worth keeping current: shown, or in a tab on screen whose pane is in TUI mode right now. */
+function isPrefetchable() {
+  if (!window()?.visible) return false;
+  const ownPane = panes().find(p => p.pane === props()?.pane);
+  if (!ownPane || props()?.view !== "gui") return false;
+  const tab = spaces().find(s => s.active)?.tabs.find(t => t.id === ownPane.tab && t.active);
+  return !!tab;
+}
+
+/** Results are applied while shown and while prefetching for the next switch. */
+function isLive() {
+  return isShown() || isPrefetchable();
+}
+
 function terminalAddress() {
   const p = props() ?? {};
   const origin = p.origin ?? p.terminal;
@@ -164,14 +182,14 @@ function bridge() {
   return { socket: label.socket, machine: split < 0 ? undefined : address.slice(0, split), address };
 }
 
-/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[], footer: ReturnType<typeof footerControls>}>, blockHover: number | null, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number, copying: boolean, selectionOnly: boolean, autoScroll: number, autoScrollTimer: boolean, selectionFocus: {row: number, col: number} | null}} */
+/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[], footer: ReturnType<typeof footerControls>}>, blockHover: number | null, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number, copying: boolean, selectionOnly: boolean, autoScroll: number, autoScrollTimer: boolean, selectionFocus: {row: number, col: number} | null, stale: boolean}} */
 function paneState() {
   const selectionRows = new Map();
   return { total: null, revision: -1, items: new Map(), blockHover: null, heights: [], width: 80, height: 300,
     handle: VirtualListScrollHandle.new(), fetching: false, error: null, initial: true, lastSize: null,
     frameTop: 0, frameHeight: 0, pressed: false, following: true, searchState: null, searchBar: null,
     selectionRows, selection: createSelection(index => selectionRows.get(index)), selecting: false, pressPoint: null, images: [], jumpSerial: 0,
-    copying: false, selectionOnly: false, autoScroll: 0, autoScrollTimer: false, selectionFocus: null };
+    copying: false, selectionOnly: false, autoScroll: 0, autoScrollTimer: false, selectionFocus: null, stale: false };
 }
 
 /** Render the visible terminal rows, including one extra row for a partial scroll. */
@@ -284,6 +302,20 @@ export default class StereoView extends View {
     this.keyboardUntil = 0;
     this.cellWidth = 12;
     this.cellMeasured = false;
+    /** @type {number} */ this.lastRead = -Infinity;
+    this.tickShown = false;
+    this.readScheduled = false;
+    if (lastGeometry) {
+      const g = lastGeometry;
+      this.cellWidth = g.cellWidth; this.cellMeasured = true;
+      this.areaWidth = g.areaWidth; this.areaHeight = g.areaHeight;
+      this.controlWidth = g.controlWidth; this.controlHeight = g.controlHeight;
+      const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
+      for (const [name, state] of /** @type {[string, ReturnType<typeof paneState>][]} */ ([["chat", this.chat], ["activity", this.activity], ["combined", this.combined]])) {
+        const size = g.panels[name];
+        if (size) Object.assign(state, paneDimensions(size, zoom, this.cellWidth, ROW_CHROME));
+      }
+    }
     this.available = !checking() && !!bridge();
     if (checking()) return;
     this.focus = cx.focus_handle();
@@ -305,8 +337,22 @@ export default class StereoView extends View {
         else if (action !== "dialog-focus" && !dialog) this.navigate(action, cx);
       }
     });
-    cx.timer.every(INTERVAL, (/** @type {any} */ cx) => this.refresh(cx));
-    this.refresh(cx);
+    cx.timer.every(TICK_MS, (/** @type {any} */ cx) => this.tick(cx));
+    this.tick(cx);
+  }
+
+  /**
+   * One beat of the copy's clock. A shown copy reads the bridge when it appears and then every live interval; a copy
+   * whose pane is in TUI mode keeps its data warm slowly, so the first frame of the next switch has content.
+   * @param {any} cx
+   */
+  tick(cx) {
+    const shown = isShown();
+    const plan = refreshPlan({ shown, prefetchable: !shown && isPrefetchable(), wasShown: this.tickShown, elapsed: Date.now() - this.lastRead });
+    this.tickShown = shown;
+    if (plan === "idle") return;
+    this.lastRead = Date.now();
+    this.refresh(cx, plan === "prefetch");
   }
 
   /** Herdr gives the keyboard of a GUI pane to this view; with no dialog open it belongs to the composer field. */
@@ -408,13 +454,13 @@ export default class StereoView extends View {
           .child("Jump to latest")));
   }
 
-  /** @param {any} cx */
-  refresh(cx) {
+  /** @param {any} cx @param {boolean} [prefetch] read for a copy that is not shown yet */
+  refresh(cx, prefetch = false) {
     const shown = isShown();
     if (shown && !this.wasShown) { this.keyboardTries = KEYBOARD_TRIES; this.keyboardUntil = Date.now() + KEYBOARD_CLAIM_MS; }
     this.wasShown = shown;
-    if (!shown) return;
-    this.claimKeyboardOnEntry();
+    if (!shown && !(prefetch && isLive())) return;
+    if (shown) this.claimKeyboardOnEntry();
     const connection = bridge();
     this.available = !!connection;
     if (!connection) { this.connection = undefined; cx.notify(); return; }
@@ -441,6 +487,22 @@ export default class StereoView extends View {
     this.fetchSurface(connection, cx);
     this.fetchOverlays(connection, cx);
     this.fetchDock(connection, cx);
+    this.fetchPanes(connection, cx);
+  }
+
+  /** Read again soon, once, after a resize: the panels' width changed, so the rows on screen have the old wrapping. @param {any} cx */
+  scheduleRead(cx) {
+    if (this.readScheduled) return;
+    this.readScheduled = true;
+    cx.timer.after(60, (/** @type {any} */ next) => {
+      this.readScheduled = false;
+      const connection = bridge();
+      if (connection && isLive()) this.fetchPanes(connection, next);
+    });
+  }
+
+  /** @param {{socket: string, machine?: string, address: string}} connection @param {any} cx */
+  fetchPanes(connection, cx) {
     const placement = this.dialogPlacement();
     if (this.viewState?.mode === "combined" || placement === "combined") this.fetchPane("combined", this.combined, connection, cx);
     else if (placement === "maximize") this.fetchPane("activity", this.activity, connection, cx);
@@ -488,7 +550,7 @@ export default class StereoView extends View {
         if (surface.v !== 1 || typeof surface.active !== "boolean" || (surface.piWindow !== undefined && typeof surface.piWindow !== "boolean") || !Number.isSafeInteger(surface.frame) ||
             !Number.isSafeInteger(surface.mouseFrame) ||
             !Array.isArray(surface.lines) || surface.lines.length > 256 || !surface.lines.every(/** @param {unknown} */ line => typeof line === "string")) throw new Error("Invalid surface");
-        if (bridge()?.socket !== connection.socket || !isShown()) return;
+        if (bridge()?.socket !== connection.socket || !isLive()) return;
         this.surface = { ...surface, width };
         this.syncSurfaceInput(next);
       } catch {
@@ -516,7 +578,7 @@ export default class StereoView extends View {
               layer.id < 1 || layer.frame < 1 || layer.mouseFrame < 1 || layer.width < 1 || layer.width > 4096 ||
               layer.height < 1 || layer.height > 256 || typeof layer.focused !== "boolean" ||
               !Array.isArray(layer.lines) || layer.lines.length > layer.height || layer.lines.some((/** @type {unknown} */ line) => typeof line !== "string"))) throw new Error("Invalid overlays");
-        if (bridge()?.socket !== connection.socket || !isShown()) return;
+        if (bridge()?.socket !== connection.socket || !isLive()) return;
         const ids = new Set(data.overlays.map(layer => layer.id));
         for (const [id, handle] of this.overlayScrolls) if (!ids.has(id)) {
           handle.release?.();
@@ -531,7 +593,8 @@ export default class StereoView extends View {
 
   /** @param {any} cx */
   syncSurfaceInput(cx) {
-    if (this.overlays?.overlays.some(layer => layer.focused) || this.surface?.active || this.dock?.focused) this.openSurfaceInput(cx);
+    // A copy that only prefetches must not take the keyboard.
+    if (isShown() && (this.overlays?.overlays.some(layer => layer.focused) || this.surface?.active || this.dock?.focused)) this.openSurfaceInput(cx);
     else this.closeSurfaceInput();
   }
 
@@ -550,7 +613,7 @@ export default class StereoView extends View {
         if (dock.v !== 1 || typeof dock.active !== "boolean" || typeof dock.focused !== "boolean" ||
             !Number.isSafeInteger(dock.frame) || !Number.isSafeInteger(dock.mouseFrame) ||
             !Array.isArray(dock.lines) || dock.lines.length > 256 || !dock.lines.every((/** @type {unknown} */ line) => typeof line === "string")) throw new Error("Invalid dock");
-        if (bridge()?.socket !== connection.socket || !isShown()) return;
+        if (bridge()?.socket !== connection.socket || !isLive()) return;
         this.dock = { ...dock, width };
         this.syncSurfaceInput(next);
       } catch { this.dock = null; this.syncSurfaceInput(next); }
@@ -970,7 +1033,7 @@ export default class StereoView extends View {
         const page = JSON.parse(result.stdout);
         if (!validView(page, start, count, width, following)) throw new Error("Invalid bridge response");
         const now = bridge();
-        if (!isShown() || !now || now.socket !== connection.socket || state.width !== width) return;
+        if (!isLive() || !now || now.socket !== connection.socket || state.width !== width) return;
         if (state.searchBar && page.search?.open && page.search.query === state.searchState?.query &&
             Number.isSafeInteger(page.search.count) && Number.isSafeInteger(page.search.current)) {
           const previousTop = state.searchState?.top;
@@ -1006,6 +1069,12 @@ export default class StereoView extends View {
           state.selection.extend(state.selectionFocus);
           if (!state.pressed || !state.selectionOnly) state.selectionFocus = null;
         }
+        if (state.stale) {
+          // First page at the new width: rows kept from the old one that it does not replace have the wrong wrapping.
+          state.stale = false;
+          for (const index of dropStaleRows(state.items, page.top, page.lines.length))
+            if (!state.selection.endpoints().includes(index)) state.selectionRows.delete(index);
+        }
         for (const index of state.items.keys()) {
           if (index >= page.total || (index >= page.top + page.lines.length && index < page.top + count)) {
             state.items.delete(index);
@@ -1031,6 +1100,8 @@ export default class StereoView extends View {
       } finally {
         state.fetching = false;
         cx.notify();
+        // The panel was resized while this page was in flight: it is for the old width, so ask again now.
+        if (state.width !== width) this.scheduleRead(cx);
       }
     });
   }
@@ -1051,16 +1122,28 @@ export default class StereoView extends View {
     cx.notify();
   }
 
+  /** Keep what this copy measured for the copies created after it. */
+  rememberGeometry() {
+    if (!this.cellMeasured) return;
+    const panels = { ...(lastGeometry?.panels ?? {}) };
+    for (const [name, state] of /** @type {[string, ReturnType<typeof paneState>][]} */ ([["chat", this.chat], ["activity", this.activity], ["combined", this.combined]]))
+      if (state.lastSize) panels[name] = { width: state.lastSize.width, height: state.lastSize.height };
+    lastGeometry = { cellWidth: this.cellWidth, areaWidth: this.areaWidth, areaHeight: this.areaHeight,
+      controlWidth: this.controlWidth, controlHeight: this.controlHeight, panels };
+  }
+
   /** @param {ReturnType<typeof paneState>} state @param {{width: number, height: number}} size @param {any} cx */
   sizePane(state, size, cx) {
     state.lastSize = size;
     const z = settings().zoom;
     const zoom = typeof z === "number" && z > 0 ? z : 1;
-    const width = Math.max(10, Math.min(300, Math.floor((size.width / zoom - ROW_CHROME) / this.cellWidth)));
-    const height = Math.max(1, Math.floor(size.height / zoom));
+    const { width, height } = paneDimensions(size, zoom, this.cellWidth, ROW_CHROME);
+    this.rememberGeometry();
     if (width === state.width && height === state.height) return;
     if (width !== state.width) {
-      state.items.clear();
+      // Keep the rows: drawn with the old wrapping they are better than a blank panel until the next page lands.
+      state.stale = true;
+      this.scheduleRead(cx);
       state.selection.clear();
       state.selectionRows.clear();
       state.selectionFocus = null;
@@ -1622,14 +1705,14 @@ export default class StereoView extends View {
         const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
         const width = size.width / zoom, height = size.height / zoom;
         if (Math.abs(width - this.areaWidth) < 1 && Math.abs(height - this.areaHeight) < 1) return;
-        this.areaWidth = width; this.areaHeight = height; cx.notify();
+        this.areaWidth = width; this.areaHeight = height; this.rememberGeometry(); cx.notify();
       }).child(content);
     const root = v_flex().relative().size_full().min_h(0).bg(t.surface).text_size(UI_TEXT_SIZE)
       .on_size_change((size, cx) => {
         const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
         const width = size.width / zoom, height = size.height / zoom;
         if (Math.abs(width - this.controlWidth) >= 1 || Math.abs(height - this.controlHeight) >= 1) {
-          this.controlWidth = width; this.controlHeight = height; cx.notify();
+          this.controlWidth = width; this.controlHeight = height; this.rememberGeometry(); cx.notify();
         }
       })
       .child(div().id("stereo-cell-probe").absolute().top_0().left_0().opacity(0).whitespace_nowrap()
