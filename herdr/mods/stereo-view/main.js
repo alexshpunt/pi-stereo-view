@@ -1398,12 +1398,13 @@ export default class StereoView extends View {
     if (typeof ready !== "function") return;
     this.preparing = true;
     this.drewTree = false;
+    const startedAt = Date.now();
     this.refresh(cx);
     cx.notify();
     /** @param {any} next */
     const poll = next => {
       if (!this.preparing) return;
-      if (this.preparedEnough()) { this.preparing = false; ready(); return; }
+      if (this.preparedEnough()) { this.preparing = false; (this.prepareLog ??= []).push(Date.now() - startedAt); ready(); return; } // prepareLog: TEMPORARY (LPT-1943)
       next.notify();
       next.timer.after(16, poll);
     };
@@ -1593,7 +1594,7 @@ export default class StereoView extends View {
       if (this.treeFrames.length > 2000) this.treeFrames.splice(0, 1000);
       if (!(Date.now() - (this.treeStatusAt ?? 0) < 1000)) {
         this.treeStatusAt = Date.now();
-        writeFile(`${appHome()}/stereo-tree-status.json`, JSON.stringify({ name, drawn: !!treeRows, chat: this.trees.status("chat"), activity: this.trees.status("activity"), width: state.width, height: state.height, perf: typeof performance !== "undefined", frames: this.treeFrames.slice(-600), ranges: { chat: this.trees.ranges("chat"), activity: this.trees.ranges("activity") } })).catch(() => {});
+        writeFile(`${appHome()}/stereo-tree-status.json`, JSON.stringify({ prepareMs: this.prepareLog?.slice(-10), name, drawn: !!treeRows, chat: this.trees.status("chat"), activity: this.trees.status("activity"), width: state.width, height: state.height, perf: typeof performance !== "undefined", frames: this.treeFrames.slice(-600), ranges: { chat: this.trees.ranges("chat"), activity: this.trees.ranges("activity") } })).catch(() => {});
       }
     }
     const rows = treeRows ?? v_virtual_list(id, state.total ?? 0, LINE_HEIGHT,
