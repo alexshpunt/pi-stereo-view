@@ -3,7 +3,7 @@ import type { TreeChange } from "./tree-model.js";
 import type { TreeLayout } from "./tree-layout.js";
 export class TreeView {
   constructor(client: Pick<TreeClient, "model" | "closed" | "get" | "rows">, options?: { viewport?: number; cols?: number; budgetMs?: number; maxExpandedChars?: number });
-  layout: TreeLayout; anchor: { index: number; offset: number }; following: boolean;
+  model: import("./tree-model.js").TreeModel; viewport: number; layout: TreeLayout; anchor: { index: number; offset: number }; following: boolean;
   readonly top: number; readonly maxTop: number; readonly exact: boolean; readonly settled: boolean; maxExpandedChars: number; busy: number;
   changed(change: TreeChange): void;
   setViewport(rows: number): void;

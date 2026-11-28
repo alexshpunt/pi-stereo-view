@@ -866,6 +866,15 @@ export default class StereoView extends View {
     this.activePane = pane;
     if (state.searchBar) { state.searchBar.focus(); return; }
     state.searchState = { open: true, query: "", count: 0, current: 0, pending: false };
+    if (this.trees?.active(pane)) {
+      // LPT-1943: a tree pane searches the bodies the mod holds (tree-find.js); Pi's search is not involved.
+      const actions = this.trees.findActions(pane, {
+        state: next => { state.searchState = next; },
+        // The bar is released outside its own key handler.
+        closed: next => next.timer.after(16, later => { state.searchBar?.dispose(); state.searchBar = null; state.searchState = null; later.notify(); }),
+      });
+      if (actions) { state.searchBar = createSearchBar(pane, actions); cx.notify(); return; }
+    }
     state.searchBar = createSearchBar(pane, {
       query: (query, next) => this.sendSearch(pane, { action: "query", query }, next),
       next: next => this.sendSearch(pane, { action: "next" }, next),
@@ -1591,7 +1600,7 @@ export default class StereoView extends View {
     const frameStart = typeof performance !== "undefined" ? performance.now() : Date.now();
     const treeRows = this.trees && name !== "combined" ? this.trees.list(name, state, {
       theme: t, lineHeight: LINE_HEIGHT, font: historyFont(), fontSize: historyFontSize(), gutter: ROW_GUTTER,
-      notify: () => this.viewCx?.notify(), svg, scrollbarLane: SCROLLBAR_LANE + 2,
+      notify: () => this.viewCx?.notify(), svg, scrollbarLane: SCROLLBAR_LANE + 2, cellWidth: this.cellWidth,
     }) : null;
     if (treeRows) this.drewTree = true;
     if (this.trees) { // TEMPORARY (LPT-1943): per-render timings for the live test, written to the app home
@@ -1647,9 +1656,17 @@ export default class StereoView extends View {
           });
         })
         .on_mouse_down("left", (event, cx) => {
-          if (!event.local_position || this.trees?.active(name)) return;
+          if (!event.local_position) return;
           const z = settings().zoom;
           const zoom = typeof z === "number" && z > 0 ? z : 1;
+          if (this.trees?.active(name)) {
+            // LPT-1943: text selection in a tree panel (tree-interact.js); the press takes the keyboard like the old panes do.
+            if (name === "chat" || name === "activity") this.activePane = name;
+            this.focus?.focus();
+            this.trees.pointerDown(name, state, { x: event.local_position.x / zoom, y: event.local_position.y / zoom, count: event.click_count || 1,
+              shift: !!event.modifiers?.shift, maxX: (state.lastSize?.width ?? Infinity) / zoom - SCROLLBAR_LANE }, cx);
+            return;
+          }
           const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / panelRowHeight(state));
           this.sendMouse(name, state, row, "press", event, cx);
         })
@@ -1657,6 +1674,7 @@ export default class StereoView extends View {
           if (!state.pressed && this.trees?.active(name)) {
             const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
             const x = event.local_position ? event.local_position.x / zoom : -1, y = event.local_position ? event.local_position.y / zoom : -1;
+            if (this.trees.dragging(name)) { this.trees.pointerMove(name, state, { x, y, pressed: event.pressed_button === "left" }, cx); return; }
             const viewport = state.handle.viewport_size().height || state.height;
             const inside = x >= 0 && x < (state.lastSize?.width ?? 0) / zoom && y >= 0 && y < viewport;
             this.trees.track(name, state, inside ? y : null, () => cx.notify());
@@ -1687,6 +1705,7 @@ export default class StereoView extends View {
           cx.notify();
         })
         .on_window_mouse_up("left", (event, cx) => {
+          if (this.trees?.dragging(name)) { this.trees.pointerUp(name); cx.notify(); return; }
           if (!state.pressed) return;
           if (!event.local_position) { this.cancelPaneCapture(name, state, cx); return; }
           state.autoScroll = 0;
@@ -1926,6 +1945,13 @@ export default class StereoView extends View {
         return;
       }
       const pane = this.viewState?.mode === "combined" ? this.combined : this.activePane === "chat" ? this.chat : this.activity;
+      const treePane = this.viewState?.mode === "combined" ? null : this.activePane;
+      if (this.focus.is_focused() && event.modifiers?.control && event.key?.toLowerCase() === "c" && treePane && this.trees?.hasSelection(treePane)) {
+        this.trees.copySelection(treePane, cx); cx.stop_propagation(); return; // LPT-1943: text selected in a tree panel
+      }
+      if (this.focus.is_focused() && event.key === "escape" && treePane && this.trees?.hasSelection(treePane)) {
+        this.trees.clearSelection(treePane); cx.notify(); cx.stop_propagation(); return;
+      }
       if (this.focus.is_focused() && event.modifiers?.control && event.key?.toLowerCase() === "c") {
         if (pane.selection.bounds()) {
           const name = this.viewState?.mode === "combined" ? "combined" : this.activePane;
