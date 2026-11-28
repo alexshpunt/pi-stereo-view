@@ -174,6 +174,8 @@ export function createTreePanels(gpui, deps) {
   return {
     /** Whether the pane's tree is in use (its stream exists); the old per-page polling stays off then. */
     active(name) { const entry = panes.get(name); return !!entry && !entry.dead; },
+    /** Like `active`, but opens the stream first: the old per-page request of a huge history must never run ahead of it. */
+    claim(name) { const entry = panes.get(name) ?? ensure(name, undefined); return !!entry && !entry.dead; },
     /** True while a stream delivered something the next frame must draw, or heights/bodies are still settling. */
     wantsRender() {
       for (const entry of panes.values()) {

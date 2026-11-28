@@ -1113,7 +1113,7 @@ export default class StereoView extends View {
   /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {{socket: string, machine?: string, address: string}} connection @param {any} cx */
   fetchPane(pane, state, connection, cx) {
     if (state.fetching || state.copying || (state.pressed && !state.selectionOnly) || this.actionPending || this.actions.length) return;
-    if (this.trees?.active(pane)) return; // The element tree supplies this pane's rows.
+    if (this.trees?.claim(pane)) return; // The element tree supplies this pane's rows.
     const following = state.following;
     const { start, count } = nextPage(state);
     const width = state.width;
