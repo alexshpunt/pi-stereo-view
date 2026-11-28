@@ -20,6 +20,7 @@ const PAGE = 256;
 /** How many times a GUI that has just appeared hands the keyboard to the composer, and for how long it tries (LPT-1930). */
 const KEYBOARD_TRIES = 3;
 const KEYBOARD_CLAIM_MS = 15000;
+const LOADING_MS = 1500; // How long a new copy draws only its background while it waits for the bridge's first state.
 // What the last copy measured. A copy created later (a new pane) starts from it, so its first frame is laid out
 // like the others instead of jumping from guesses once it is measured.
 /** @type {{cellWidth: number, areaWidth: number, areaHeight: number, controlWidth: number, controlHeight: number, panels: Record<string, {width: number, height: number}>} | null} */
@@ -303,6 +304,7 @@ export default class StereoView extends View {
     this.cellWidth = 12;
     this.cellMeasured = false;
     /** @type {number} */ this.lastRead = -Infinity;
+    this.created = Date.now();
     this.tickShown = false;
     this.readScheduled = false;
     if (lastGeometry) {
@@ -1122,6 +1124,11 @@ export default class StereoView extends View {
     cx.notify();
   }
 
+  /** Whether the first read of the bridge's state is still on its way (for a moment only: a bridge that does not answer shows its message). */
+  loading() {
+    return this.available && !this.controlError && this.viewState === null && Date.now() - this.created < LOADING_MS;
+  }
+
   /** Keep what this copy measured for the copies created after it. */
   rememberGeometry() {
     if (!this.cellMeasured) return;
@@ -1682,8 +1689,13 @@ export default class StereoView extends View {
       .child(this.control("headers", state?.showHeaders ? "Hide headers" : "Show headers", t));
     const hasSurface = !!this.surface?.active;
     const placement = this.dialogPlacement();
+    // Until the first state arrives the layout is a guess: draw the background only, so the first frame does not
+    // show the default layout and then jump to the real one.
+    const loading = this.loading();
     let content;
-    if (!this.available) {
+    if (loading) {
+      content = div();
+    } else if (!this.available) {
       content = div().px(8).text_color(t.muted).child("Waiting for the Stereo View bridge. The terminal remains available.");
     } else if (state?.mode === "combined" || placement === "combined") {
       content = this.panel("combined", "History", this.combined, t, hasSurface);
@@ -1720,8 +1732,8 @@ export default class StereoView extends View {
       .child(div().id("stereo-cell-probe").absolute().top_0().left_0().opacity(0).whitespace_nowrap()
         .font_family(historyFont()).text_size(historyFontSize())
         .on_size_change((size, cx) => this.measureCell(size, cx)).child("MMMMMMMMMM"))
-      .child(props()?.view === "gui" ? div().h(0) : header)
-      .child(state?.showToolbar !== false ? toolbar : props()?.view === "gui" ? this.control("settings", "Settings", t) : div().h(0))
+      .child(props()?.view === "gui" || loading ? div().h(0) : header)
+      .child(loading ? div().h(0) : state?.showToolbar !== false ? toolbar : props()?.view === "gui" ? this.control("settings", "Settings", t) : div().h(0))
       .child(this.controlError ? div().px(8).text_color(t.muted).child(this.controlError) : div().h(0))
       .child(body);
     if (!this.surface?.active && this.dock?.active && this.dock.lines.length) root.child(this.renderDock(t));
