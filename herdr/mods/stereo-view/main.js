@@ -1006,7 +1006,8 @@ export default class StereoView extends View {
             if (pane.following) pane.handle.scroll_to_bottom();
             else if (Number.isSafeInteger(reply.restored?.top)) pane.handle.scroll_to_item(reply.restored.top);
           } else if (Number.isSafeInteger(reply.top)) { pane.following = false; pane.handle.scroll_to_item(reply.top); }
-        } else if (reply.ok !== true && !((request.op === "surface-mouse" || request.op === "overlay-mouse") && reply.ok === false)) throw new Error("Action failed");
+        // A pointer event Pi did not take is not an error: it can be for a frame Pi has replaced, or land outside rows that a resize just moved.
+        } else if (reply.ok !== true && !((request.op === "surface-mouse" || request.op === "overlay-mouse" || request.op === "mouse") && reply.ok === false)) throw new Error("Action failed");
         if (reply.ok === false && request.event?.type === "wheel") this.scrollUnhandledWheel(request);
         this.controlError = null;
       } catch {
