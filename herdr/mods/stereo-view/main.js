@@ -13,6 +13,13 @@ import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./i
 import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "./history-blocks.js";
 
 const LABEL = "herdr.stereo.bridge";
+// LPT-1943 benchmark instrumentation (temporary): how long exec takes as the mod sees it.
+const BENCH_SAMPLES = [];
+function benchRecord(op, pane, execMs, parseMs, bytes, piMs) {
+  BENCH_SAMPLES.push({ op, pane, execMs, parseMs, bytes, piMs, at: Date.now() });
+  if (BENCH_SAMPLES.length % 10 === 0) writeFile(`${appHome()}/stereo-bench.json`, JSON.stringify(BENCH_SAMPLES)).catch(() => {});
+}
+
 const DEFAULT_LINE_HEIGHT = 17; // Used until the terminal's text size is known.
 const LINE_HEIGHT_RATIO = 1.32; // Row height per point of terminal text, matching the terminal's own rows.
 let LINE_HEIGHT = DEFAULT_LINE_HEIGHT; // Set by syncTypography from the terminal's text size and line height.
@@ -1061,9 +1068,12 @@ export default class StereoView extends View {
     const request = JSON.stringify({ v: 1, op: "view", pane, top: start, height: count, width, following });
     cx.spawn(async (/** @type {any} */ cx) => {
       try {
+        const benchT0 = Date.now();
         const result = await exec("node", ["-e", CLIENT, connection.socket, request], { on: connection.machine, timeout: 5000 });
+        const benchT1 = Date.now();
         if (result.code !== 0) throw new Error("Bridge unavailable");
         const page = JSON.parse(result.stdout);
+        benchRecord("view", pane, benchT1 - benchT0, Date.now() - benchT1, result.stdout.length, page.bench?.pageMs);
         if (!validView(page, start, count, width, following)) throw new Error("Invalid bridge response");
         const now = bridge();
         if (!isLive() || !now || now.socket !== connection.socket || state.width !== width) return;
