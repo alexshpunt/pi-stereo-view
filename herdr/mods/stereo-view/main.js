@@ -217,6 +217,12 @@ function treeSpawn(/** @type {string | null} */ mode) {
     const spawn = /** @type {any} */ (hostApi).spawnStream;
     return typeof spawn === "function" ? spawn : null;
   }
+  if (mode === "live-wsl") {
+    // TEMPORARY (LPT-1943): the real spawnStream, run on this Windows host through wsl.exe with a relay file (the test
+    // machine's own core predates machine.exec_stream).
+    const spawn = /** @type {any} */ (hostApi).spawnStream;
+    return typeof spawn === "function" ? (/** @type {string} */ _command, /** @type {string[]} */ args) => spawn("wsl.exe", ["-e", "node", "/tmp/lpt1943-relay.js", args[2], args[3]], {}) : null;
+  }
   if (mode?.startsWith("replay:")) return replaySpawn(mode.slice(7), path => readFile(path, "utf8"));
   return null;
 }
