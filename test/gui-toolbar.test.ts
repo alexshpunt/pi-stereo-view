@@ -13,7 +13,7 @@ import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "../
 // @ts-expect-error The mod has no TypeScript declarations.
 import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "../herdr/mods/stereo-view/history-blocks.js";
 // @ts-expect-error The mod has no TypeScript declarations.
-import { dropStaleRows, paneDimensions, refreshPlan, TICK_MS } from "../herdr/mods/stereo-view/refresh-plan.js";
+import { dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT } from "../herdr/mods/stereo-view/refresh-plan.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -131,7 +131,7 @@ function harness() {
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView, focused: paneFocused }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom, font: terminalFont, font_size: terminalSize }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, dropStaleRows, paneDimensions, refreshPlan, TICK_MS, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
+  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
     appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
