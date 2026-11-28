@@ -87,6 +87,13 @@ export function createSettingsPanel(preferences, update, close) {
     turnHoverColor: InputState.new({ value: preferences.turnHoverColor === "turn" ? "" : preferences.turnHoverColor }),
   };
   const errors = {};
+  let closed = false;
+  function dismiss(cx) {
+    if (closed) return;
+    closed = true;
+    for (const input of Object.values(inputs)) input.release();
+    close(cx);
+  }
   for (const key of Object.keys(inputs)) {
     inputs[key].on("change", (_event, cx) => { delete errors[key]; cx.notify(); });
     inputs[key].on("submit", (_event, cx) => applyInput(key, cx));
@@ -124,10 +131,10 @@ export function createSettingsPanel(preferences, update, close) {
         content.child(section);
       }
       return v_flex().id("stereo-settings").size_full().min_h(0).bg(t.surface).text_color(t.foreground)
-        .on_key_down((event, cx) => { if (event.key === "escape") { close(cx); cx.stop_propagation(); } })
+        .on_key_down((event, cx) => { if (event.key === "escape") { dismiss(cx); cx.stop_propagation(); } })
         .child(h_flex().items_center().justify_between().px(16).py(10)
           .child(div().text_size(15).font_semibold().child("Stereo View settings"))
-          .child(button("stereo-settings-close", "Close", (_event, cx) => close(cx), t)))
+          .child(button("stereo-settings-close", "Close", (_event, cx) => dismiss(cx), t)))
         .child(content);
     },
   };

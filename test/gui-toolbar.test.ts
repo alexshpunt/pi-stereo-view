@@ -28,6 +28,8 @@ function harness() {
     windowMove?: (...args: any[]) => void;
     windowUp?: (...args: any[]) => void;
     keyDown?: (...args: any[]) => void;
+    scrollHandle?: { y: number };
+    scrollable = false;
     constructor(readonly kind: string) {
       return new Proxy(this, { get(target, prop, receiver) {
         if (prop in target) return (target as any)[prop];
@@ -41,6 +43,8 @@ function harness() {
           if (prop === "on_window_mouse_move") target.windowMove = args[0];
           if (prop === "on_window_mouse_up") target.windowUp = args[1];
           if (prop === "on_key_down") target.keyDown = args[0];
+          if (prop === "overflow_y_scrollbar") target.scrollable = true;
+          if (prop === "track_scroll") target.scrollHandle = args[0];
           return receiver;
         };
       } });
@@ -58,7 +62,7 @@ function harness() {
   };
   const ui = { View: class {}, div: el("div"), image: el("image"), svg: el("svg"), h_flex: el("horizontal"), v_flex: el("vertical"),
     v_virtual_list: el("list"), VirtualListScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), viewport_size: () => ({ height: 300 }), content_size: () => ({ height: 0 }), scroll_to_bottom() {}, scroll_to_item() {} }) },
-    ScrollHandle: { new: () => ({ offset: () => ({ y: 0 }), release() {} }) },
+    ScrollHandle: { new: () => ({ y: 0, offset() { return { y: this.y }; }, release() {} }) },
     Scrollbar: { vertical: el("scrollbar") }, Input: { new: () => new Element("input") }, InputState: { new: () => input } };
   const opened: string[] = [];
   const copied: string[] = [];
@@ -132,6 +136,38 @@ test("keeps history visible behind Pi overlays and forwards overlay input", asyn
     event: { type: "press", button: "left", x: 1, y: 0 } });
   expect(h.calls).toContainEqual({ v: 1, op: "overlay-mouse", revision: 1, id: 7, frame: 5,
     event: { type: "release", button: "left", x: 1, y: 0 } });
+});
+
+test("does not copy stale selection coordinates after history reflows", () => {
+  const h = harness();
+  h.view.init({}, h.cx);
+  const pane = h.view.chat;
+  const cells = Array.from("abcdef", (text, start) => ({ text, start, end: start + 1 }));
+  pane.selectionRows.set(0, { cells, words: [] });
+  pane.selection.start({ row: 0, col: 1 }, "character");
+  pane.selection.extend({ row: 0, col: 3 });
+  expect(pane.selection.text()).toBe("bcd");
+  h.view.sizePane(pane, { width: 900, height: 300 }, h.cx);
+  expect(pane.selection.bounds()).toBeUndefined();
+  expect(pane.selectionRows.size).toBe(0);
+});
+
+test("scrolls a tall overlay and routes clicks to the scrolled row", async () => {
+  const h = harness();
+  h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 0, col: 0, width: 20, height: 60, lines: Array.from({ length: 60 }, (_, i) => `row ${i}`) }]);
+  h.view.init({}, h.cx);
+  await h.flush();
+  const layer = h.find(h.view.render(), "stereo-overlay-7")!;
+  expect(layer.scrollable).toBe(true);
+  expect(layer.scrollHandle).toBeDefined();
+  layer.scrollHandle!.y = 17 * 30;
+  layer.mouseDown!({ local_position: { x: 13, y: 18 } }, h.cx);
+  layer.windowUp!({ local_position: { x: 13, y: 18 } }, h.cx);
+  await h.flush();
+  expect(h.calls).toContainEqual({ v: 1, op: "overlay-mouse", revision: 1, id: 7, frame: 5,
+    event: { type: "press", button: "left", x: 1, y: 31 } });
+  expect(h.calls).toContainEqual({ v: 1, op: "overlay-mouse", revision: 1, id: 7, frame: 5,
+    event: { type: "release", button: "left", x: 1, y: 31 } });
 });
 
 test("sends a long paste as one ordered overlay transaction", async () => {

@@ -164,6 +164,7 @@ export default class StereoView extends View {
     /** @type {OverlayPage | null} */ this.overlays = null;
     this.overlaysPending = false;
     this.overlayPress = null;
+    this.overlayScrolls = new Map();
     this.controlHeight = 400;
     this.surfacePending = false;
     this.dock = null;
@@ -212,6 +213,8 @@ export default class StereoView extends View {
       this.surface = null;
       this.actions = [];
       this.overlays = null; this.overlayPress = null;
+      for (const handle of this.overlayScrolls.values()) handle.release?.();
+      this.overlayScrolls.clear();
       for (const state of [this.chat, this.activity, this.combined]) {
         state.searchBar?.dispose(); state.searchBar = null; state.searchState = null;
         state.selection.clear(); state.selectionRows.clear(); state.selecting = false;
@@ -298,6 +301,11 @@ export default class StereoView extends View {
               layer.height < 1 || layer.height > 256 || typeof layer.focused !== "boolean" ||
               !Array.isArray(layer.lines) || layer.lines.length > layer.height || layer.lines.some((/** @type {unknown} */ line) => typeof line !== "string"))) throw new Error("Invalid overlays");
         if (bridge()?.socket !== connection.socket || !isShown()) return;
+        const ids = new Set(data.overlays.map(layer => layer.id));
+        for (const [id, handle] of this.overlayScrolls) if (!ids.has(id)) {
+          handle.release?.();
+          this.overlayScrolls.delete(id);
+        }
         this.overlays = data;
         this.syncSurfaceInput(next);
       } catch { this.overlays = null; this.syncSurfaceInput(next); }
@@ -782,7 +790,15 @@ export default class StereoView extends View {
     const width = Math.max(10, Math.min(300, Math.floor((size.width / zoom - 24) / this.cellWidth)));
     const height = Math.max(1, Math.floor(size.height / zoom));
     if (width === state.width && height === state.height) return;
-    if (width !== state.width) state.items.clear();
+    if (width !== state.width) {
+      state.items.clear();
+      state.selection.clear();
+      state.selectionRows.clear();
+      state.selectionFocus = null;
+      state.selecting = false;
+      state.autoScroll = 0;
+      if (state.selectionOnly) { state.pressed = false; state.selectionOnly = false; state.pressPoint = null; }
+    }
     state.width = width;
     state.height = height;
     cx.notify();
@@ -1086,8 +1102,12 @@ export default class StereoView extends View {
     const connection = bridge(); if (!connection) return;
     const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
     const x = Math.floor(event.local_position.x / zoom / this.cellWidth);
-    const y = Math.floor(event.local_position.y / zoom / rowHeight());
-    const inside = x >= 0 && x < layer.width && y >= 0 && y < layer.height;
+    const y = Math.floor((event.local_position.y / zoom + (this.overlayScrolls.get(layer.id)?.offset().y ?? 0)) / rowHeight());
+    const viewportWidth = Math.min(this.controlWidth, layer.width * this.cellWidth);
+    const viewportHeight = Math.min(this.controlHeight, layer.height * LINE_HEIGHT + (layer.focused ? 40 : 0));
+    const inside = event.local_position.x >= 0 && event.local_position.x / zoom < viewportWidth &&
+      event.local_position.y >= 0 && event.local_position.y / zoom < viewportHeight &&
+      x >= 0 && x < layer.width && y >= 0 && y < layer.height;
     if (type === "press") {
       if (!inside || this.overlaysPending) return;
       this.overlayPress = { id: layer.id, frame: layer.mouseFrame, revision: this.overlays.revision, x, y };
@@ -1108,8 +1128,10 @@ export default class StereoView extends View {
     const height = Math.min(this.controlHeight, layer.height * LINE_HEIGHT + (layer.focused ? 40 : 0));
     const left = Math.max(0, Math.min(this.controlWidth - width, layer.col / Math.max(1, screen.columns) * this.controlWidth));
     const top = Math.max(0, Math.min(this.controlHeight - height, layer.row / Math.max(1, screen.rows) * this.controlHeight));
+    let scroll = this.overlayScrolls.get(layer.id);
+    if (!scroll) { scroll = ScrollHandle.new(); this.overlayScrolls.set(layer.id, scroll); }
     const body = v_flex().id(`stereo-overlay-${layer.id}`).absolute().left(left).top(top).w(width).h(height)
-      .overflow_hidden().bg(t.surface)
+      .overflow_y_scrollbar().track_scroll(scroll).bg(t.surface)
       .on_mouse_down("left", (event, cx) => { if (layer.focused) this.surfaceInput?.focus(); this.sendOverlayMouse(layer, "press", event, cx); })
       .on_window_mouse_move((event, cx) => { if (this.overlayPress?.id === layer.id) event.pressed_button === "left" ? this.sendOverlayMouse(layer, "drag", event, cx) : this.cancelControlCapture("overlay", cx); })
       .on_window_mouse_up("left", (event, cx) => { if (this.overlayPress?.id === layer.id) event.local_position ? this.sendOverlayMouse(layer, "release", event, cx) : this.cancelControlCapture("overlay", cx); });

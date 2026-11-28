@@ -59,7 +59,7 @@ test("settings controls send typed changes and close without mutating preference
   const inputs: any[] = [];
   const InputState = { new: ({ value }: any) => {
     const events: Record<string, Function> = {};
-    const input = { current: value, on: (key: string, fn: Function) => { events[key] = fn; }, value() { return this.current; }, events };
+    const input = { current: value, released: 0, release() { this.released++; }, on: (key: string, fn: Function) => { events[key] = fn; }, value() { return this.current; }, events };
     inputs.push(input); return input;
   } };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/settings.js", import.meta.url), "utf8")
@@ -84,4 +84,5 @@ test("settings controls send typed changes and close without mutating preference
   expect(changes).toEqual([["showTimestamps", false], ["autoPaneHeaderRows", 15]]);
   find(root, "stereo-settings-close")!.click!({}, cx);
   expect(closed).toBe(1);
+  expect(inputs.map(input => input.released)).toEqual([1, 1]);
 });
