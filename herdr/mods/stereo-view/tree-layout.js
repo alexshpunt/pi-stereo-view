@@ -38,7 +38,7 @@ export class TreeLayout {
       const i = this.model.indexOf(ids[k]);
       if (i < 0 || this.measured[i]) continue;
       const item = this.model.items[i];
-      if (item.k === "rows" || !this.model.bodies.has(item.id) || this.model.full.has(item.id)) continue;
+      if (item.k === "rows" || !this.model.bodies.has(item.id) || (item.x && this.model.full.has(item.id))) continue; // expanded here: measured locally
       this.setHeight(i, this.chrome(item) + rows[k]);
     }
     return true;
@@ -66,7 +66,7 @@ export class TreeLayout {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const exact = this.piRows.get(item.id);
-      if (exact !== undefined && item.k !== "rows" && !this.model.full.has(item.id)) { this.heights[i] = this.chrome(item) + exact; this.measured[i] = 1; }
+      if (exact !== undefined && item.k !== "rows" && !(item.x && this.model.full.has(item.id))) { this.heights[i] = this.chrome(item) + exact; this.measured[i] = 1; }
       else this.heights[i] = this.estimate(item);
     }
     this.countUnmeasured();
