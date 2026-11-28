@@ -8,25 +8,12 @@ export const herdrCommand: HerdrCommand = args => new Promise((resolve, reject) 
   });
 });
 
-/** Open only with an App-verified, machine-qualified caller address. */
-export async function openGuiForFocusedTerminal(terminal: string, pid: number, run: HerdrCommand = herdrCommand,
-  stillRunning: () => boolean = () => true): Promise<boolean> {
-  // HC_TERMINAL_ID is normally a bare, machine-local ID. It cannot identify the
-  // caller in the App's machine namespace, even when its PID also matches.
-  // Fail closed until the App supplies a verified fully qualified address.
-  if (!/^[^/\s]+\/t[a-zA-Z0-9]+$/.test(terminal) || !Number.isSafeInteger(pid) || pid <= 0) return false;
-  try {
-    const status = JSON.parse(await run(["status"]));
-    if (status.agent !== terminal || typeof status.tab !== "string" || !status.tab) return false;
-    const list = JSON.parse(await run(["do", "agent.list"]));
-    if (!Array.isArray(list.agents) || !list.agents.some((agent: { terminal?: unknown; pid?: unknown }) =>
-      agent.terminal === status.agent && agent.pid === pid)) return false;
-    const latest = JSON.parse(await run(["status"]));
-    if (!stillRunning() || latest.agent !== status.agent || latest.tab !== status.tab) return false;
-    await run(["do", "app.open", JSON.stringify({ mod: "stereo-view", app: "stereo-view", for: status.agent })]);
-    return true;
-  } catch {
-    // The app or the optional mod may not be installed. The terminal stays usable.
-    return false;
-  }
+/** Keep auto-open disabled until the running App can report its pane-view capability. */
+export async function openGuiForFocusedTerminal(_terminal: string, _pid: number, _run: HerdrCommand = herdrCommand,
+  _stillRunning: () => boolean = () => true): Promise<boolean> {
+  // The command listing is from the CLI executable, which need not match the running App.
+  // App status and agent.list do not report pane views. An invalid pane.view command is
+  // not a safe probe: older Apps can route unknown commands to a mod. Opening the tab
+  // manually remains available on both old and new Herdr versions.
+  return false;
 }

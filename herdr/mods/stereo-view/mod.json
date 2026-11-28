@@ -1,6 +1,11 @@
 {
   "place": "none",
   "capabilities": { "clipboard": { "write": true }, "fs": { "read": ["${pluginDir}/../../data/stereo-view"], "write": ["${pluginDir}/../../data/stereo-view"] } },
+  "pane_view": {
+    "id": "gui",
+    "label": "GUI",
+    "when": [{ "label": "herdr.stereo.bridge" }]
+  },
   "app": {
     "id": "stereo-view",
     "label": "Stereo View",

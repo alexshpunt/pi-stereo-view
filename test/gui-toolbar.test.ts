@@ -7,6 +7,8 @@ import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { dialogKey } from "../herdr/mods/stereo-view/dialog-keys.js";
 // @ts-expect-error The mod has no TypeScript declarations.
+import { composerRoute } from "../herdr/mods/stereo-view/composer-route.js";
+// @ts-expect-error The mod has no TypeScript declarations.
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
@@ -20,7 +22,13 @@ function harness() {
   let overlays: any[] = [];
   let pointerHandled = true;
   let stopped = 0;
+  let focusCount = 0;
+  let paneView = false;
+  let shownView = "gui";
   const pending: Promise<unknown>[] = [];
+  let listening = false;
+  let deliverCommand: ((command: string) => void) | undefined;
+  const nextCommand = () => { listening = true; return new Promise<string>(resolve => { deliverCommand = resolve; }); };
   class Element {
     name?: string;
     nodes: Element[] = [];
@@ -74,9 +82,9 @@ function harness() {
     Scrollbar: { vertical: el("scrollbar") }, Input: { new: () => new Element("input") }, InputState: { new: () => input } };
   const opened: string[] = [];
   const copied: string[] = [];
-  const cx = { notify() {}, stop_propagation() { stopped++; }, focus_handle: () => ({ focus() {}, is_focused: () => true, release() {} }),
+  const cx = { notify() {}, stop_propagation() { stopped++; }, focus_handle: () => ({ focus() { focusCount++; }, is_focused: () => true, release() {} }),
     write_to_clipboard(text: string) { copied.push(text); },
-    open_url(url: string) { opened.push(url); }, timer: { every() {}, after(_delay: number, callback: (cx: any) => void) { callback(cx); } }, spawn(fn: (cx: any) => Promise<unknown>) { pending.push(fn(cx)); } };
+    open_url(url: string) { opened.push(url); }, timer: { every() {}, after(_delay: number, callback: (cx: any) => void) { callback(cx); } }, spawn(fn: (cx: any) => Promise<unknown>) { listening = false; const promise = fn(cx); if (!listening) pending.push(promise); } };
   const terminal = { address: "m/t", state: "live", pid: 1, labels: { "herdr.stereo.bridge": JSON.stringify({ v: 1, pid: 1, socket: "/tmp/stereo-ABC123/s" }) } };
   const state = { v: 1, layout: "columns", side: "left", mode: "split", zoom: null, showToolbar: true, showHeaders: true, compactTools: true };
   Object.assign(state, { preferences: { compactTools: true } });
@@ -109,10 +117,10 @@ function harness() {
       })) });
     }
     return { code: 0, stdout: JSON.stringify(data) };
-  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
+  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
+  const names = { ...ui, ...env, nextCommand, composerRoute, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
     appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -124,8 +132,38 @@ function harness() {
     setSurface(value: typeof surface) { surface = value; }, setOverlays(value: any[]) { overlays = value; },
     typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
     setPointerHandled(value: boolean) { pointerHandled = value; }, stopped: () => stopped,
-    surfaceFocused: () => inputFocused };
+    surfaceFocused: () => inputFocused, sendCommand: (command: string) => deliverCommand?.(command),
+    setPaneView(value: boolean) { paneView = value; }, setShownView(value: string) { shownView = value; }, focused: () => focusCount };
 }
+
+test("pane view drops app chrome, starts with a live bridge and pauses in TUI", async () => {
+  const h = harness(); h.setPaneView(true); h.view.init({}, h.cx);
+  expect(h.view.available).toBe(true);
+  await h.flush();
+  expect(h.find(h.view.render(), "stereo-terminal")).toBeUndefined();
+  const before = h.calls.length;
+  h.setShownView("tui"); h.view.refresh(h.cx); await h.flush();
+  expect(h.calls.length).toBe(before);
+  h.setShownView("gui"); h.view.refresh(h.cx); await h.flush();
+  expect(h.calls.length).toBeGreaterThan(before);
+});
+
+test("a pane created in TUI mode recognizes a live bridge before switching", async () => {
+  const h = harness(); h.setPaneView(true); h.setShownView("tui");
+  h.view.init({}, h.cx);
+  expect(h.view.available).toBe(true);
+  expect(h.calls).toHaveLength(0);
+});
+
+test("pane focus targets the active panel or the open Pi dialog", async () => {
+  const h = harness(); h.setPaneView(true); h.view.init({}, h.cx); await h.flush();
+  h.sendCommand("focus"); await Promise.resolve(); await h.flush();
+  expect(h.focused()).toBe(1);
+  h.setSurface({ active: true, frame: 2, lines: ["dialog"] });
+  h.view.refresh(h.cx); await h.flush();
+  h.sendCommand("focus"); await Promise.resolve();
+  expect(h.surfaceFocused()).toBe(true);
+});
 
 test("keeps split history visible while an extension dialog is open", async () => {
   const h = harness(); h.setSurface({ active: true, frame: 8, mouseFrame: 12, lines: ["dialog"] });

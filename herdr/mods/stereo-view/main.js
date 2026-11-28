@@ -83,7 +83,7 @@ c.on('end',()=>{if(!done)fail()});`;
 function isShown() {
   if (!window()?.visible) return false;
   const ownPane = panes().find(p => p.pane === props()?.pane);
-  if (!ownPane) return false;
+  if (!ownPane || (props()?.view === "gui" && ownPane.view !== "gui")) return false;
   const space = spaces().find(s => s.active);
   const tab = space?.tabs.find(t => t.id === ownPane.tab && t.active);
   return !!tab && (!tab.zoomed || ownPane.zoomed);
@@ -224,13 +224,20 @@ export default class StereoView extends View {
     // Until the first layout measures the monospace probe, use one em per cell.
     this.activePane = "chat";
     this.cellWidth = 12;
-    this.available = false;
+    this.available = !checking() && !!bridge();
     if (checking()) return;
     this.focus = cx.focus_handle();
     cx.spawn(async (cx) => {
       for (;;) {
-        const action = composerRoute(await nextCommand(), props()?.pane);
-        if (!action || !isShown()) continue;
+        const command = await nextCommand();
+        if (!isShown()) continue;
+        if (command === "focus" && props()?.view === "gui") {
+          this.refresh(cx);
+          if (this.surfaceInput) this.surfaceInput.focus(); else this.focus?.focus();
+          continue;
+        }
+        const action = composerRoute(command, props()?.pane);
+        if (!action) continue;
         const dialog = this.surface?.active || this.overlays?.overlays.some(layer => layer.focused) || this.dock?.focused;
         if (action === "dialog-focus" && dialog) this.surfaceInput?.focus();
         else if (action !== "dialog-focus" && !dialog) this.navigate(action, cx);
@@ -1382,8 +1389,8 @@ export default class StereoView extends View {
       .font_family(typeof settings().font_family === "string" ? /** @type {string} */ (settings().font_family) : "monospace")
       .child(div().id("stereo-cell-probe").absolute().top_0().left_0().opacity(0).whitespace_nowrap()
         .on_size_change((size, cx) => this.measureCell(size, cx)).child("MMMMMMMMMM"))
-      .child(header)
-      .child(state?.showToolbar !== false ? toolbar : div().h(0))
+      .child(props()?.view === "gui" ? div().h(0) : header)
+      .child(state?.showToolbar !== false ? toolbar : props()?.view === "gui" ? this.control("settings", "Settings", t) : div().h(0))
       .child(this.controlError ? div().px(8).text_color(t.muted).child(this.controlError) : div().h(0))
       .child(body);
     if (!this.surface?.active && this.dock?.active && this.dock.lines.length) root.child(this.renderDock(t));
