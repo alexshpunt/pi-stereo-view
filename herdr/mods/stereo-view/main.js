@@ -1608,9 +1608,17 @@ export default class StereoView extends View {
       const end = typeof performance !== "undefined" ? performance.now() : Date.now();
       (this.treeFrames ??= []).push({ name, at: end, spent: end - frameStart });
       if (this.treeFrames.length > 2000) this.treeFrames.splice(0, 1000);
+      const frameStats = /** @type {any} */ (hostApi).frameStats; // frames the host drew since the last call (window level)
+      if (typeof frameStats === "function" && Date.now() - (this.frameStatsAt ?? 0) >= 250) {
+        this.frameStatsAt = Date.now();
+        const sample = frameStats();
+        if (sample?.count) (this.frameStatsLog ??= []).push({ at: Date.now(), ...sample });
+        if ((this.frameStatsLog?.length ?? 0) > 2400) this.frameStatsLog.splice(0, 1200);
+      }
       if (!(Date.now() - (this.treeStatusAt ?? 0) < 1000)) {
         this.treeStatusAt = Date.now();
-        writeFile(`${appHome()}/stereo-tree-status.json`, JSON.stringify({ prepareMs: this.prepareLog?.slice(-10), name, drawn: !!treeRows, chat: this.trees.status("chat"), activity: this.trees.status("activity"), width: state.width, height: state.height, perf: typeof performance !== "undefined", frames: this.treeFrames.slice(-600), ranges: { chat: this.trees.ranges("chat"), activity: this.trees.ranges("activity") } })).catch(() => {});
+        if (this.frameStatsLog) writeFile(`${appHome()}/stereo-frames.json`, JSON.stringify(this.frameStatsLog)).catch(() => {});
+        writeFile(`${appHome()}/stereo-tree-status.json`, JSON.stringify({ prepareMs: this.prepareLog?.slice(-10), name, drawn: !!treeRows, chat: this.trees.status("chat"), activity: this.trees.status("activity"), combined: this.trees.status("combined"), width: state.width, height: state.height, perf: typeof performance !== "undefined", frames: this.treeFrames.slice(-600), ranges: { chat: this.trees.ranges("chat"), activity: this.trees.ranges("activity") } })).catch(() => {});
       }
     }
     const rows = treeRows ?? v_virtual_list(id, state.total ?? 0, LINE_HEIGHT,
