@@ -9,6 +9,7 @@ import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
 import { composerAlive, composerFieldCommand, composerRoute } from "./composer-route.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
+import { blockAround, buttonRow, columnsFit, footerControls, padsEdge } from "./history-blocks.js";
 
 const LABEL = "herdr.stereo.bridge";
 const LINE_HEIGHT = 17;
@@ -17,6 +18,19 @@ const INTERVAL = 700;
 const ICON_SIZE = 14; // Toolbar icon edge in logical pixels.
 const NARROW_CONTROLS_WIDTH = 400; // Switch to icons when text controls no longer fit.
 const MIN_ACTIVITY_WIDTH = 200; // Leave room for the heading and controls in a narrow split.
+const ROW_GUTTER = 8; // Space before a history row's text; its background runs through it.
+const SCROLLBAR_LANE = 8; // Strip at a panel's right edge that holds no text, for the scrollbar.
+const ROW_CHROME = 2 * ROW_GUTTER + SCROLLBAR_LANE; // What a panel spends beside its terminal cells.
+const DIVIDER_SIZE = 5; // The draggable line between the two panels.
+const BLOCK_BUTTON = 24; // Edge of a block button's hit area (WCAG 2.5.8).
+const BLOCK_BUTTON_RADIUS = 4; // Corner radius of a block button.
+const BLOCK_BUTTONS_GAP = 2; // Space between a block's two buttons and to the panel's edge.
+const COPIED_MS = 1500; // How long Copy shows its check mark.
+const FALLBACK_FONT = "JetBrains Mono"; // Ships with Herdr; used when the layout names no terminal font.
+const UI_TEXT_SIZE = 12; // Text size of the toolbar and headings.
+const DEFAULT_FONT_SIZE = 12; // Terminal text size when the settings hold none.
+const MIN_FONT_SIZE = 9; // Smallest text that still fits a row.
+const MAX_FONT_SIZE = 14; // Largest text a row can hold.
 /** @typedef {{id:number, frame:number, mouseFrame:number, focused:boolean, row:number, col:number, width:number, height:number, lines:string[]}} OverlayLayer */
 /** @typedef {{revision:number, columns:number, rows:number, overlays:OverlayLayer[]}} OverlayPage */
 // GPUI snaps each virtual row to a whole window pixel before scrolling.
@@ -31,6 +45,26 @@ function panelRowHeight(state) {
   const measured = state.total > 0 ? height / state.total : 0;
   return Number.isFinite(measured) && measured >= LINE_HEIGHT * 0.9 && measured <= LINE_HEIGHT * 1.1
     ? measured : rowHeight();
+}
+
+/**
+ * History rows are terminal cells: only the terminal's own monospace font keeps every row `columns` cells wide, so
+ * its padding fills the panel and a wrapped line ends where Pi wrapped it. `settings().font` is that font.
+ */
+function historyFont() {
+  const font = settings().font;
+  return typeof font === "string" && font ? font : FALLBACK_FONT;
+}
+
+/** The terminal's text size, held to what a row's height takes. */
+function historyFontSize() {
+  const size = settings().font_size;
+  return typeof size === "number" && Number.isFinite(size) ? Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, size)) : DEFAULT_FONT_SIZE;
+}
+
+/** The controls Pi draws under a block, when this raw row is that footer. @param {string} line */
+function rowFooter(line) {
+  return line.includes("]") ? footerControls(parseAnsi(line).map(run => run.text).join("")) : null;
 }
 
 /** Preserve terminal modifiers without sending absent or false fields. @param {any} event */
@@ -110,10 +144,10 @@ function bridge() {
   return { socket: label.socket, machine: split < 0 ? undefined : address.slice(0, split), address };
 }
 
-/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[]}>, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number, copying: boolean, selectionOnly: boolean, autoScroll: number, autoScrollTimer: boolean, selectionFocus: {row: number, col: number} | null}} */
+/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[], footer: ReturnType<typeof footerControls>}>, blockHover: number | null, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number, copying: boolean, selectionOnly: boolean, autoScroll: number, autoScrollTimer: boolean, selectionFocus: {row: number, col: number} | null}} */
 function paneState() {
   const selectionRows = new Map();
-  return { total: null, revision: -1, items: new Map(), heights: [], width: 80, height: 300,
+  return { total: null, revision: -1, items: new Map(), blockHover: null, heights: [], width: 80, height: 300,
     handle: VirtualListScrollHandle.new(), fetching: false, error: null, initial: true, lastSize: null,
     frameTop: 0, frameHeight: 0, pressed: false, following: true, searchState: null, searchBar: null,
     selectionRows, selection: createSelection(index => selectionRows.get(index)), selecting: false, pressPoint: null, images: [], jumpSerial: 0,
@@ -210,6 +244,7 @@ export default class StereoView extends View {
     this.surfaceWidth = 0;
     this.controlWidth = 800;
     this.hoverPane = null;
+    /** @type {{pane: string, row: number, at: number} | null} */ this.copied = null;
     this.hoverKey = "";
     /** @type {string | undefined} */ this.controlMoveKey = undefined;
     this.hoverAt = 0;
@@ -224,6 +259,7 @@ export default class StereoView extends View {
     // Until the first layout measures the monospace probe, use one em per cell.
     this.activePane = "chat";
     this.cellWidth = 12;
+    this.cellMeasured = false;
     this.available = !checking() && !!bridge();
     if (checking()) return;
     this.focus = cx.focus_handle();
@@ -256,9 +292,25 @@ export default class StereoView extends View {
     if (command && composerAlive(labels)) run(command);
   }
 
+  /**
+   * The layout on screen: the chosen one, except that two columns too narrow to read stack as rows instead
+   * (the choice stays as it is and applies again when the pane is wide enough).
+   */
+  layout() {
+    const chosen = this.viewState?.layout;
+    // Until the first layout measures a cell, the width in cells is a guess: keep the choice.
+    if (chosen !== "columns" || this.viewState?.mode !== "split" || this.viewState.zoom || !this.cellMeasured) return chosen;
+    return columnsFit(this.areaWidth, this.cellWidth, ROW_CHROME, DIVIDER_SIZE) ? "columns" : "rows";
+  }
+
+  /** Whether the chosen two columns are stacked for lack of width. */
+  stacked() {
+    return this.viewState?.layout === "columns" && this.layout() === "rows";
+  }
+
   dialogPlacement() {
     const state = this.viewState;
-    return this.surface?.active && this.surface.piWindow && state?.mode === "split" && state.layout === "columns" && !state.zoom
+    return this.surface?.active && this.surface.piWindow && state?.mode === "split" && this.layout() === "columns" && !state.zoom
       ? state.preferences?.piWindows : undefined;
   }
 
@@ -868,7 +920,7 @@ export default class StereoView extends View {
           const index = page.top + i;
           state.selectionRows.set(index, page.selection[i]);
           state.items.delete(index);
-          state.items.set(index, { id: `${page.frame}:${index}`, lines: [page.lines[i]] });
+          state.items.set(index, { id: `${page.frame}:${index}`, lines: [page.lines[i]], footer: rowFooter(page.lines[i]) });
         }
         if (state.selectionFocus && state.selectionRows.has(state.selectionFocus.row)) {
           state.selection.extend(state.selectionFocus);
@@ -908,11 +960,15 @@ export default class StereoView extends View {
     const z = settings().zoom;
     const zoom = typeof z === "number" && z > 0 ? z : 1;
     const measured = size.width / zoom / 10;
-    if (!Number.isFinite(measured) || measured <= 0 || Math.abs(measured - this.cellWidth) < 0.01) return;
+    if (!Number.isFinite(measured) || measured <= 0) return;
+    const wasMeasured = this.cellMeasured;
+    this.cellMeasured = true;
+    if (Math.abs(measured - this.cellWidth) < 0.01) { if (!wasMeasured) cx.notify(); return; }
     this.cellWidth = measured;
     if (this.chat.lastSize) this.sizePane(this.chat, this.chat.lastSize, cx);
     if (this.activity.lastSize) this.sizePane(this.activity, this.activity.lastSize, cx);
     if (this.combined.lastSize) this.sizePane(this.combined, this.combined.lastSize, cx);
+    cx.notify();
   }
 
   /** @param {ReturnType<typeof paneState>} state @param {{width: number, height: number}} size @param {any} cx */
@@ -920,7 +976,7 @@ export default class StereoView extends View {
     state.lastSize = size;
     const z = settings().zoom;
     const zoom = typeof z === "number" && z > 0 ? z : 1;
-    const width = Math.max(10, Math.min(300, Math.floor((size.width / zoom - 24) / this.cellWidth)));
+    const width = Math.max(10, Math.min(300, Math.floor((size.width / zoom - ROW_CHROME) / this.cellWidth)));
     const height = Math.max(1, Math.floor(size.height / zoom));
     if (width === state.width && height === state.height) return;
     if (width !== state.width) {
@@ -937,12 +993,19 @@ export default class StereoView extends View {
     cx.notify();
   }
 
-  /** @param {any} t @param {any} run */
-  ansiRun(t, run) {
+  /** A run's resolved colors. @param {any} t @param {any} run */
+  runColors(t, run) {
     const color = (/** @type {any} */ value, /** @type {any} */ fallback) => value === undefined ? fallback : typeof value === "string" ? value : t[`ansi${value.ansi}`] ?? fallback;
     let fg = color(run.fg, t.foreground), bg = color(run.bg, undefined);
     if (run.inverse) [fg, bg] = [bg ?? t.surface, fg];
-    let el = div().flex_none().whitespace_nowrap().text_color(fg);
+    return { fg, bg };
+  }
+
+  /** @param {any} t @param {any} run @param {boolean} [grow] run on to the row's end, so a block's background has no ragged edge */
+  ansiRun(t, run, grow = false) {
+    const { fg, bg } = this.runColors(t, run);
+    let el = div().whitespace_nowrap().font_family(historyFont()).text_size(historyFontSize()).text_color(fg);
+    el = grow ? el.flex_grow(1).flex_shrink(0) : el.flex_none();
     if (bg) el = el.bg(bg);
     if (run.bold) el = el.font_semibold();
     if (run.italic) el = el.italic();
@@ -1024,14 +1087,26 @@ export default class StereoView extends View {
     }
   }
 
-  /** @param {ReturnType<typeof paneState>} state @param {number} index @param {any} t */
+  /**
+   * One history row. A block's background spans the panel: a blank edge of a run with a background carries it
+   * through the gutter and to the row's end. The footer Pi draws under a block (`[Go to] [Copy]`) is not drawn;
+   * the block's hover buttons stand for it.
+   * @param {ReturnType<typeof paneState>} state @param {number} index @param {any} t
+   */
   entry(state, index, t) {
     const item = state.items.get(index);
     if (!item) return div().h(LINE_HEIGHT).flex_none();
     const line = item.lines[0] ?? "";
-    const row = h_flex().relative().w_full().px(8).h(LINE_HEIGHT).flex_none().whitespace_nowrap().overflow_hidden()
-      .children(selectedRuns(parseAnsi(line), state.selectionRows.get(index),
-        state.selection.columns(index)).map(run => this.ansiRun(t, run)));
+    const row = h_flex().relative().w_full().h(LINE_HEIGHT).flex_none().whitespace_nowrap().overflow_hidden();
+    if (!item.footer) {
+      const runs = selectedRuns(parseAnsi(line), state.selectionRows.get(index), state.selection.columns(index));
+      /** @param {any} run @param {"start" | "end"} side */
+      const carried = (run, side) => run && !run.selected && padsEdge(run, side) ? this.runColors(t, run).bg : undefined;
+      const lead = carried(runs[0], "start");
+      const grow = carried(runs[runs.length - 1], "end") !== undefined;
+      row.child(lead ? div().w(ROW_GUTTER).flex_none().bg(lead) : div().w(ROW_GUTTER).flex_none());
+      row.children(runs.map((run, n) => this.ansiRun(t, run, grow && n === runs.length - 1)));
+    }
     for (const placement of state.images) {
       const path = this.imagePaths.get(placement.id);
       if (path && index >= placement.row && index < placement.row + placement.rows) {
@@ -1045,6 +1120,82 @@ export default class StereoView extends View {
     return row;
   }
 
+  /**
+   * The block under the pointer in one panel, with the row that carries its buttons: its first row on screen.
+   * @param {ReturnType<typeof paneState>} state
+   */
+  hoveredBlock(state) {
+    if (state.blockHover === null) return null;
+    const block = blockAround(state.blockHover, index => { const item = state.items.get(index); return item ? item.footer ?? null : undefined; });
+    if (!block) return null;
+    const first = Math.floor(state.handle.offset().y / panelRowHeight(state));
+    return { ...block, anchor: buttonRow(block, first) };
+  }
+
+  /** Follow the pointer to the block it is over; redraw only when that block changes. @param {ReturnType<typeof paneState>} state @param {any} event @param {any} cx */
+  trackBlockHover(state, event, cx) {
+    let row = null;
+    if (event.local_position) {
+      const z = settings().zoom;
+      const zoom = typeof z === "number" && z > 0 ? z : 1;
+      const x = event.local_position.x / zoom, y = event.local_position.y / zoom;
+      const viewport = state.handle.viewport_size().height || state.height;
+      if (x >= 0 && x < (state.lastSize?.width ?? 0) / zoom && y >= 0 && y < viewport)
+        row = Math.floor((state.handle.offset().y + y) / panelRowHeight(state));
+    }
+    const before = this.hoveredBlock(state);
+    state.blockHover = row;
+    const after = this.hoveredBlock(state);
+    if (before?.start !== after?.start || before?.anchor !== after?.anchor) cx.notify();
+  }
+
+  /**
+   * Go to and Copy for one block, floating over the right edge of its first row on screen (a row clips its own
+   * overflow, so the buttons belong to the panel). Each one presses the control Pi drew in the block's footer row,
+   * so Pi does what it does for a click there.
+   * @param {string} pane @param {ReturnType<typeof paneState>} state @param {NonNullable<ReturnType<StereoView["hoveredBlock"]>>} block @param {any} t
+   */
+  blockButtons(pane, state, block, t) {
+    const copied = this.copied?.pane === pane && this.copied.row === block.end && Date.now() - this.copied.at < COPIED_MS;
+    const rowTop = block.anchor * panelRowHeight(state) - state.handle.offset().y;
+    const viewport = state.handle.viewport_size().height || state.height;
+    const barHeight = BLOCK_BUTTON + 2 * BLOCK_BUTTONS_GAP + 2;
+    const top = Math.max(0, Math.min(viewport - barHeight, rowTop + (LINE_HEIGHT - barHeight) / 2));
+    /** @param {"goTo" | "copy"} which @param {string} label @param {string} icon */
+    const button = (which, label, icon) => h_flex().id(`stereo-block-${which}`).accessibility_label(label).tooltip(label)
+      .items_center().justify_center().flex_none().w(BLOCK_BUTTON).h(BLOCK_BUTTON).rounded(BLOCK_BUTTON_RADIUS)
+      .cursor_pointer().hover(s => s.bg(t.hover))
+      .on_mouse_down("left", (_event, cx) => cx.stop_propagation())
+      .on_click((_event, cx) => this.pressBlockControl(pane, state, block, which, cx))
+      .child(svg(`mods/stereo-view/icons/${icon}.svg`).id(`stereo-block-icon-${which}`).size(ICON_SIZE)
+        .text_color(copied && which === "copy" ? t.accent ?? t.foreground : t.foreground));
+    const bar = h_flex().id("stereo-block-buttons").absolute().right(SCROLLBAR_LANE + BLOCK_BUTTONS_GAP).top(top)
+      .items_center().gap(BLOCK_BUTTONS_GAP).p(BLOCK_BUTTONS_GAP).rounded(BLOCK_BUTTON_RADIUS + BLOCK_BUTTONS_GAP)
+      .bg(t.raised ?? t.surface).border_1().border_color(t.border);
+    if (block.footer.goTo) bar.child(button("goTo", "Go to the same point in the other panel", "go-to"));
+    if (block.footer.copy) bar.child(button("copy", copied ? "Copied" : "Copy this block", copied ? "check" : "copy"));
+    return bar;
+  }
+
+  /** Click the control Pi drew in a block's footer row. @param {string} pane @param {ReturnType<typeof paneState>} state @param {NonNullable<ReturnType<StereoView["hoveredBlock"]>>} block @param {"goTo" | "copy"} which @param {any} cx */
+  pressBlockControl(pane, state, block, which, cx) {
+    const control = block.footer[which];
+    const connection = bridge();
+    const y = block.end - state.frameTop;
+    if (!control || !connection || state.revision < 1 || state.fetching || y < 0 || y >= state.frameHeight) return;
+    const x = control.column + Math.floor(control.width / 2);
+    for (const type of ["press", "release"]) {
+      this.actions.push({ request: { v: 1, op: "mouse", pane, frame: state.revision,
+        event: { type, button: "left", x, y, shift: false, ctrl: false, alt: false, clickCount: 1 } }, connection });
+    }
+    if (which === "copy") {
+      this.copied = { pane, row: block.end, at: Date.now() };
+      cx.timer.after(COPIED_MS, (/** @type {any} */ next) => next.notify());
+    }
+    this.drainActions(cx);
+    cx.notify();
+  }
+
   /** @param {string} action @param {string} label @param {any} t @param {number} [width] */
   control(action, label, t, width = this.controlWidth) {
     const state = this.viewState;
@@ -1054,6 +1205,11 @@ export default class StereoView extends View {
       : action.startsWith("find-") ? "find"
       : action.startsWith("zoom-") ? (state?.zoom === action.slice(5) ? "restore" : "maximize")
       : action === "compact" ? (state?.compactTools ? "full" : "compact") : action;
+    // Two columns stacked for lack of width: the layout choice has no effect until the pane is wider.
+    if (action === "layout" && this.stacked()) {
+      return div().id(`stereo-action-${action}`).accessibility_label(label).tooltip("Stacked: the pane is too narrow for columns").px(6).py(3).text_color(t.dim)
+        .child(icons ? svg(`mods/stereo-view/icons/${icon}.svg`).id(`stereo-icon-${action}`).size(ICON_SIZE).text_color(t.dim) : label);
+    }
     return div().id(`stereo-action-${action}`).accessibility_label(label).tooltip(label).px(6).py(3).cursor_pointer().text_color(t.foreground)
       .hover(s => s.bg(t.hover)).on_click((_event, cx) => {
         if (action === "find-chat" || action === "find-activity") {
@@ -1071,7 +1227,7 @@ export default class StereoView extends View {
   }
 
   chatExtent() {
-    const rows = this.viewState?.layout === "rows";
+    const rows = this.layout() === "rows";
     const total = rows ? this.areaHeight : this.areaWidth;
     const reserve = rows ? 40 : Math.min(MIN_ACTIVITY_WIDTH, total / 2);
     if (this.drag) return Math.max(40, Math.min(total - reserve, this.drag.size));
@@ -1084,7 +1240,7 @@ export default class StereoView extends View {
 
   /** @param {any} t */
   divider(t) {
-    const rows = this.viewState?.layout === "rows";
+    const rows = this.layout() === "rows";
     const separator = div().id("stereo-divider").flex_none().bg(t.border).cursor_pointer();
     if (rows) separator.h(5).w_full(); else separator.w(5).h_full();
     return separator
@@ -1118,6 +1274,7 @@ export default class StereoView extends View {
   /** @param {string} name @param {string} title @param {ReturnType<typeof paneState>} state @param {any} t @param {boolean} [showSurface] */
   panel(name, title, state, t, showSurface = false) {
     const id = `stereo-${name}`;
+    const hovered = this.hoveredBlock(state);
     const rows = v_virtual_list(id, state.total ?? 0, LINE_HEIGHT,
       index => `${name}-${index}`,
       range => Array.from({ length: range.end - range.start }, (_, n) => this.entry(state, range.start + n, t)))
@@ -1126,7 +1283,7 @@ export default class StereoView extends View {
       .child(div().text_color(t.muted).child(title));
     const actions = h_flex().items_center();
     const placement = this.dialogPlacement();
-    const split = this.viewState?.mode === "split" && this.viewState.layout === "columns" && !this.viewState.zoom && placement !== "combined" && placement !== "maximize";
+    const split = this.viewState?.mode === "split" && this.layout() === "columns" && !this.viewState.zoom && placement !== "combined" && placement !== "maximize";
     const width = split ? (name === "chat" ? this.chatExtent() : this.areaWidth - this.chatExtent() - 5) : this.areaWidth;
     if (name !== "combined") actions.child(this.control(`find-${name}`, "Find", t, width));
     if (name === "activity") actions.child(this.control("compact", this.viewState?.compactTools ? "Full tools" : "Compact tools", t, width));
@@ -1136,7 +1293,7 @@ export default class StereoView extends View {
     if (split) panel.h_full();
     else panel.w_full();
     if (name === "chat" && this.viewState?.mode === "split" && !this.viewState?.zoom) {
-      if (this.viewState.layout === "rows") panel.flex_none().h(this.chatExtent());
+      if (this.layout() === "rows") panel.flex_none().h(this.chatExtent());
       else panel.flex_none().w(this.chatExtent());
     }
     if (name !== "combined" && this.viewState?.showHeaders !== false) panel.child(heading);
@@ -1148,6 +1305,8 @@ export default class StereoView extends View {
         .on_scroll_wheel((_event, cx) => {
           if (name === "chat" || name === "activity") this.activePane = name;
           state.following = false;
+          // The buttons sit on a row's position; hide them until the pointer moves on the scrolled rows.
+          if (state.blockHover !== null) { state.blockHover = null; cx.notify(); }
           cx.timer.after(100, next => {
             const offset = state.handle.offset().y;
             const viewport = state.handle.viewport_size().height || state.height;
@@ -1163,7 +1322,7 @@ export default class StereoView extends View {
           this.sendMouse(name, state, row, "press", event, cx);
         })
         .on_window_mouse_move((event, cx) => {
-          if (!state.pressed) { this.sendHover(name, state, event, cx); return; }
+          if (!state.pressed) { this.trackBlockHover(state, event, cx); this.sendHover(name, state, event, cx); return; }
           if (event.pressed_button !== "left") { this.cancelPaneCapture(name, state, cx); return; }
           if (!event.local_position) return;
           const z = settings().zoom;
@@ -1201,7 +1360,8 @@ export default class StereoView extends View {
           const row = Math.floor((state.handle.offset().y + event.local_position.y / zoom) / panelRowHeight(state));
           this.sendMouse(name, state, row, "release", event, cx);
         })
-        .child(rows).child(Scrollbar.vertical(id).absolute().inset_0()));
+        .child(rows).child(Scrollbar.vertical(id).absolute().inset_0())
+        .children(hovered ? [this.blockButtons(name, state, hovered, t)] : []));
     if (showSurface) panel.child(this.renderSurface(t));
     return panel;
   }
@@ -1314,7 +1474,7 @@ export default class StereoView extends View {
 
   /** @param {any} t */
   renderSurface(t) {
-    const rows = this.viewState?.mode === "split" && this.viewState.layout === "rows" && !this.viewState.zoom;
+    const rows = this.viewState?.mode === "split" && this.layout() === "rows" && !this.viewState.zoom;
     const available = rows ? Math.max(0, this.areaHeight - this.chatExtent() - 5) : this.areaHeight;
     const height = Math.min(Math.max(LINE_HEIGHT * 2, available * 0.6), this.surface.lines.length * LINE_HEIGHT + (this.surfaceInput ? 46 : 8));
     const body = v_flex().id("stereo-surface").relative().flex_none().h(height).min_h(0).overflow_y_scroll().track_scroll(this.surfaceScroll).px(8).py(4)
@@ -1372,7 +1532,7 @@ export default class StereoView extends View {
         chat: () => this.panel("chat", "Conversation", this.chat, t, hasSurface && state?.zoom === "chat"),
         activity: () => this.panel("activity", "Activity", this.activity, t, hasSurface && state?.zoom !== "chat"),
       };
-      const container = state?.layout === "rows" ? v_flex() : h_flex();
+      const container = this.layout() === "rows" ? v_flex() : h_flex();
       content = container.id("stereo-panels").flex_1().w_full().min_w(0).min_h(0);
       const order = state?.zoom ? [state.zoom] : state?.side === "right" ? ["activity", "chat"] : ["chat", "activity"];
       for (const [index, name] of order.entries()) {
@@ -1387,7 +1547,7 @@ export default class StereoView extends View {
         if (Math.abs(width - this.areaWidth) < 1 && Math.abs(height - this.areaHeight) < 1) return;
         this.areaWidth = width; this.areaHeight = height; cx.notify();
       }).child(content);
-    const root = v_flex().relative().size_full().min_h(0).bg(t.surface).text_size(12)
+    const root = v_flex().relative().size_full().min_h(0).bg(t.surface).text_size(UI_TEXT_SIZE)
       .on_size_change((size, cx) => {
         const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
         const width = size.width / zoom, height = size.height / zoom;
@@ -1395,8 +1555,8 @@ export default class StereoView extends View {
           this.controlWidth = width; this.controlHeight = height; cx.notify();
         }
       })
-      .font_family(typeof settings().font_family === "string" ? /** @type {string} */ (settings().font_family) : "monospace")
       .child(div().id("stereo-cell-probe").absolute().top_0().left_0().opacity(0).whitespace_nowrap()
+        .font_family(historyFont()).text_size(historyFontSize())
         .on_size_change((size, cx) => this.measureCell(size, cx)).child("MMMMMMMMMM"))
       .child(props()?.view === "gui" ? div().h(0) : header)
       .child(state?.showToolbar !== false ? toolbar : props()?.view === "gui" ? this.control("settings", "Settings", t) : div().h(0))
@@ -1439,7 +1599,7 @@ export default class StereoView extends View {
           this.activePane = this.activePane === "chat" ? "activity" : "chat";
         else if (["left", "right", "arrowleft", "arrowright"].includes(key)) {
           const direction = key.endsWith("left") ? -1 : 1;
-          const rows = this.viewState?.layout === "rows";
+          const rows = this.layout() === "rows";
           const extent = this.chatExtent() + direction * (rows ? LINE_HEIGHT : 4 * this.cellWidth);
           const value = rows ? Math.max(1, Math.min(240, Math.round(extent / LINE_HEIGHT)))
             : Math.max(24, Math.min(240, Math.round((extent - 16) / this.cellWidth)));
