@@ -8,7 +8,7 @@ import { createSearchBar } from "./search-bar.js";
 import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
 import { composerAlive, composerFieldCommand, composerRoute } from "./composer-route.js";
-import { dropStaleRows, paneDimensions, refreshPlan, TICK_MS } from "./refresh-plan.js";
+import { dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT } from "./refresh-plan.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
 import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "./history-blocks.js";
 
@@ -183,14 +183,15 @@ function bridge() {
   return { socket: label.socket, machine: split < 0 ? undefined : address.slice(0, split), address };
 }
 
-/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[], footer: ReturnType<typeof footerControls>}>, blockHover: number | null, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number, copying: boolean, selectionOnly: boolean, autoScroll: number, autoScrollTimer: boolean, selectionFocus: {row: number, col: number} | null, stale: boolean}} */
+/** @returns {{total: number | null, revision: number, items: Map<number, {id: string, lines: string[], footer: ReturnType<typeof footerControls>}>, blockHover: number | null, heights: number[], width: number, height: number, handle: any, fetching: boolean, error: string | null, initial: boolean, lastSize: {width: number, height: number} | null, frameTop: number, frameHeight: number, pressed: boolean, following: boolean, searchState: any, searchBar: any, selectionRows: Map<number, any>, selection: any, selecting: boolean, pressPoint: {row: number, col: number, moved: boolean} | null, images: any[], jumpSerial: number, copying: boolean, selectionOnly: boolean, autoScroll: number, autoScrollTimer: boolean, selectionFocus: {row: number, col: number} | null, stale: boolean, unusable: number, settling: boolean}} */
 function paneState() {
   const selectionRows = new Map();
   return { total: null, revision: -1, items: new Map(), blockHover: null, heights: [], width: 80, height: 300,
     handle: VirtualListScrollHandle.new(), fetching: false, error: null, initial: true, lastSize: null,
     frameTop: 0, frameHeight: 0, pressed: false, following: true, searchState: null, searchBar: null,
     selectionRows, selection: createSelection(index => selectionRows.get(index)), selecting: false, pressPoint: null, images: [], jumpSerial: 0,
-    copying: false, selectionOnly: false, autoScroll: 0, autoScrollTimer: false, selectionFocus: null, stale: false };
+    copying: false, selectionOnly: false, autoScroll: 0, autoScrollTimer: false, selectionFocus: null, stale: false,
+    unusable: 0, settling: false };
 }
 
 /** Render the visible terminal rows, including one extra row for a partial scroll. */
@@ -482,7 +483,7 @@ export default class StereoView extends View {
         state.selection.clear(); state.selectionRows.clear(); state.selecting = false;
         state.total = null; state.revision = -1; state.items.clear(); state.heights = [];
         state.initial = true; state.following = true; state.error = null; state.pressed = false; state.images = []; state.jumpSerial = 0;
-        state.selectionOnly = false; state.autoScroll = 0; state.selectionFocus = null;
+        state.selectionOnly = false; state.autoScroll = 0; state.selectionFocus = null; state.unusable = 0; state.settling = false;
       }
     }
     this.fetchState(connection, cx);
@@ -492,11 +493,11 @@ export default class StereoView extends View {
     this.fetchPanes(connection, cx);
   }
 
-  /** Read again soon, once, after a resize: the panels' width changed, so the rows on screen have the old wrapping. @param {any} cx */
-  scheduleRead(cx) {
+  /** Read again soon, once, after a resize: the panels' width changed, so the rows on screen have the old wrapping. @param {any} cx @param {number} [delay] */
+  scheduleRead(cx, delay = 60) {
     if (this.readScheduled) return;
     this.readScheduled = true;
-    cx.timer.after(60, (/** @type {any} */ next) => {
+    cx.timer.after(delay, (/** @type {any} */ next) => {
       this.readScheduled = false;
       const connection = bridge();
       if (connection && isLive()) this.fetchPanes(connection, next);
@@ -1043,6 +1044,14 @@ export default class StereoView extends View {
           if (Number.isSafeInteger(page.search.top) && page.search.top !== previousTop)
             state.handle.scroll_to_item(page.search.top);
         }
+        // Pi is still laying history out at a new width: keep the rows on screen and read again at once.
+        if (state.unusable < UNUSABLE_LIMIT && !pageUsable(page, [...state.items.values()].some(item => rowHasText(item.lines[0])))) {
+          state.unusable++;
+          state.settling = true;
+          return;
+        }
+        state.unusable = 0;
+        state.settling = page.settling === true;
         const currentOffset = state.handle.offset().y;
         const geometryChanged = state.total !== page.total;
         state.total = page.total;
@@ -1099,11 +1108,14 @@ export default class StereoView extends View {
         state.error = null;
       } catch {
         state.error = "Could not read this panel. The terminal is still available.";
+        state.settling = false;
       } finally {
         state.fetching = false;
         cx.notify();
         // The panel was resized while this page was in flight: it is for the old width, so ask again now.
         if (state.width !== width) this.scheduleRead(cx);
+        // Pi has not finished measuring the history at this width (or sent a page not to be drawn): its total can still change.
+        else if (state.settling) this.scheduleRead(cx, SETTLE_MS);
       }
     });
   }

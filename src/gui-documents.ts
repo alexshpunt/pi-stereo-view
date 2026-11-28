@@ -6,7 +6,12 @@ import { GuiImages, type GuiImagePlacement } from "./gui-images.ts";
 type TuiMouseDispatchTarget = NonNullable<ReturnType<NativeDocument["handleMouse"]>>["target"];
 export type GuiPane = Pane | "combined";
 type GuiDocument = Pick<NativeDocument, "setViewport" | "beginFrame" | "render" | "takeScrollShift" | "handleMouse" | "dispose"> &
-  Partial<Pick<NativeDocument, "locate">>;
+  Partial<Pick<NativeDocument, "locate" | "setLazyBudget" | "settling">>;
+
+/** Time per page for measuring offscreen entries while a panel's width has just changed or rows are still being measured. */
+const SETTLE_BUDGET_MS = 16;
+/** The steady budget of a document's pages. */
+const STEADY_BUDGET_MS = 4;
 
 export interface GuiViewport extends DocumentViewport { width: number }
 export interface GuiDocumentPage {
@@ -17,6 +22,8 @@ export interface GuiDocumentPage {
   height: number;
   /** How far the content above this viewport moved during this render. */
   scrollShift: number;
+  /** Rows outside the viewport are still being measured, so the total can change; ask again soon. Absent when settled. */
+  settling?: true;
   lines: readonly string[];
   selection: readonly GuiSelectionRow[];
   images: readonly GuiImagePlacement[];
@@ -48,6 +55,8 @@ export class GuiDocuments {
   private readonly frames: Partial<Record<GuiPane, Frame>> = {};
   private readonly viewports: Partial<Record<GuiPane, GuiViewport>> = {};
   private readonly gestures: Partial<Record<GuiPane, Gesture>> = {};
+  /** The width of each panel's last page and whether that page left rows unmeasured. */
+  private readonly lastWidths: Partial<Record<GuiPane, { width: number; settling: boolean }>> = {};
   private serial = 0;
   private readonly images = new GuiImages();
   private jumpSerial = 0;
@@ -87,6 +96,9 @@ export class GuiDocuments {
     this.viewports[pane] = view;
     this.beforeFrame();
     const document = this.documents[pane];
+    // While the width changes or rows are still unmeasured, measure more of them per page, so the total settles in a few pages.
+    const previous = this.lastWidths[pane];
+    document.setLazyBudget?.(!previous || previous.width !== view.width || previous.settling ? SETTLE_BUDGET_MS : STEADY_BUDGET_MS);
     document.beginFrame();
     let lines = document.render(view.width);
     if (this.pendingJump?.pane === pane) {
@@ -107,20 +119,25 @@ export class GuiDocuments {
         document.beginFrame();
         lines = document.render(view.width);
       }
+      // Rows still being measured can change the row count in the last render. Show that render's own last rows: a window
+      // taken from the count before it would lie past the end or over rows not measured yet.
+      view.top = Math.max(0, lines.length - view.height);
     }
+    const settling = document.settling === true;
+    this.lastWidths[pane] = { width: view.width, settling };
     const jump = pane === "combined" ? undefined : this.jumps[pane];
     if (jump && Date.now() - jump.at > 5000 && pane !== "combined") delete this.jumps[pane];
     const extracted = this.images.page(lines, view.top, view.height);
     const visible = extracted.lines;
     const frame: Frame = {
       frame: ++this.serial, top: view.top, width: view.width, height: view.height,
-      total: lines.length, scrollShift: document.takeScrollShift(),
+      total: lines.length, scrollShift: document.takeScrollShift(), ...(settling ? { settling: true as const } : {}),
       lines: visible, selection: visible.map(guiSelectionCells), images: extracted.images, viewport: view,
       ...(pane === "combined" ? {} : { jump: this.jumps[pane] }),
     };
     this.frames[pane] = frame;
     return { frame: frame.frame, top: frame.top, width: frame.width, height: frame.height,
-      total: frame.total, scrollShift: frame.scrollShift, lines: frame.lines, selection: frame.selection, images: frame.images,
+      total: frame.total, scrollShift: frame.scrollShift, ...(frame.settling ? { settling: true as const } : {}), lines: frame.lines, selection: frame.selection, images: frame.images,
       ...(frame.jump ? { jump: frame.jump } : {}) };
   }
 

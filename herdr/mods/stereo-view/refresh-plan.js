@@ -4,6 +4,29 @@ export const LIVE_MS = 700;
 export const HIDDEN_MS = 2500;
 /** The granularity of the copy's clock; it decides when a refresh is due. */
 export const TICK_MS = 200;
+/** How soon the panels are read again while Pi is still measuring rows at a new width. */
+export const SETTLE_MS = 30;
+/** How many unusable pages in a row a panel waits out before it shows what Pi sent. */
+export const UNUSABLE_LIMIT = 40;
+
+const ANSI = /\x1b\[[0-9;:]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
+
+/** Whether a row has text, ignoring styles and blanks. @param {string | undefined} line */
+export function rowHasText(line) {
+  return line !== undefined && line.replace(ANSI, "").trim() !== "";
+}
+
+/**
+ * Whether a page of rows from the bridge may replace what a panel shows. While Pi lays history out again at a new
+ * width, an older Pi answers with an empty window (past the end) or a window of unmeasured, blank rows. Drawing
+ * that would blank a panel that has content, so the panel keeps its rows and reads again.
+ * @param {{total: number, lines: string[]}} page @param {boolean} hasContent whether the panel shows any row with text now
+ */
+export function pageUsable(page, hasContent) {
+  if (!hasContent || page.total === 0) return true;
+  if (page.lines.length === 0) return false;
+  return page.lines.some(rowHasText);
+}
 
 /**
  * What one tick of the copy's clock should do.

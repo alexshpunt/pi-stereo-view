@@ -23,6 +23,64 @@ test("loads every image in a viewport even when their payloads exceed the cache"
   }
 });
 
+/** A document that lays out more rows with every render, like history being measured at a new width. */
+function measuringDocument(counts: number[], settling: (render: number) => boolean) {
+  let renders = 0;
+  const budgets: number[] = [];
+  const document = {
+    setViewport() {}, beginFrame() {}, takeScrollShift: () => 0, handleMouse: () => undefined, dispose() {},
+    setLazyBudget: (milliseconds: number) => { budgets.push(milliseconds); },
+    get settling() { return settling(renders); },
+    render: () => {
+      const count = counts[Math.min(renders++, counts.length - 1)]!;
+      return Array.from({ length: count }, (_, row) => `row ${row} of ${count}`);
+    },
+  };
+  return { document, budgets };
+}
+
+test("a following page shows the last rows of the render that produced it, even while the row count keeps changing", () => {
+  // Every render changes the count: shrinking (the panel got wider) and growing (it got narrower).
+  for (const counts of [[400, 300, 250, 220, 200], [100, 140, 190, 260, 340]]) {
+    const { document } = measuringDocument(counts, () => false);
+    const gui = new GuiDocuments({ chat: document, activity: document });
+    const page = gui.page("chat", { width: 30, top: 0, height: 10, following: true });
+    expect(page.lines).toHaveLength(10);
+    expect(page.top).toBe(page.total - 10);
+    expect(page.lines.at(-1)).toBe(`row ${page.total - 1} of ${page.total}`);
+  }
+});
+
+test("a page reports that rows are still being measured and raises the measuring budget while the width changes", () => {
+  const { document, budgets } = measuringDocument([200], render => render <= 2);
+  const gui = new GuiDocuments({ chat: document, activity: document });
+  const first = gui.page("chat", { width: 30, top: 0, height: 10, following: true });
+  expect(first.settling).toBe(true);
+  expect(budgets.at(-1)).toBeGreaterThan(4);
+  // Still unmeasured: the next page at the same width keeps the larger budget.
+  const second = gui.page("chat", { width: 30, top: 0, height: 10, following: true });
+  expect(second.settling).toBeUndefined();
+  expect(budgets.at(-1)).toBeGreaterThan(4);
+  const settled = gui.page("chat", { width: 30, top: 0, height: 10, following: true });
+  expect(settled.settling).toBeUndefined();
+  expect(budgets.at(-1)).toBe(4);
+  gui.page("chat", { width: 36, top: 0, height: 10, following: true });
+  expect(budgets.at(-1)).toBeGreaterThan(4);
+});
+
+test("a panel made wider still gets measured rows in its last lines when the history is long", () => {
+  const { gui, history } = setup();
+  for (let i = 0; i < 600; i++) history.addChild(new UserMessageComponent(`message ${i} ${"lorem ipsum ".repeat(12)}`, 0, 0));
+  const narrow = gui.page("chat", { width: 20, top: 0, height: 30, following: true });
+  expect(narrow.lines.join("\n")).toContain("message 599");
+  for (const width of [90, 25, 140, 30]) {
+    const page = gui.page("chat", { width, top: 0, height: 30, following: true });
+    expect(page.lines).toHaveLength(30);
+    expect(page.lines.filter(line => line.trim() === "").length).toBeLessThanOrEqual(2);
+    expect(page.lines.join("\n")).toContain("message 599");
+  }
+});
+
 class UserMessageComponent extends Text {
   events: TuiMouseEvent[] = [];
   handleMouse(event: TuiMouseEvent) {

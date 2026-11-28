@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error The mod is JavaScript loaded directly by Herdr.
-import { dropStaleRows, HIDDEN_MS, LIVE_MS, paneDimensions, refreshPlan } from "../herdr/mods/stereo-view/refresh-plan.js";
+import { dropStaleRows, HIDDEN_MS, LIVE_MS, pageUsable, paneDimensions, refreshPlan, rowHasText } from "../herdr/mods/stereo-view/refresh-plan.js";
 
 describe("refresh plan", () => {
   it("reads at once when a copy appears, then once per live interval", () => {
@@ -30,5 +30,23 @@ describe("rows from before a width change", () => {
     const items = new Map<number, string>([[0, "a"], [1, "b"], [5, "c"], [9, "d"]]);
     expect(dropStaleRows(items, 4, 3)).toEqual([0, 1, 9]);
     expect([...items.keys()]).toEqual([5]);
+  });
+});
+describe("pages that must not replace rows on screen", () => {
+  const page = (total: number, lines: string[]) => ({ total, lines });
+  it("rejects an empty window or only blank rows while the panel has content", () => {
+    expect(pageUsable(page(500, []), true)).toBe(false);
+    expect(pageUsable(page(500, ["", "  ", "\x1b[48;5;22m   \x1b[49m"]), true)).toBe(false);
+  });
+  it("accepts a page with text, and any page for a panel that shows nothing yet or a history with no rows", () => {
+    expect(pageUsable(page(500, ["", "\x1b[32mwrite\x1b[39m"]), true)).toBe(true);
+    expect(pageUsable(page(500, []), false)).toBe(true);
+    expect(pageUsable(page(500, ["", ""]), false)).toBe(true);
+    expect(pageUsable(page(0, []), true)).toBe(true);
+  });
+  it("tells text from styled blanks", () => {
+    expect(rowHasText(undefined)).toBe(false);
+    expect(rowHasText("\x1b[1m \x1b[22m")).toBe(false);
+    expect(rowHasText("\x1b[1ma\x1b[22m")).toBe(true);
   });
 });

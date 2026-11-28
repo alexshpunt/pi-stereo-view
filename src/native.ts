@@ -205,6 +205,8 @@ export class NativeDocument extends Container {
   private viewport?: () => DocumentViewport | undefined;
   private requestRender?: () => void;
   private followUp = false;
+  private lazyBudget = LAZY_BUDGET_MS;
+  private unsettled = false;
   private readonly print: unknown[] = [];
   private readonly annotations = new WeakMap<Component, BlockAnnotation>();
 
@@ -274,6 +276,12 @@ export class NativeDocument extends Container {
     this.viewport = provider;
     this.requestRender = requestRender;
   }
+
+  /** Time per frame for measuring offscreen entries. A panel that shows the document in a GUI raises it while the width changes. */
+  setLazyBudget(milliseconds: number): void { this.lazyBudget = milliseconds; }
+
+  /** Whether the last render left offscreen entries unmeasured, so the row count can still change. */
+  get settling(): boolean { return this.unsettled; }
 
   /** Rows entries above the viewport grew by since the last call; the panel adds them to keep its content in place. */
   takeScrollShift(): number {
@@ -660,6 +668,7 @@ export class NativeDocument extends Container {
     this.renderActs = turns;
     const chat = this.source.children[2] as Container;
     this.timestamps.prepare(chat.children);
+    const previousWidth = this.lastWidth;
     this.lastWidth = width;
     this.positions.clear();
     if (this.excerpt && !this.index.contains(this.excerpt.entry.source, this.pane)) this.excerpt = undefined;
@@ -699,9 +708,12 @@ export class NativeDocument extends Container {
     // A following panel shows the end; find the entries of its last rows from cached heights.
     let tail = 0;
     if (virtual && view.following) {
+      // Cached heights are from the previous width. A wider panel wraps into fewer rows, so ask for proportionally more
+      // rows: the last rows of the panel must be measured, never estimates, whatever the width changed from.
+      const wanted = Math.ceil((view.height + margin) * Math.max(1, previousWidth / width) * 1.25);
       let rows = 0;
       tail = entries.length;
-      while (tail > 0 && rows < view.height + margin) rows += this.segments.get(entries[--tail].source)?.lines.length ?? 1;
+      while (tail > 0 && rows < wanted) rows += this.segments.get(entries[--tail].source)?.lines.length ?? 1;
     }
     const sweep = entries.length ? this.sweep % entries.length : 0;
     this.sweep = sweep + SWEEP_ENTRIES;
@@ -860,7 +872,7 @@ export class NativeDocument extends Container {
             (index >= sweep && index < sweep + SWEEP_ENTRIES) || index + entries.length < sweep + SWEEP_ENTRIES;
           if (measured && swept) this.fingerprint(entry, rowed, tree, this.print);
           if (!measured || (swept && !sameValues(segment!.print, this.print))) {
-            if (performance.now() < started + LAZY_BUDGET_MS) render = true;
+            if (performance.now() < started + this.lazyBudget) render = true;
             // Native changes request their own frames; only unmeasured layout needs follow-up frames.
             // This also keeps an unstable fingerprint from scheduling frames forever.
             else if (!measured) pending = true;
@@ -916,6 +928,7 @@ export class NativeDocument extends Container {
     this.children = children;
     this.frameWidth = outer;
     this.frameLines = lines;
+    this.unsettled = pending;
     if (pending) this.scheduleFollowUp();
     return lines;
   }
