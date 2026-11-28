@@ -64,7 +64,7 @@ function harness() {
   const copied: string[] = [];
   const cx = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {}, is_focused: () => true, release() {} }),
     write_to_clipboard(text: string) { copied.push(text); },
-    open_url(url: string) { opened.push(url); }, timer: { every() {} }, spawn(fn: (cx: any) => Promise<unknown>) { pending.push(fn(cx)); } };
+    open_url(url: string) { opened.push(url); }, timer: { every() {}, after(_delay: number, callback: (cx: any) => void) { callback(cx); } }, spawn(fn: (cx: any) => Promise<unknown>) { pending.push(fn(cx)); } };
   const terminal = { address: "m/t", state: "live", pid: 1, labels: { "herdr.stereo.bridge": JSON.stringify({ v: 1, pid: 1, socket: "/tmp/stereo-ABC123/s" }) } };
   const state = { v: 1, layout: "columns", side: "left", mode: "split", zoom: null, showToolbar: true, showHeaders: true, compactTools: true };
   Object.assign(state, { preferences: { compactTools: true } });

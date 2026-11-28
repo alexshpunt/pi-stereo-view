@@ -265,11 +265,11 @@ export default class StereoView extends View {
             !Array.isArray(surface.lines) || surface.lines.length > 256 || !surface.lines.every(/** @param {unknown} */ line => typeof line === "string")) throw new Error("Invalid surface");
         if (bridge()?.socket !== connection.socket || !isShown()) return;
         this.surface = { ...surface, width };
-        this.syncSurfaceInput();
+        this.syncSurfaceInput(next);
       } catch {
         // An unsupported or unavailable surface leaves the terminal as the fallback.
         this.surface = null;
-        this.syncSurfaceInput();
+        this.syncSurfaceInput(next);
       } finally { this.surfacePending = false; next.notify(); }
     });
   }
@@ -293,14 +293,15 @@ export default class StereoView extends View {
               !Array.isArray(layer.lines) || layer.lines.length > layer.height || layer.lines.some((/** @type {unknown} */ line) => typeof line !== "string"))) throw new Error("Invalid overlays");
         if (bridge()?.socket !== connection.socket || !isShown()) return;
         this.overlays = data;
-        this.syncSurfaceInput();
-      } catch { this.overlays = null; this.syncSurfaceInput(); }
+        this.syncSurfaceInput(next);
+      } catch { this.overlays = null; this.syncSurfaceInput(next); }
       finally { this.overlaysPending = false; next.notify(); }
     });
   }
 
-  syncSurfaceInput() {
-    if (this.overlays?.overlays.some(layer => layer.focused) || this.surface?.active || this.dock?.focused) this.openSurfaceInput();
+  /** @param {any} cx */
+  syncSurfaceInput(cx) {
+    if (this.overlays?.overlays.some(layer => layer.focused) || this.surface?.active || this.dock?.focused) this.openSurfaceInput(cx);
     else this.closeSurfaceInput();
   }
 
@@ -321,14 +322,14 @@ export default class StereoView extends View {
             !Array.isArray(dock.lines) || dock.lines.length > 256 || !dock.lines.every((/** @type {unknown} */ line) => typeof line === "string")) throw new Error("Invalid dock");
         if (bridge()?.socket !== connection.socket || !isShown()) return;
         this.dock = { ...dock, width };
-        this.syncSurfaceInput();
-      } catch { this.dock = null; this.syncSurfaceInput(); }
+        this.syncSurfaceInput(next);
+      } catch { this.dock = null; this.syncSurfaceInput(next); }
       finally { this.dockPending = false; next.notify(); }
     });
   }
 
-  /** Capture platform text input and paste without drawing a second editor. */
-  openSurfaceInput() {
+  /** Capture platform text input and paste without drawing a second editor. @param {any} cx */
+  openSurfaceInput(cx) {
     if (this.surfaceInput) return;
     const input = InputState.new({ placeholder: "Type or paste into Pi" });
     this.surfaceInput = input;
@@ -351,7 +352,7 @@ export default class StereoView extends View {
       for (let i = 0; i < parts.length; i += 256) this.sendSurfaceData(parts.slice(i, i + 256).join(""), cx);
     });
     input.on("submit", (_event, cx) => { this.sendSurfaceData("\r", cx); });
-    input.focus();
+    cx.timer.after(50, () => { if (this.surfaceInput === input && isShown()) input.focus(); });
   }
 
   closeSurfaceInput() {
@@ -1039,7 +1040,7 @@ export default class StereoView extends View {
   renderOverlay(layer, t) {
     const screen = this.overlays;
     const width = Math.min(this.controlWidth, layer.width * this.cellWidth);
-    const height = Math.min(this.controlHeight, layer.height * LINE_HEIGHT);
+    const height = Math.min(this.controlHeight, layer.height * LINE_HEIGHT + (layer.focused ? 40 : 0));
     const left = Math.max(0, Math.min(this.controlWidth - width, layer.col / Math.max(1, screen.columns) * this.controlWidth));
     const top = Math.max(0, Math.min(this.controlHeight - height, layer.row / Math.max(1, screen.rows) * this.controlHeight));
     const body = v_flex().id(`stereo-overlay-${layer.id}`).absolute().left(left).top(top).w(width).h(height)
@@ -1049,7 +1050,8 @@ export default class StereoView extends View {
       .on_window_mouse_up("left", (event, cx) => { if (this.overlayPress?.id === layer.id) this.sendOverlayMouse(layer, "release", event, cx); });
     for (const line of layer.lines) body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
       .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
-    if (layer.focused && this.surfaceInput) body.child(Input.new(this.surfaceInput).absolute().w(1).h(1).opacity(0));
+    if (layer.focused && this.surfaceInput) body.child(Input.new(this.surfaceInput).w_full().h(30).mt(8).px(6)
+      .border_1().border_color(t.border).bg(t.background).text_color(t.foreground));
     return body;
   }
 

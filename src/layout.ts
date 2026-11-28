@@ -456,9 +456,9 @@ export class TranscriptLayout {
     const surfaceView = surfaceTree ? new NativeSurfaceScrollView(surfaceTree, { overscroll: "contain" }) : undefined;
     const widgetsPresent = (): boolean => !!above && !!below && (above.children.length > 1 || below.children.length > 0);
     const surfacePresent = (): boolean => widgetsPresent() || projectDialog;
-    // The GUI has no Pi terminal dock. Borrow its non-editor entries without moving their ownership.
-    const guiDockTree = supportedDock ? new VStack(entries.filter((_, i) => i !== 3)) : undefined;
-    this.guiDock = new GuiSurface(() => guiDockTree,
+    // The composer owns Pi's editor and footer. Both widget placements share a strip above it.
+    const guiDockTree = above && below ? new VStack([above, below]) : undefined;
+    this.guiDock = new GuiSurface(() => widgetsPresent() ? guiDockTree : undefined,
       () => host.getFocusedComponent(), () => host.requestRender(), component => host.setFocus(component), true);
     const dockUnchanged = (): boolean => supportedDock && nativeDock.entries.length === 6 &&
       nativeDock.entries.every((entry, i) => entry.component === nativeDock.children[i] &&
