@@ -1544,7 +1544,7 @@ export default class StereoView extends View {
     const frameStart = typeof performance !== "undefined" ? performance.now() : Date.now();
     const treeRows = this.trees && name !== "combined" ? this.trees.list(name, state, {
       theme: t, lineHeight: LINE_HEIGHT, font: historyFont(), fontSize: historyFontSize(), gutter: ROW_GUTTER,
-      notify: () => this.viewCx?.notify(),
+      notify: () => this.viewCx?.notify(), svg, scrollbarLane: SCROLLBAR_LANE + 2,
     }) : null;
     if (this.trees) { // TEMPORARY (LPT-1943): per-render timings for the live test, written to the app home
       const end = typeof performance !== "undefined" ? performance.now() : Date.now();

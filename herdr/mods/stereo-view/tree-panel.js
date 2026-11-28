@@ -11,7 +11,8 @@ import { styleMarkdown } from "./md-style.js";
  * @param {{ spawnStream: any, target: (name: string) => ({ socket: string, on?: string } | null), parseAnsi?: (line: string) => any[] }} deps
  */
 export function createTreePanels(gpui, deps) {
-  const { div, v_flex, v_virtual_list } = gpui;
+  const { div, h_flex, v_flex, v_virtual_list } = gpui;
+  const COPIED_MS = 1500;
   /** @type {Map<string, any>} */
   const panes = new Map();
 
@@ -46,12 +47,50 @@ export function createTreePanels(gpui, deps) {
     });
   }
 
+  /** Text of one item as the user would paste it: the source text, not the wrapped rows. */
+  function itemText(body) {
+    if (!body) return "";
+    return body.t ?? [body.a, body.o].filter(Boolean).join("\n");
+  }
+
+  /** Copy one item; a body that is not in the cache is fetched first. */
+  function copyItem(entry, item, cx, ctx) {
+    const done = text => {
+      entry.copied = { id: item.id, at: Date.now() };
+      ctx.notify();
+      cx.timer?.after?.(COPIED_MS, next => next.notify());
+      return text;
+    };
+    const body = entry.view.model.bodies.get(item.id);
+    if (body) { cx.write_to_clipboard(done(itemText(body))); return; }
+    cx.spawn(async next => {
+      await entry.client.get([item.id]);
+      const text = itemText(entry.view.model.bodies.get(item.id));
+      if (text) next.write_to_clipboard(done(text));
+    });
+  }
+
+  /** The Copy button floating over the right edge of the hovered item. */
+  function copyButton(entry, item, ctx) {
+    const t = ctx.theme;
+    const copied = entry.copied?.id === item.id && Date.now() - entry.copied.at < COPIED_MS;
+    return h_flex().id(`stereo-tree-copy-${item.id}`).accessibility_label(copied ? "Copied" : "Copy this item").tooltip(copied ? "Copied" : "Copy this item")
+      .absolute().top(2).right(ctx.scrollbarLane ?? 14).items_center().justify_center().w(22).h(22).rounded(4)
+      .bg(t.raised ?? t.surface).border_1().border_color(t.border).cursor_pointer().hover(s => s.bg(t.hover))
+      .on_mouse_down("left", (_event, cx) => cx.stop_propagation())
+      .on_click((_event, cx) => copyItem(entry, item, cx, ctx))
+      .child(ctx.svg(`mods/stereo-view/icons/${copied ? "check" : "copy"}.svg`).id(`stereo-tree-copy-icon-${item.id}`).size(14)
+        .text_color(copied ? t.accent ?? t.foreground : t.foreground));
+  }
+
   function renderItem(entry, index, ctx) {
     const { view } = entry;
     const model = view.model, layout = view.layout;
     const item = model.items[index];
     const height = layout.heights[index] * ctx.lineHeight;
-    const box = v_flex().w_full().h(height).flex_none().overflow_hidden().px(ctx.gutter);
+    const box = v_flex().id(`stereo-tree-${entry.name}-${item.id}`).relative().w_full().h(height).flex_none().overflow_hidden().px(ctx.gutter)
+      .on_mouse_move((_event, cx) => { if (entry.hover !== item.id) { entry.hover = item.id; ctx.notify(); } });
+    if (entry.hover === item.id && item.k !== "rows" && ctx.svg) box.child(copyButton(entry, item, ctx));
     const body = model.bodies.get(item.id);
     const t = ctx.theme;
     if (item.k === "rows") {
