@@ -7,7 +7,7 @@ import { createSettingsPanel } from "./settings.js";
 import { createSearchBar } from "./search-bar.js";
 import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
-import { composerRoute } from "./composer-route.js";
+import { composerAlive, composerFieldCommand, composerRoute } from "./composer-route.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
 
 const LABEL = "herdr.stereo.bridge";
@@ -233,7 +233,8 @@ export default class StereoView extends View {
         if (!isShown()) continue;
         if (command === "focus" && props()?.view === "gui") {
           this.refresh(cx);
-          if (this.surfaceInput) this.surfaceInput.focus(); else this.focus?.focus();
+          if (this.surfaceInput) this.surfaceInput.focus();
+          else { this.focus?.focus(); this.handKeyboardToComposer(); }
           continue;
         }
         const action = composerRoute(command, props()?.pane);
@@ -245,6 +246,14 @@ export default class StereoView extends View {
     });
     cx.timer.every(INTERVAL, (/** @type {any} */ cx) => this.refresh(cx));
     this.refresh(cx);
+  }
+
+  /** Herdr gives the keyboard of a GUI pane to this view; with no dialog open it belongs to the composer field. */
+  handKeyboardToComposer() {
+    const address = terminalAddress();
+    const labels = terminals().find(t => t.address === address)?.labels;
+    const command = composerFieldCommand(props()?.pane);
+    if (command && composerAlive(labels)) run(command);
   }
 
   dialogPlacement() {

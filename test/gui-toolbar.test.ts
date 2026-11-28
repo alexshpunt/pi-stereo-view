@@ -7,13 +7,14 @@ import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { dialogKey } from "../herdr/mods/stereo-view/dialog-keys.js";
 // @ts-expect-error The mod has no TypeScript declarations.
-import { composerRoute } from "../herdr/mods/stereo-view/composer-route.js";
+import { composerAlive, composerFieldCommand, composerRoute } from "../herdr/mods/stereo-view/composer-route.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
   const calls: any[] = [];
+  const runs: string[] = [];
   let total = 1;
   let jump: { serial: number; top: number } | undefined;
   let rows: string[] | undefined;
@@ -117,10 +118,10 @@ function harness() {
       })) });
     }
     return { code: 0, stdout: JSON.stringify(data) };
-  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
+  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, nextCommand, composerRoute, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
+  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
     appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -133,6 +134,7 @@ function harness() {
     typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
     setPointerHandled(value: boolean) { pointerHandled = value; }, stopped: () => stopped,
     surfaceFocused: () => inputFocused, sendCommand: (command: string) => deliverCommand?.(command),
+    runs, setComposerLabel(stamp?: number) { (terminal.labels as any)["herdr.composer"] = stamp === undefined ? undefined : String(stamp); },
     setPaneView(value: boolean) { paneView = value; }, setShownView(value: string) { shownView = value; }, focused: () => focusCount };
 }
 
@@ -163,6 +165,26 @@ test("pane focus targets the active panel or the open Pi dialog", async () => {
   h.view.refresh(h.cx); await h.flush();
   h.sendCommand("focus"); await Promise.resolve();
   expect(h.surfaceFocused()).toBe(true);
+});
+
+test("a GUI focus goes on to the composer field of its pane unless a Pi dialog is open", async () => {
+  const h = harness(); h.setPaneView(true); h.view.init({}, h.cx); await h.flush();
+  h.sendCommand("focus"); await Promise.resolve(); await h.flush();
+  expect(h.runs, "no composer is alive").toEqual([]);
+
+  h.setComposerLabel(Date.now() - 60000);
+  h.sendCommand("focus"); await Promise.resolve(); await h.flush();
+  expect(h.runs, "a stale composer label").toEqual([]);
+
+  h.setComposerLabel(Date.now());
+  h.sendCommand("focus"); await Promise.resolve(); await h.flush();
+  expect(h.runs).toEqual(["paste-composer.field:m%2Fp:focus"]);
+
+  h.setSurface({ active: true, frame: 2, lines: ["dialog"] });
+  h.view.refresh(h.cx); await h.flush();
+  h.sendCommand("focus"); await Promise.resolve();
+  expect(h.surfaceFocused()).toBe(true);
+  expect(h.runs, "the dialog keeps the keyboard").toHaveLength(1);
 });
 
 test("keeps split history visible while an extension dialog is open", async () => {
