@@ -1095,11 +1095,6 @@ export default class StereoView extends View {
         if (geometryChanged && following && state.following && state.total > 0) state.handle.scroll_to_bottom();
         else if (!following && page.scrollShift && state.total > 0)
           state.handle.scroll_to_item(Math.max(0, Math.min(state.total - 1, Math.floor(currentOffset / panelRowHeight(state)) + page.scrollShift)));
-        // The first page of a following panel arrives before its list has been laid out, so the jump to the bottom
-        // can land short and leave rows that are loaded off screen; do it again once the layout has settled.
-        if (state.initial && following) cx.timer.after(120, (/** @type {any} */ next) => {
-          if (state.following && state.total > 0) { state.handle.scroll_to_bottom(); next.notify(); }
-        });
         state.initial = false;
         state.error = null;
       } catch {

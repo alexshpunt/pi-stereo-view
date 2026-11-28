@@ -176,6 +176,17 @@ test("a pane created in TUI mode recognizes a live bridge and reads ahead, so it
   expect(h.calls.length).toBe(reads);
 });
 
+test("a new copy draws only its background until the first state arrives, not the default layout (LPT-1932)", async () => {
+  const h = harness(); h.setPaneView(true);
+  h.view.init({}, h.cx);
+  expect(h.view.loading()).toBe(true);
+  expect(h.find(h.view.render(), "stereo-panels")).toBeUndefined();
+  expect(h.find(h.view.render(), "stereo-body")).toBeDefined();
+  await h.flush();
+  expect(h.view.loading()).toBe(false);
+  expect(h.find(h.view.render(), "stereo-panels")).toBeDefined();
+});
+
 test("a width change keeps the rows on screen, reads them again at once and then drops the old ones (LPT-1932)", async () => {
   const h = harness(); h.setRows(Array.from({ length: 5 }, (_, i) => `row ${i}`));
   h.view.init({}, h.cx); await h.flush();
