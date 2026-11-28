@@ -7,7 +7,7 @@ import { createSettingsPanel } from "./settings.js";
 import { createSearchBar } from "./search-bar.js";
 import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
-import { createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
+import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
 
 const LABEL = "herdr.stereo.bridge";
 const LINE_HEIGHT = 17;
@@ -39,6 +39,21 @@ if(crypto.createHash('sha256').update(data).digest('hex')!==id)process.exit(2);
 const temp=output+'.'+process.pid+'.tmp';
 try{fs.writeFileSync(temp,data);fs.renameSync(temp,output);}finally{try{fs.unlinkSync(temp)}catch(e){if(e.code!=='ENOENT')throw e}}`;
 const imageCache = createImageCache(() => exec("node", ["-e", IMAGE_CACHE_INIT, `${appHome()}/data/stereo-view/images`], { timeout: 5000 }));
+// All views in this runtime share the owner directory, so they share eviction and in-flight writes too.
+const imageViews = new Set();
+const imageStore = createBoundedImageStore(128 * 1024 * 1024, path => unlink(`${appHome()}/${path}`), id => {
+  for (const ref of imageViews) {
+    const view = ref.deref();
+    if (!view) { imageViews.delete(ref); continue; }
+    for (const state of [view.chat, view.activity, view.combined]) {
+      const first = Math.max(0, Math.floor(state.handle.offset().y / panelRowHeight(state)));
+      const height = state.handle.viewport_size().height || state.height;
+      const last = first + Math.ceil(height / panelRowHeight(state)) + 1;
+      if (state.images.some(image => image.id === id && image.row < last && image.row + image.rows > first)) return true;
+    }
+  }
+  return false;
+});
 // Fixed code, not a command or script read from the terminal label. The socket and
 // request are arguments and never interpolated into this source.
 const CLIENT = `const net=require('node:net');
@@ -182,7 +197,8 @@ export default class StereoView extends View {
     this.hoverPane = null;
     this.hoverKey = "";
     this.hoverAt = 0;
-    this.imagePaths = new Map();
+    this.imagePaths = imageStore;
+    imageViews.add(new WeakRef(this));
     this.imagePending = new Set();
     this.imageQueue = [];
     this.imageWorkers = 0;
@@ -730,6 +746,7 @@ export default class StereoView extends View {
         state.images = state.images.filter(placement => placement.row + placement.rows <= page.top || placement.row >= page.top + page.height);
         state.images.push(...page.images);
         if (state.images.length > 512) state.images.splice(0, state.images.length - 512);
+        cx.spawn(async () => { try { await this.imagePaths.prune(); } catch (error) { console.warn("Stereo View image cleanup failed", error); } });
         for (const placement of page.images) this.loadImage(placement, connection, cx);
         for (let i = 0; i < page.lines.length; i++) {
           const index = page.top + i;
@@ -822,7 +839,7 @@ export default class StereoView extends View {
   /** @param {any} placement @param {{socket:string,machine?:string}} connection @param {any} cx */
   loadImage(placement, connection, cx) {
     const id = placement.id;
-    if (this.imagePaths.has(id) || this.imagePending.has(id) || Date.now() - (this.imageFailures.get(id) ?? 0) < 5000) return;
+    if (this.imagePaths.get(id) || this.imagePending.has(id) || Date.now() - (this.imageFailures.get(id) ?? 0) < 5000) return;
     this.imageFailures.delete(id);
     this.imagePending.add(id);
     this.imageQueue.push({ placement, connection });
@@ -838,30 +855,36 @@ export default class StereoView extends View {
     this.imageWorkers++;
     cx.spawn(async (/** @type {any} */ next) => {
       try {
-        let encoded = "", total = -1;
-        while (total < 0 || encoded.length < total) {
-          const request = { v: 1, op: "image", id, offset: encoded.length, length: 524288 };
-          const result = await exec("node", ["-e", CLIENT, connection.socket, JSON.stringify(request)], { on: connection.machine, timeout: 5000 });
-          if (result.code !== 0 || bridge()?.socket !== connection.socket) throw new Error("Image unavailable");
-          const chunk = JSON.parse(result.stdout);
-          if (chunk.v !== 1 || !Number.isSafeInteger(chunk.total) || chunk.total < 1 || chunk.total > 22369624 ||
-              (total !== -1 && total !== chunk.total) || typeof chunk.data !== "string" || !chunk.data.length ||
-              !/^[A-Za-z0-9+/=]+$/.test(chunk.data) || encoded.length + chunk.data.length > chunk.total) throw new Error("Invalid image response");
-          total = chunk.total;
-          encoded += chunk.data;
-        }
-        const extension = placement.mime === "image/jpeg" ? "jpg" : placement.mime.slice(6);
-        const owner = await imageCache();
-        const relative = `data/stereo-view/images/${owner}/${id}.${extension}`;
-        const directory = `${appHome()}/data/stereo-view/images/${owner}`;
-        const temporary = `${directory}/${id}-${Math.random().toString(36).slice(2)}.base64`;
-        await writeFile(temporary, encoded);
-        try {
-          const decoded = await exec("node", ["-e", IMAGE_DECODE, temporary, `${directory}/${id}.${extension}`, id], { timeout: 15000 });
-          if (decoded.code !== 0) throw new Error("Image data could not be decoded");
-        } finally { await unlink(temporary); }
-        this.imagePaths.set(id, relative);
-      } catch (error) { this.imageFailures.set(id, Date.now()); console.warn("Stereo View image failed", error); }
+        await this.imagePaths.load(id, async () => {
+          let encoded = "", total = -1;
+          while (total < 0 || encoded.length < total) {
+            const request = { v: 1, op: "image", id, offset: encoded.length, length: 524288 };
+            const result = await exec("node", ["-e", CLIENT, connection.socket, JSON.stringify(request)], { on: connection.machine, timeout: 5000 });
+            if (result.code !== 0 || bridge()?.socket !== connection.socket) throw new Error("Image unavailable");
+            const chunk = JSON.parse(result.stdout);
+            if (chunk.v !== 1 || !Number.isSafeInteger(chunk.total) || chunk.total < 1 || chunk.total > 22369624 ||
+                (total !== -1 && total !== chunk.total) || typeof chunk.data !== "string" || !chunk.data.length ||
+                !/^[A-Za-z0-9+/=]+$/.test(chunk.data) || encoded.length + chunk.data.length > chunk.total) throw new Error("Invalid image response");
+            total = chunk.total;
+            encoded += chunk.data;
+          }
+          const extension = placement.mime === "image/jpeg" ? "jpg" : placement.mime.slice(6);
+          const owner = await imageCache();
+          const relative = `data/stereo-view/images/${owner}/${id}.${extension}`;
+          const directory = `${appHome()}/data/stereo-view/images/${owner}`;
+          const temporary = `${directory}/${id}-${Math.random().toString(36).slice(2)}.base64`;
+          await writeFile(temporary, encoded);
+          try {
+            const decoded = await exec("node", ["-e", IMAGE_DECODE, temporary, `${directory}/${id}.${extension}`, id], { timeout: 15000 });
+            if (decoded.code !== 0) throw new Error("Image data could not be decoded");
+          } finally { await unlink(temporary); }
+          return { path: relative, size: Math.floor(encoded.length * 3 / 4) };
+        });
+      } catch (error) {
+        this.imageFailures.set(id, Date.now());
+        while (this.imageFailures.size > 512) this.imageFailures.delete(this.imageFailures.keys().next().value);
+        console.warn("Stereo View image failed", error);
+      }
       finally { this.imagePending.delete(id); this.imageWorkers--; this.drainImages(next); next.notify(); }
     });
   }

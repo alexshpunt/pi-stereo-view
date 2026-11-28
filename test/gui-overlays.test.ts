@@ -84,3 +84,21 @@ test("routes clicks to a non-capturing overlay and rejects obscured and stale ta
   layouts[0].col = 2;
   expect(surface.mouse(page.revision, first.id, first.mouseFrame, event)).toBe(false);
 });
+
+test("keeps a captured drag when the pointer crosses another overlay", () => {
+  const events: string[] = [];
+  const a = new Overlay("first", 0, 0), b = new Overlay("second", 0, 0), editor = new Overlay("editor", 0, 0);
+  a.handleMouse = event => { events.push(event.type); return { handled: true }; };
+  const layouts = [
+    { entry: { component: a }, row: 1, col: 1, width: 20, height: 1 },
+    { entry: { component: b }, row: 1, col: 10, width: 10, height: 1 },
+  ];
+  const host = { terminal: { columns: 80, rows: 24 }, renderedOverlayLayouts: layouts,
+    getFocusedComponent: (): Component => editor, requestRender() {}, setFocus(_component: Component) {} };
+  const surface = new GuiOverlays(host), page = surface.page(), first = page.overlays[0];
+  const event = { type: "press" as const, button: "left" as const, x: 1, y: 0 };
+  expect(surface.mouse(page.revision, first.id, first.mouseFrame, event)).toBe(true);
+  expect(surface.mouse(page.revision, first.id, first.mouseFrame, { ...event, type: "drag", x: 10 })).toBe(true);
+  expect(surface.mouse(page.revision, first.id, first.mouseFrame, { ...event, type: "release", x: 10 })).toBe(true);
+  expect(events).toEqual(["press", "drag", "release"]);
+});

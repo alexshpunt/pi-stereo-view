@@ -7,7 +7,7 @@ import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { dialogKey } from "../herdr/mods/stereo-view/dialog-keys.js";
 // @ts-expect-error The mod has no TypeScript declarations.
-import { createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
+import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
@@ -103,7 +103,7 @@ function harness() {
   }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t" }], props: () => ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, dialogKey, createImageCache, IMAGE_CACHE_INIT,
+  const names = { ...ui, ...env, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
     appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -116,6 +116,37 @@ function harness() {
     typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
     surfaceFocused: () => inputFocused };
 }
+
+test("keeps a visible image while evicting an older offscreen image", async () => {
+  const h = harness(); h.view.init({}, h.cx); await h.flush();
+  h.view.chat.images = [{ id: "visible", row: 0, rows: 1 }];
+  const store = h.view.imagePaths;
+  await store.load("old", async () => ({ path: "old", size: 80 * 1024 * 1024 }));
+  await store.load("visible", async () => ({ path: "visible", size: 80 * 1024 * 1024 }));
+  expect(store.get("old")).toBeUndefined();
+  expect(store.get("visible")).toBe("visible");
+});
+
+test("pins images in both views at their measured fractional-scale scroll positions", async () => {
+  const h = harness(); h.setZoom(1.1); h.view.init({}, h.cx); await h.flush();
+  const second = new h.view.constructor(); second.init({}, h.cx); await h.flush();
+  const state = h.view.chat;
+  state.total = 194;
+  state.handle.content_size = () => ({ height: 3292.13 });
+  state.handle.offset = () => ({ y: 2104.85 });
+  state.handle.viewport_size = () => ({ height: 34 });
+  state.images = [{ id: "fractional", row: 124, rows: 1 }];
+  second.chat.images = [{ id: "second", row: 0, rows: 1 }];
+  const store = h.view.imagePaths;
+  await store.load("fractional", async () => ({ path: "fractional", size: 80 * 1024 * 1024 }));
+  await store.load("second", async () => ({ path: "second", size: 80 * 1024 * 1024 }));
+  expect(store.get("fractional")).toBe("fractional");
+  expect(store.get("second")).toBe("second");
+  state.handle.offset = () => ({ y: 0 });
+  await store.prune();
+  expect(store.get("fractional")).toBeUndefined();
+  expect(store.get("second")).toBe("second");
+});
 
 test("keeps history visible behind Pi overlays and forwards overlay input", async () => {
   const h = harness();

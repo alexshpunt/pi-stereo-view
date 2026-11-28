@@ -100,8 +100,8 @@ export class GuiOverlays {
     if (index < 0) return false;
     const target = this.snapshot[index], x = target.col + event.x, y = target.row + event.y;
     if (event.x < 0 || event.y < 0 || event.x >= target.width || event.y >= target.height ||
-        this.snapshot.slice(index + 1).some(layer => x >= layer.col && x < layer.col + layer.width &&
-          y >= layer.row && y < layer.row + layer.height)) return false;
+        (event.type === "press" && this.snapshot.slice(index + 1).some(layer => x >= layer.col && x < layer.col + layer.width &&
+          y >= layer.row && y < layer.row + layer.height))) return false;
     return this.records.get(target.entry)?.surface.mouse(frame, event, { x: target.col, y: target.row }) ?? false;
   }
 

@@ -32,3 +32,53 @@ export function createImageCache(run) {
     return name;
   }).catch(error => { pending = undefined; throw error; });
 }
+
+/** A shared, byte-bounded cache. Pinned images stay until they leave all visible views.
+ * @param {number} limit
+ * @param {(path: string) => Promise<void>} remove
+ * @param {(id: string) => boolean} pinned
+ */
+export function createBoundedImageStore(limit, remove, pinned) {
+  const entries = new Map(), loading = new Map(), removing = new Map();
+  let size = 0, pruning;
+  const get = id => {
+    const entry = entries.get(id);
+    if (!entry) return undefined;
+    entries.delete(id); entries.set(id, entry);
+    return entry.path;
+  };
+  const prune = () => {
+    if (pruning) return pruning;
+    pruning = (async () => {
+      while (size > limit) {
+        const candidate = [...entries].find(([id]) => !pinned(id));
+        if (!candidate) break;
+        const [id, entry] = candidate;
+        entries.delete(id); size -= entry.size;
+        const operation = Promise.resolve().then(() => remove(entry.path));
+        removing.set(id, operation);
+        try { await operation; }
+        catch (error) { entries.set(id, entry); size += entry.size; throw error; }
+        finally { removing.delete(id); }
+      }
+    })().finally(() => { pruning = undefined; });
+    return pruning;
+  };
+  const load = (id, write) => {
+    const cached = get(id);
+    if (cached) return Promise.resolve(cached);
+    if (loading.has(id)) return loading.get(id);
+    const operation = (async () => {
+      await removing.get(id);
+      const again = get(id);
+      if (again) return again;
+      const entry = await write();
+      entries.set(id, entry); size += entry.size;
+      await prune();
+      return entry.path;
+    })().finally(() => { loading.delete(id); });
+    loading.set(id, operation);
+    return operation;
+  };
+  return { get, load, prune };
+}
