@@ -1141,6 +1141,18 @@ export default class StereoView extends View {
     return this.available && !this.controlError && this.viewState === null && Date.now() - this.created < LOADING_MS;
   }
 
+  /**
+   * Whether a panel that is about to be shown has not had its first page yet, for a moment only. The panels are laid out
+   * but not drawn until then, so no frame shows a panel empty that is about to have rows.
+   * @param {any} state @param {string} placement
+   */
+  pendingFirstPage(state, placement) {
+    if (!this.available || this.controlError || !state || Date.now() - this.created >= LOADING_MS) return false;
+    const names = state.mode === "combined" || placement === "combined" ? ["combined"]
+      : placement === "maximize" ? ["activity"] : state.zoom ? [state.zoom] : ["chat", "activity"];
+    return names.some(name => { const pane = /** @type {any} */ (this)[name]; return !!pane?.initial && !pane.error; });
+  }
+
   /** Keep what this copy measured for the copies created after it. */
   rememberGeometry() {
     if (!this.cellMeasured) return;
@@ -1726,6 +1738,8 @@ export default class StereoView extends View {
         content.child(panels[name]());
       }
     }
+    // The panels are laid out (that starts their first read) but stay undrawn until their first page is here.
+    if (!loading && this.pendingFirstPage(state, placement)) content.opacity(0);
     const body = v_flex().id("stereo-body").flex_1().w_full().min_w(0).min_h(0)
       .on_size_change((size, cx) => {
         const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
