@@ -77,9 +77,9 @@ pi --tui-mode fullscreen
 
 ## Experimental Herdr view
 
-The experimental branch includes a Herdr mod in `herdr/mods/stereo-view`. Copy that folder into the Herdr app's `mods` directory, then open **Stereo View** from the running Pi terminal's Herdr apps. The two native panels scroll independently. Select **Terminal** to return to Pi. The normal terminal view remains unchanged without Herdr.
+The experimental branch includes a Herdr mod in `herdr/mods/stereo-view`. Copy that folder into the Herdr app's `mods` directory. In Herdr versions with pane views, switch the running Pi terminal pane to GUI to see Stereo View, or back to TUI to see Pi's terminal. Older versions can open **Stereo View** as an app tab and use **Terminal** to return. The two native panels scroll independently. The normal terminal view remains unchanged without Herdr.
 
-The mod renders Pi's native history, including colors and images, and forwards supported history controls to the live components. The panels support selection, copying, search and independent scrolling. It fetches visible pages rather than eagerly drawing the full history, including within long entries. The bridge requires a Unix socket and Node on the terminal's machine; native Windows Pi is not supported. Automatic opening is disabled until the App can provide a verified machine-qualified caller identity. See the [mod README](herdr/mods/stereo-view/README.md) for the protocol and other limits.
+The mod renders Pi's native history, including colors and images, and forwards supported history controls to the live components. The panels support selection, copying, search and independent scrolling. It fetches visible pages rather than eagerly drawing the full history, including within long entries. The bridge requires a Unix socket and Node on the terminal's machine; native Windows Pi is not supported. Automatic app-tab opening is disabled because the running App cannot yet report whether pane views are supported. See the [mod README](herdr/mods/stereo-view/README.md) for the protocol and other limits.
 
 ## Use it
 

@@ -227,7 +227,7 @@ export default class StereoView extends View {
     this.available = !checking() && !!bridge();
     if (checking()) return;
     this.focus = cx.focus_handle();
-    cx.spawn(async (cx) => {
+    cx.spawn(async (/** @type {any} */ cx) => {
       for (;;) {
         const command = await nextCommand();
         if (!isShown()) continue;
@@ -253,7 +253,7 @@ export default class StereoView extends View {
       ? state.preferences?.piWindows : undefined;
   }
 
-  /** Handle navigation from the focused panel or its composer. */
+  /** Handle navigation from the focused panel or its composer. @param {string} key @param {any} cx */
   navigate(key, cx) {
     const pane = this.viewState?.mode === "combined" ? this.combined : this.activePane === "chat" ? this.chat : this.activity;
     if (key === "search") {
