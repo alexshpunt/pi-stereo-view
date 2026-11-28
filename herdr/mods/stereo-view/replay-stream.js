@@ -8,14 +8,22 @@ const defer = fn => { Promise.resolve().then(fn); };
 /** @param {string} recording JSON lines: snapshot chunks, then body messages. */
 export function createReplayStream(recording) {
   const lineCallbacks = [], exitCallbacks = [];
-  const bodies = new Map();
+  /** id -> [start, end) of the recorded `B` line that holds its body; parsed only when asked for. */
+  const where = new Map();
   const snaps = [];
-  for (const line of recording.split("\n")) {
-    if (!line) continue;
-    const message = JSON.parse(line);
-    if (message.t === "snap") snaps.push(line);
-    else if (message.t === "bodies") for (const id of Object.keys(message.bodies)) bodies.set(id, message.bodies[id]);
+  for (let from = 0; from < recording.length;) {
+    let to = recording.indexOf("\n", from);
+    if (to < 0) to = recording.length;
+    if (recording.charCodeAt(from) === 66 && recording.charCodeAt(from + 1) === 9) { // "B\t"
+      const idsEnd = recording.indexOf("\t", from + 2);
+      for (const id of recording.slice(from + 2, idsEnd).split(",")) where.set(id, [idsEnd + 1, to]);
+    } else if (to > from) {
+      const line = recording.slice(from, to);
+      if (line.startsWith("{\"t\":\"snap\"")) snaps.push(line);
+    }
+    from = to + 1;
   }
+  const bodies = { has: id => where.has(id), get: id => { const [a, b] = where.get(id); return JSON.parse(recording.slice(a, b)).bodies[id]; } };
   const emit = line => { for (const callback of lineCallbacks) callback(line); };
   let killed = false;
   const stream = {
@@ -31,7 +39,14 @@ export function createReplayStream(recording) {
       try { request = JSON.parse(line); } catch { return; }
       if (request.op === "get") {
         const found = {};
-        for (const id of request.ids ?? []) if (bodies.has(id)) found[id] = bodies.get(id);
+        const parsed = new Map(); // each recorded line once per request, not once per id
+        for (const id of request.ids ?? []) {
+          if (!bodies.has(id)) continue;
+          const [a, b] = where.get(id);
+          let line = parsed.get(a);
+          if (!line) { line = JSON.parse(recording.slice(a, b)).bodies; parsed.set(a, line); }
+          found[id] = line[id];
+        }
         defer(() => emit(JSON.stringify({ t: "bodies", rq: request.rq, bodies: found })));
       } else if (request.op === "rows") defer(() => emit(JSON.stringify({ t: "rows", rq: request.rq, id: request.id, lines: [] })));
       else if (request.op === "resync") defer(() => { for (const line of snaps) emit(line); });

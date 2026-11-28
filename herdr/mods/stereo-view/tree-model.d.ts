@@ -8,6 +8,8 @@ export class TreeModel {
   indexOf(id: string): number;
   apply(message: unknown): TreeChange | undefined;
   storeBodies(bodies: Record<string, TreeBody | null>): string[];
+  readonly bodyChars: number;
+  evict(center: number, maxChars: number): number;
   body(at: number): TreeBody | undefined;
 }
 export function bodyText(body: TreeBody | undefined): string;

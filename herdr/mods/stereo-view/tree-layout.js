@@ -20,6 +20,7 @@ export class TreeLayout {
     this.cursor = 0;
     /** Bumps whenever any height changes: a renderer re-sends item sizes only then. */
     this.version = 0;
+    this.unmeasured = 0;
   }
 
   chrome(item) { return CHROME[item.k] ?? 1; }
@@ -38,7 +39,16 @@ export class TreeLayout {
     this.cursor = 0;
     this.version++;
     for (let i = 0; i < items.length; i++) this.heights[i] = this.estimate(items[i]);
+    this.countUnmeasured();
     this.buildTree();
+  }
+
+  /** Items whose height is still an estimate; Pi-rows items are exact once their rows arrive and are not counted. */
+  countUnmeasured() {
+    const items = this.model.items;
+    let count = 0;
+    for (let i = 0; i < items.length; i++) { if (items[i].k === "rows") this.measured[i] = 1; else if (!this.measured[i]) count++; }
+    this.unmeasured = count;
   }
 
   buildTree() {
@@ -64,6 +74,7 @@ export class TreeLayout {
     this.measured = Uint8Array.from(measured);
     this.version++;
     for (let i = 0; i < inserted; i++) this.wrapped.delete(items[at + i].id);
+    this.countUnmeasured();
     this.buildTree();
   }
 
@@ -96,6 +107,7 @@ export class TreeLayout {
   setHeight(i, rows) {
     const delta = rows - this.heights[i];
     this.heights[i] = rows;
+    if (!this.measured[i]) this.unmeasured--;
     this.measured[i] = 1;
     if (delta) { this.version++; for (let k = i + 1; k <= this.heights.length; k += k & -k) this.tree[k] += delta; }
     return delta;

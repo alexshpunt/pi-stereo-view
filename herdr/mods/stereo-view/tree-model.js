@@ -83,6 +83,36 @@ export class TreeModel {
     return loaded;
   }
 
+  /** Characters held in loaded bodies. */
+  get bodyChars() {
+    let chars = 0;
+    for (const body of this.bodies.values()) chars += (body.t?.length ?? 0) + (body.a?.length ?? 0) + (body.o?.length ?? 0);
+    return chars;
+  }
+
+  /**
+   * Keep memory bounded: when loaded bodies exceed `maxChars`, drop those farthest from item `center` until
+   * `maxChars * 0.75` remain. The mod's JS heap is small (a 40 MB pane OOMs it), so bodies are a cache.
+   * Returns the number of bodies dropped.
+   */
+  evict(center, maxChars) {
+    let chars = this.bodyChars;
+    if (chars <= maxChars) return 0;
+    const target = maxChars * 0.75;
+    const order = [];
+    for (const id of this.bodies.keys()) { const at = this.indexOf(id); order.push([at < 0 ? Infinity : Math.abs(at - center), id]); }
+    order.sort((a, b) => b[0] - a[0]);
+    let dropped = 0;
+    for (const [, id] of order) {
+      if (chars <= target) break;
+      const body = this.bodies.get(id);
+      chars -= (body.t?.length ?? 0) + (body.a?.length ?? 0) + (body.o?.length ?? 0);
+      this.bodies.delete(id);
+      dropped++;
+    }
+    return dropped;
+  }
+
   body(at) { const item = this.items[at]; return item ? this.bodies.get(item.id) : undefined; }
   get length() { return this.items.length; }
 }

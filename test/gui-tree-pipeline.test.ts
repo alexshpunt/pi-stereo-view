@@ -120,6 +120,20 @@ describe("layout, view and search", () => {
     expect(view.frame().pending).toEqual([]);
   });
 
+  it("bounds the loaded bodies by dropping those farthest from the screen, and measures before dropping", () => {
+    const local = new TreeModel();
+    local.apply({ t: "snap", pane: "chat", epoch: 1, rev: 1, total: 100, at: 0, last: true,
+      items: Array.from({ length: 100 }, (_, i) => ({ id: `e${i}`, k: "md", n: 1, c: 100, b: { t: "x".repeat(100) } })) });
+    expect(local.bodyChars).toBe(10000);
+    expect(local.evict(50, 4000)).toBeGreaterThan(0);
+    expect(local.bodyChars).toBeLessThanOrEqual(3000);
+    expect(local.bodies.has("e50")).toBe(true);
+    expect(local.bodies.has("e0")).toBe(false);
+    const view = new TreeView({ model: local, closed: true, get: () => Promise.resolve([]), rows: () => Promise.resolve([]) } as never, { viewport: 10, cols: 40, maxChars: 4000 });
+    view.changed({ kind: "snapshot", at: 0, removed: 0, inserted: 100, last: true });
+    expect(view.exact).toBe(false);
+  });
+
   it("searches in slices", () => {
     const search = new TreeSearch(model);
     search.start("ITEM 77");

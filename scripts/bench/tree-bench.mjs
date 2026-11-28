@@ -57,7 +57,7 @@ const firstPending = first.pending.length;
 
 // Let the background prefetch load every body, frames running as they would.
 const loadStart = performance.now();
-while (!view.fullyLoaded && performance.now() - loadStart < 120000) { time("frame while loading", () => view.frame()); await sleep(1); }
+while (!view.settled && performance.now() - loadStart < 120000) { time("frame while loading", () => view.frame()); await sleep(1); }
 const loadWall = performance.now() - loadStart;
 const exactStart = performance.now();
 while (!view.exact && performance.now() - exactStart < 60000) { time("frame while measuring", () => view.frame()); await sleep(0); }
@@ -115,8 +115,9 @@ for (const [name, values] of Object.entries(samples)) {
   if (!row.ok) failed = true;
   rows.push(row);
 }
-const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
+const summary = { pane, items: client.model.items.length, totalRows: view.layout.totalRows, snapshotWallMs: +snapshotWall.toFixed(0), loadAllBodiesWallMs: +loadWall.toFixed(0), allHeightsExactWallMs: +exactWall.toFixed(0), firstFramePending: firstPending, bodyCharsHeld: client.model.bodyChars, bodyCharsCap: view.maxChars, itemsWithBody: client.model.bodies.size, pendingAfterLoad, fallbackPending, fallbackItems: client.model.items.filter(item => item.k === "rows").length, kinds: client.model.items.reduce((k, item) => (k[item.k] = (k[item.k] ?? 0) + 1, k), {}), searchHits: search.hits.length, searchWallMs: +searchWall.toFixed(0), thresholds: { p95: P95, max: MAX } };
 if (pendingAfterLoad) failed = true;
+if (client.model.bodyChars > view.maxChars) failed = true; // memory stays bounded
 console.log(JSON.stringify(summary));
 console.table(rows.map(({ name, n, p50, p95, max, ok }) => ({ name, n, p50, p95, max, ok })));
 if (out) writeFileSync(out, JSON.stringify({ summary, rows }, null, 1));

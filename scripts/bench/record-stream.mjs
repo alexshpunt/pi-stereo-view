@@ -17,7 +17,10 @@ socket.on("data", chunk => {
     const line = buffer.slice(0, end); buffer = buffer.slice(end + 1);
     const message = JSON.parse(line);
     if (message.t === "snap") { lines.push(line); items.push(...message.items); if (message.last) waiting?.(); }
-    else if (message.t === "bodies") { delete message.rq; lines.push(JSON.stringify(message)); waiting?.(); }
+    else if (message.t === "bodies") {
+      // `B<TAB>ids<TAB>json`: the replay adapter indexes the ids without parsing the body (the mod's heap is small).
+      delete message.rq; lines.push(`B\t${Object.keys(message.bodies).join(",")}\t${JSON.stringify(message)}`); waiting?.();
+    }
   }
 });
 const next = () => new Promise(resolve => { waiting = resolve; });

@@ -8,7 +8,8 @@ const now = () => (typeof performance !== "undefined" ? performance.now() : Date
 
 export class TreeView {
   /** @param client TreeClient; @param viewport rows visible; @param cols text width in cells */
-  constructor(client, { viewport = 40, cols = 100, budgetMs = 4, prefetchScreens = 3 } = {}) {
+  constructor(client, { viewport = 40, cols = 100, budgetMs = 4, prefetchScreens = 3, maxChars = 12_000_000 } = {}) {
+    this.maxChars = maxChars;
     this.client = client;
     this.model = client.model;
     this.layout = new TreeLayout(this.model);
@@ -30,7 +31,6 @@ export class TreeView {
   /** A snapshot or splice arrived (the client calls this from its `change` hook). */
   changed(change) {
     this.complete = false;
-    this.exact = false;
     if (change.kind === "snapshot") {
       if (!change.last) return;
       this.layout.rebuild();
@@ -63,7 +63,6 @@ export class TreeView {
     const height = this.layout.heights[index] || 1;
     const fraction = height ? offset / height : 0;
     this.layout.rebuild(cols);
-    this.exact = false;
     this.requestedRows.clear();
     this.anchor = { index, offset: Math.min(Math.floor(fraction * (this.layout.heights[index] || 1)), Math.max(0, (this.layout.heights[index] || 1) - 1)) };
   }
@@ -116,7 +115,7 @@ export class TreeView {
     this.prefetch(visibleFirst, visibleLast);
     // Spare budget makes the rest of the pane exact, so far jumps and the scrollbar stop drifting.
     const left = this.budgetMs - (now() - started);
-    if (left > 0.5 && !this.exact) this.exact = layout.measureSlice(left);
+    if (left > 0.5 && layout.unmeasured > 0) layout.measureSlice(left);
     return { top, total: layout.totalRows, window: windowItems, pending, spentMs: now() - started, measuredCount };
   }
 
@@ -135,18 +134,20 @@ export class TreeView {
     const items = this.model.items;
     const ids = [];
     let chars = 0;
-    const consider = i => {
+    const span = Math.max(visibleLast - visibleFirst + 1, 1) * (this.prefetchScreens + 1);
+    // Near the screen a body is always wanted; farther away only while its height is still an estimate.
+    const consider = (i, d) => {
       const item = items[i];
       if (!item || item.k === "rows" || this.model.bodies.has(item.id)) return true;
+      if (d > span && this.layout.measured[i]) return true;
       if (ids.length >= BATCH_ITEMS || (ids.length && chars + item.c > BATCH_CHARS)) return false;
       ids.push(item.id); chars += item.c;
       return true;
     };
-    const span = Math.max(visibleLast - visibleFirst + 1, 1) * (this.prefetchScreens + 1);
-    for (let d = 0; d < span + items.length && ids.length < BATCH_ITEMS; d++) {
+    for (let d = 0; d < items.length && ids.length < BATCH_ITEMS; d++) {
       const below = visibleFirst + d, above = visibleFirst - 1 - d;
-      if (below < items.length && !consider(below)) break;
-      if (above >= 0 && !consider(above)) break;
+      if (below < items.length && !consider(below, d)) break;
+      if (above >= 0 && !consider(above, d)) break;
       if (below >= items.length && above < 0) break;
     }
     if (!ids.length) { this.complete = true; return; }
@@ -154,8 +155,18 @@ export class TreeView {
     this.client.get(ids).then(loaded => { this.inFlight = false; this.loadedBodies(loaded); }, () => { this.inFlight = false; });
   }
 
-  loadedBodies() { /* heights are measured lazily by the next frame */ }
+  /** Fresh bodies: make their heights exact now (while they are in memory), then drop what is farthest from the screen. */
+  loadedBodies(loaded) {
+    for (const id of loaded ?? []) {
+      const i = this.model.indexOf(id);
+      if (i >= 0 && !this.layout.measured[i]) this.layout.measure(i, false);
+    }
+    this.model.evict(this.anchor.index, this.maxChars);
+    this.complete = false;
+  }
 
-  /** Whether the whole pane's bodies are loaded (the benchmark waits for this). */
-  get fullyLoaded() { return this.model.items.every(item => item.k === "rows" || this.model.bodies.has(item.id)); }
+  /** Every height is exact and nothing near the screen is missing (the benchmark waits for this). */
+  /** Every height is exact. */
+  get exact() { return this.layout.unmeasured === 0; }
+  get settled() { return this.layout.unmeasured === 0 && this.complete === true; }
 }
