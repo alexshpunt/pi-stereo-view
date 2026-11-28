@@ -371,7 +371,7 @@ export default class StereoView extends View {
     return div().id(`stereo-latest-wrap-${name}`).absolute().left_0().right_0().bottom(LATEST_BOTTOM).flex().justify_center()
       .child(h_flex().id(`stereo-latest-${name}`).accessibility_label("Jump to latest").tooltip("Jump to latest (End)")
         .items_center().gap(LATEST_GAP).min_h(LATEST_MIN_HEIGHT).px(10).rounded(12)
-        .bg(t.raised).border_1().border_color(t.border).text_color(t.foreground).cursor_pointer()
+        .bg(t.raised).border_1().border_color(t.border).shadow_md().text_color(t.foreground).cursor_pointer()
         .hover(s => s.bg(t.hover))
         .on_mouse_down("left", (_event, cx) => cx.stop_propagation()) // Not a press on the panel's text.
         .on_click((_event, cx) => this.jumpToLatest(name, pane, cx))
