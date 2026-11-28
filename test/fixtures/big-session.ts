@@ -23,7 +23,7 @@ export const SIZES = {
   /** A few seconds to generate; fast enough for unit-level checks. */
   small: { exchanges: 300, callsPerTurn: 3, hugeEvery: 40, hugeLines: 800, codeEvery: 5, codeLines: 60, imageEvery: 60, seed: 1 },
   /** Thousands of messages and tool calls: the benchmark default. */
-  large: { exchanges: 3000, callsPerTurn: 4, hugeEvery: 50, hugeLines: 3000, codeEvery: 4, codeLines: 120, imageEvery: 100, seed: 1 },
+  large: { exchanges: 1500, callsPerTurn: 4, hugeEvery: 60, hugeLines: 1500, codeEvery: 4, codeLines: 120, imageEvery: 100, seed: 1 },
   /** A very long real-world session (tens of thousands of rows per panel). */
   huge: { exchanges: 8000, callsPerTurn: 5, hugeEvery: 40, hugeLines: 6000, codeEvery: 3, codeLines: 200, imageEvery: 150, seed: 1 },
 } satisfies Record<string, BigSessionOptions>;

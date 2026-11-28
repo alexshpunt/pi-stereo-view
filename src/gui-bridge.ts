@@ -14,6 +14,8 @@ type GuiControls = { state(): ReturnType<TranscriptLayout["guiState"]>; action(a
   overlays?(): ReturnType<TranscriptLayout["guiOverlays"]> };
 
 const LABEL = "herdr.stereo.bridge";
+/** LPT-1943 benchmark: report how long Pi spent rendering and encoding each view page. */
+const BENCH = process.env.STEREO_BENCH === "1";
 const REQUEST_LIMIT = 4096;
 const RESPONSE_LIMIT = 3 * 1024 * 1024;
 /** A short page can be followed by another request; one oversized entry cannot. */
@@ -141,8 +143,12 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
               const { pane, top, height, width, following } = parsed;
               const search = pane === "combined" ? undefined : current.search();
               if (search && pane !== "combined") void search.refresh(pane);
-              const output = JSON.stringify({ v: 1, ...renderer.page(pane, { top, height, width, following }),
-                ...(search && pane !== "combined" ? { search: search.state(pane) } : {}) });
+              const benchStart = BENCH ? performance.now() : 0;
+              const rendered = renderer.page(pane, { top, height, width, following });
+              const benchRendered = BENCH ? performance.now() : 0;
+              const output = JSON.stringify({ v: 1, ...rendered,
+                ...(search && pane !== "combined" ? { search: search.state(pane) } : {}),
+                ...(BENCH ? { bench: { pageMs: benchRendered - benchStart, encodeMs: performance.now() - benchRendered } } : {}) });
               if (Buffer.byteLength(output) > RESPONSE_LIMIT) throw new Error("View is too large");
               socket.end(output + "\n");
             } else if (parsed.op === "search") {
