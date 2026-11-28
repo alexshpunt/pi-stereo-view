@@ -1,5 +1,5 @@
 import { View, div, image, svg } from "gpui-kit";
-import { writeFile, unlink } from "fs/promises";
+import { writeFile, unlink, readFile } from "fs/promises";
 import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, ScrollHandle, Scrollbar, Input, InputState } from "gpui-base";
 import { appHome, checking, exec, nextCommand, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
 import { parseAnsi } from "./ansi.js";
@@ -212,9 +212,7 @@ function terminalAddress() {
  * streaming process API) or "replay:<base url>" (recordings of a stream, for tests until that API is released).
  * @returns {((command: string, args: string[], options?: any) => any) | null}
  */
-function treeSpawn() {
-  let mode = null;
-  try { mode = localStorage.getItem("stereo-view.tree"); } catch { return null; }
+function treeSpawn(/** @type {string | null} */ mode) {
   if (mode === "live") {
     const spawn = /** @type {any} */ (hostApi).spawnStream;
     return typeof spawn === "function" ? spawn : null;
@@ -311,9 +309,19 @@ export default class StereoView extends View {
   init(_props, cx) {
     syncTypography();
     this.viewCx = cx;
-    const spawnStream = treeSpawn();
     /** The element-tree panels (LPT-1943); null while the switch is off. */
-    this.trees = spawnStream ? createTreePanels({ div, h_flex, v_flex, v_virtual_list }, { spawnStream, target: () => bridge() }) : null;
+    this.trees = null;
+    const startTrees = (/** @type {string | null} */ mode) => {
+      const spawnStream = treeSpawn(mode);
+      if (!spawnStream || this.trees) return;
+      this.trees = createTreePanels({ div, h_flex, v_flex, v_virtual_list }, { spawnStream, target: () => bridge() });
+      cx.notify();
+    };
+    let mode = null;
+    try { mode = localStorage.getItem("stereo-view.tree"); } catch { /* no storage */ }
+    if (mode === "live" || mode?.startsWith("replay:")) startTrees(mode);
+    // Development switch without a UI: the mode in a file of the app's home (read once).
+    else readFile(`${appHome()}/stereo-tree.txt`, "utf8").then(text => startTrees(text.trim()), () => {});
     this.chat = paneState();
     this.activity = paneState();
     this.combined = paneState();

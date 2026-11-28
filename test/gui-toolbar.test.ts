@@ -133,7 +133,7 @@ function harness(stored?: string) {
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
   const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
-    appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {},
+    appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {}, readFile: async () => { throw new Error("none"); },
     localStorage: { getItem: () => saved, setItem: (_key: string, value: string) => { saved = value; } } };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
