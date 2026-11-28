@@ -7,17 +7,22 @@ import { createSelection } from "../herdr/mods/stereo-view/selection.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { dialogKey } from "../herdr/mods/stereo-view/dialog-keys.js";
 // @ts-expect-error The mod has no TypeScript declarations.
-import { composerRoute } from "../herdr/mods/stereo-view/composer-route.js";
+import { composerAlive, composerFieldCommand, composerRoute } from "../herdr/mods/stereo-view/composer-route.js";
 // @ts-expect-error The mod has no TypeScript declarations.
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "../herdr/mods/stereo-view/image-pruner.js";
+// @ts-expect-error The mod has no TypeScript declarations.
+import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "../herdr/mods/stereo-view/history-blocks.js";
 
 // GPUI and Herdr are native modules available inside the app, not in Node.
 function harness() {
   const calls: any[] = [];
+  const runs: string[] = [];
   let total = 1;
   let jump: { serial: number; top: number } | undefined;
   let rows: string[] | undefined;
   let zoom = 1;
+  let terminalFont: string | undefined = "Test Mono";
+  let terminalSize: number | undefined;
   let surface: { active: boolean; frame: number; mouseFrame?: number; piWindow?: boolean; lines: string[] } = { active: false, frame: 1, mouseFrame: 1, lines: [] };
   let overlays: any[] = [];
   let pointerHandled = true;
@@ -44,10 +49,13 @@ function harness() {
     keyDown?: (...args: any[]) => void;
     scrollHandle?: { y: number };
     scrollable = false;
+    /** The last arguments of every style or layout call, by method name. */
+    styles: Record<string, any[]> = {};
     constructor(readonly kind: string) {
       return new Proxy(this, { get(target, prop, receiver) {
         if (prop in target) return (target as any)[prop];
         return (...args: any[]) => {
+          if (prop !== "child" && prop !== "children") target.styles[String(prop)] = args;
           if (prop === "id") target.name = args[0];
           if (prop === "child" && args[0] instanceof Element) target.nodes.push(args[0]);
           if (prop === "children") target.nodes.push(...args[0]);
@@ -117,10 +125,10 @@ function harness() {
       })) });
     }
     return { code: 0, stdout: JSON.stringify(data) };
-  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run() {}, settings: () => ({ zoom }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
+  }, panes: () => [{ pane: "m/p", tab: "tab", terminal: "m/t", view: shownView }], props: () => paneView ? ({ pane: "m/p", terminal: "m/t", view: "gui" }) : ({ pane: "m/p", origin: "m/t" }), run(command: string) { runs.push(command); }, settings: () => ({ zoom, font: terminalFont, font_size: terminalSize }), spaces: () => [{ active: true, tabs: [{ id: "tab", active: true }] }], terminals: () => [terminal], theme: () => ({}), window: () => ({ visible: true }), parseAnsi, lineRange: () => ({ first: 0, last: 0 }) };
   const source = readFileSync(new URL("../herdr/mods/stereo-view/main.js", import.meta.url), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class StereoView", "return class StereoView");
-  const names = { ...ui, ...env, nextCommand, composerRoute, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
+  const names = { ...ui, ...env, nextCommand, composerRoute, composerAlive, composerFieldCommand, blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd, createSettingsPanel, createSearchBar, createSelection, dialogKey, createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT,
     appHome: () => "/tmp", writeFile: async () => {}, unlink: async () => {} };
   const StereoView = new Function(...Object.keys(names), source)(...Object.values(names));
   const view = new StereoView();
@@ -128,11 +136,12 @@ function harness() {
   const find = (node: Element, id: string): Element | undefined => node.name === id ? node : node.nodes.flatMap(child => find(child, id) ?? [])[0];
   return { view, cx, calls, state, flush, find, opened, copied, setTotal(value: number) { total = value; },
     setJump(value: { serial: number; top: number }) { jump = value; },
-    setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; },
+    setRows(value: string[]) { rows = value; total = value.length; }, setZoom(value: number) { zoom = value; }, setFont(value: string | undefined) { terminalFont = value; }, setFontSize(value: number | undefined) { terminalSize = value; },
     setSurface(value: typeof surface) { surface = value; }, setOverlays(value: any[]) { overlays = value; },
     typeSurface(value: string) { inputValue = value; handlers.change?.({}, cx); },
     setPointerHandled(value: boolean) { pointerHandled = value; }, stopped: () => stopped,
     surfaceFocused: () => inputFocused, sendCommand: (command: string) => deliverCommand?.(command),
+    runs, setComposerLabel(stamp?: number) { (terminal.labels as any)["herdr.composer"] = stamp === undefined ? undefined : String(stamp); },
     setPaneView(value: boolean) { paneView = value; }, setShownView(value: string) { shownView = value; }, focused: () => focusCount };
 }
 
@@ -165,6 +174,26 @@ test("pane focus targets the active panel or the open Pi dialog", async () => {
   expect(h.surfaceFocused()).toBe(true);
 });
 
+test("a GUI focus goes on to the composer field of its pane unless a Pi dialog is open", async () => {
+  const h = harness(); h.setPaneView(true); h.view.init({}, h.cx); await h.flush();
+  h.sendCommand("focus"); await Promise.resolve(); await h.flush();
+  expect(h.runs, "no composer is alive").toEqual([]);
+
+  h.setComposerLabel(Date.now() - 60000);
+  h.sendCommand("focus"); await Promise.resolve(); await h.flush();
+  expect(h.runs, "a stale composer label").toEqual([]);
+
+  h.setComposerLabel(Date.now());
+  h.sendCommand("focus"); await Promise.resolve(); await h.flush();
+  expect(h.runs).toEqual(["paste-composer.field:m%2Fp:focus"]);
+
+  h.setSurface({ active: true, frame: 2, lines: ["dialog"] });
+  h.view.refresh(h.cx); await h.flush();
+  h.sendCommand("focus"); await Promise.resolve();
+  expect(h.surfaceFocused()).toBe(true);
+  expect(h.runs, "the dialog keeps the keyboard").toHaveLength(1);
+});
+
 test("keeps split history visible while an extension dialog is open", async () => {
   const h = harness(); h.setSurface({ active: true, frame: 8, mouseFrame: 12, lines: ["dialog"] });
   h.view.init({}, h.cx); await h.flush();
@@ -178,12 +207,15 @@ test("keeps both history panels usable when a saved chat width exceeds the windo
   const h = harness(); h.view.init({}, h.cx); await h.flush();
   h.view.viewState.preferences.chatWidth = 75;
   h.view.areaWidth = 536;
+  h.view.cellWidth = 5; // Narrow cells, so that two columns still fit at this width.
+  expect(h.view.layout()).toBe("columns");
   expect(h.view.areaWidth - h.view.chatExtent()).toBeGreaterThanOrEqual(200);
 });
 
 test("fits pane controls independently of the window toolbar", async () => {
   const h = harness(); h.view.init({}, h.cx); await h.flush();
   h.view.areaWidth = 536; h.view.controlWidth = 536;
+  h.view.cellWidth = 5;
   h.view.viewState.preferences.chatWidth = 75;
   const root = h.view.render();
   expect(h.find(root, "stereo-icon-compact")).toBeDefined();
@@ -797,13 +829,180 @@ test("forwards native document mouse events with the displayed frame", async () 
   expect(mouse[0]).toMatchObject({ pane: "chat", frame: 1, event: { x: 1, y: 0, button: "left" } });
 });
 
+const BLOCK_ROWS = ["13:52:57", "Run the command", "      [Go to] [Copy]", "", "13:53:39", "fini", "                [Copy]"];
+
+test("draws history rows in the terminal's monospace font, not the UI font", async () => {
+  const h = harness(); h.view.init({}, h.cx);
+  h.view.chat.items.set(0, { id: "0", lines: ["plain"] });
+  const run = h.view.entry(h.view.chat, 0, {}).nodes[0];
+  expect(run.styles.font_family).toEqual(["Test Mono"]);
+  expect(run.styles.text_size, "no terminal size: the default").toEqual([12]);
+  expect(h.view.entry(h.view.chat, 0, {}).styles.h, "and the default row height").toEqual([17]);
+  h.setFontSize(11); h.view.render();
+  const sized = h.view.entry(h.view.chat, 0, {});
+  expect(sized.nodes[0].styles.text_size).toEqual([11]);
+  expect(sized.styles.h, "a row is as tall as the terminal's own").toEqual([14.5]);
+  expect(sized.nodes[0].styles.line_height, "a pixel length: a bare number is a multiple of the text size").toEqual(["14.5px"]);
+  h.setFontSize(undefined); h.view.render();
+  const probe = h.find(h.view.render(), "stereo-cell-probe")!;
+  expect(probe.styles.font_family, "the cell probe measures the same font").toEqual(["Test Mono"]);
+  h.setFont(undefined);
+  expect(h.view.entry(h.view.chat, 0, {}).nodes[0].styles.font_family, "a layout without a terminal font").toEqual(["JetBrains Mono"]);
+  expect(h.find(h.view.render(), "stereo-cell-probe")!.styles.font_family).toEqual(["JetBrains Mono"]);
+});
+
+test("a block's background runs on to the row's end, and a turn's bar stays one cell", async () => {
+  const h = harness(); h.view.init({}, h.cx);
+  const bar = "\u001b[48;2;249;216;222m \u001b[49m";
+  h.view.chat.items.set(0, { id: "0", lines: [`${bar}\u001b[48;2;240;241;235m $ sleep 1   \u001b[0m`] });
+  const [marker, body] = h.view.entry(h.view.chat, 0, {}).nodes;
+  expect(marker.styles.flex_none, "the bar keeps its cell").toBeDefined();
+  expect(marker.styles.flex_grow).toBeUndefined();
+  expect(body.styles.flex_grow, "the padded run runs on to the row's end").toEqual([1]);
+  expect(body.styles.bg).toEqual(["#f0f1eb"]);
+
+  h.view.chat.items.set(1, { id: "1", lines: [bar] });
+  const only = h.view.entry(h.view.chat, 1, {}).nodes;
+  expect(only, "a row of only the bar").toHaveLength(1);
+  expect(only[0].styles.flex_grow, "the bar alone does not become a band").toBeUndefined();
+
+  h.view.chat.items.set(2, { id: "2", lines: ["\u001b[48;2;10;20;30mcode\u001b[0m"] });
+  expect(h.view.entry(h.view.chat, 2, {}).nodes[0].styles.flex_grow, "an inline span keeps its own extent").toBeUndefined();
+
+  h.view.chat.items.set(3, { id: "3", lines: [`${bar}text with trailing blanks      `] });
+  expect(h.view.entry(h.view.chat, 3, {}).nodes[1].styles.flex_grow, "padding without a background has nothing to carry").toBeUndefined();
+
+  h.view.chat.items.set(4, { id: "4", lines: ["\u001b[48;2;238;240;242m        \u001b[49m"] });
+  expect(h.view.entry(h.view.chat, 4, {}).nodes[0].styles.flex_grow, "a padding row of a message block").toEqual([1]);
+});
+
+test("a footer row keeps the turn's bar and draws nothing else", async () => {
+  const h = harness(); h.view.init({}, h.cx);
+  const bar = "\u001b[48;2;249;216;222m \u001b[49m";
+  h.view.chat.items.set(0, { id: "0", lines: [`${bar}           [Go to] [Copy]`], footer: footerControls("             [Go to] [Copy]") });
+  const nodes = h.view.entry(h.view.chat, 0, {}).nodes;
+  expect(nodes).toHaveLength(1);
+  expect(nodes[0].styles.bg).toEqual(["#f9d8de"]);
+});
+
+test("a block's footer draws nothing and its controls appear as buttons on hover", async () => {
+  const h = harness(); h.setRows(BLOCK_ROWS); h.view.init({}, h.cx); await h.flush();
+  const pane = h.view.chat;
+  expect(pane.items.get(2).footer).toEqual({ goTo: { column: 6, width: 7 }, copy: { column: 14, width: 6 } });
+  expect(pane.items.get(1).footer).toBeNull();
+  expect(h.view.entry(pane, 2, {}).nodes, "the footer row is blank").toHaveLength(0);
+
+  pane.lastSize = { width: 400, height: 300 };
+  const box = h.find(h.view.render(), "stereo-chat-box")!;
+  expect(h.find(h.view.render(), "stereo-block-buttons"), "no buttons without the pointer").toBeUndefined();
+  box.windowMove!({ local_position: { x: 20, y: 20 } }, h.cx); // Row 1.
+  const bar = h.find(h.view.render(), "stereo-block-buttons")!;
+  expect(bar).toBeDefined();
+  expect(h.find(bar, "stereo-block-goTo")?.styles.tooltip?.[0]).toMatch(/Go to/);
+  expect(h.find(bar, "stereo-block-copy")?.styles.tooltip?.[0]).toBe("Copy this block");
+  for (const id of ["stereo-block-goTo", "stereo-block-copy"]) {
+    const button = h.find(bar, id)!;
+    expect(button.styles.cursor_pointer, id).toBeDefined();
+    expect(button.styles.w?.[0], id).toBeGreaterThanOrEqual(24);
+    expect(button.styles.h?.[0], id).toBeGreaterThanOrEqual(24);
+  }
+
+  box.windowMove!({ local_position: { x: 20, y: 6 * 17 + 3 } }, h.cx); // Row 6, the second block's footer.
+  const second = h.find(h.view.render(), "stereo-block-buttons")!;
+  expect(h.find(second, "stereo-block-goTo"), "this block has no Go to").toBeUndefined();
+  expect(h.find(second, "stereo-block-copy")).toBeDefined();
+
+  box.windowMove!({ local_position: { x: 20, y: -5 } }, h.cx);
+  expect(h.find(h.view.render(), "stereo-block-buttons"), "leaving the panel hides them").toBeUndefined();
+});
+
+test("a block button presses the control Pi drew and Copy shows it was done", async () => {
+  const h = harness(); h.setRows(BLOCK_ROWS); h.view.init({}, h.cx); await h.flush();
+  const pane = h.view.chat;
+  pane.lastSize = { width: 400, height: 300 };
+  const box = h.find(h.view.render(), "stereo-chat-box")!;
+  box.windowMove!({ local_position: { x: 20, y: 20 } }, h.cx);
+  const bar = h.find(h.view.render(), "stereo-block-buttons")!;
+  const before = h.calls.length;
+  h.find(bar, "stereo-block-copy")!.click!({}, h.cx);
+  await h.flush();
+  const mouse = h.calls.slice(before).filter(call => call.op === "mouse");
+  expect(mouse.map(call => call.event)).toEqual([
+    { type: "press", button: "left", x: 17, y: 2, shift: false, ctrl: false, alt: false, clickCount: 1 },
+    { type: "release", button: "left", x: 17, y: 2, shift: false, ctrl: false, alt: false, clickCount: 1 },
+  ]);
+  expect(mouse.every(call => call.pane === "chat" && call.frame === 1)).toBe(true);
+  expect(h.find(h.view.render(), "stereo-block-copy")?.styles.tooltip?.[0], "the button says it was copied").toBe("Copied");
+
+  h.find(bar, "stereo-block-goTo")!.click!({}, h.cx);
+  await h.flush();
+  expect(h.calls.filter(call => call.op === "mouse").slice(-2).map(call => call.event.x)).toEqual([9, 9]);
+  expect(h.view.chat.pressed, "a button press does not start a selection").toBe(false);
+  expect(h.view.chat.selection.bounds()).toBeFalsy();
+});
+
+test("scrolling hides the block buttons until the pointer moves again", async () => {
+  const h = harness(); h.setRows(BLOCK_ROWS); h.view.init({}, h.cx); await h.flush();
+  h.view.chat.lastSize = { width: 400, height: 300 };
+  const box = h.find(h.view.render(), "stereo-chat-box")!;
+  box.windowMove!({ local_position: { x: 20, y: 20 } }, h.cx);
+  expect(h.find(h.view.render(), "stereo-block-buttons")).toBeDefined();
+  box.wheel!({}, h.cx);
+  expect(h.find(h.view.render(), "stereo-block-buttons")).toBeUndefined();
+});
+
+test("a block taller than the view keeps its buttons on its first visible row", async () => {
+  const h = harness();
+  const rows = ["13:52:57", ...Array.from({ length: 40 }, (_, n) => `item ${n}`), "                [Copy]"];
+  h.setRows(rows); h.view.init({}, h.cx); await h.flush();
+  const pane = h.view.chat;
+  pane.lastSize = { width: 400, height: 300 };
+  pane.handle.offset = () => ({ y: 10 * 17 });
+  pane.blockHover = 15;
+  expect(h.view.hoveredBlock(pane)).toMatchObject({ start: 0, end: 41, anchor: 10 });
+  pane.blockHover = 5;
+  expect(h.view.hoveredBlock(pane)).toMatchObject({ anchor: 10 });
+});
+
+test("two columns that are too narrow to read stack as rows without changing the saved choice", async () => {
+  const h = harness(); h.view.init({}, h.cx); await h.flush();
+  h.view.areaWidth = 355;
+  expect(h.view.layout(), "before the font is measured the choice stands").toBe("columns");
+  h.view.measureCell({ width: 100, height: 20 }, h.cx); // One cell is 10 px.
+  expect(h.view.cellWidth).toBe(10);
+  h.view.areaWidth = 1600;
+  expect(h.view.layout()).toBe("columns");
+  expect(h.find(h.view.render(), "stereo-panels")?.kind).toBe("horizontal");
+  expect(h.find(h.view.render(), "stereo-action-layout")?.click, "the layout control works while columns fit").toBeDefined();
+
+  h.view.areaWidth = 355;
+  expect(h.view.layout()).toBe("rows");
+  expect(h.view.viewState.layout, "the choice stays").toBe("columns");
+  const root = h.view.render();
+  expect(h.find(root, "stereo-panels")?.kind).toBe("vertical");
+  expect(h.find(root, "stereo-chat-box")).toBeDefined();
+  expect(h.find(root, "stereo-activity-box")).toBeDefined();
+  const control = h.find(root, "stereo-action-layout")!;
+  expect(control.click, "the layout control cannot act while stacked").toBeUndefined();
+  expect(control.styles.tooltip?.[0]).toMatch(/too narrow/);
+
+  h.view.areaWidth = 1600;
+  expect(h.view.layout()).toBe("columns");
+  h.view.viewState.mode = "combined";
+  h.view.areaWidth = 355;
+  expect(h.view.layout(), "combined history is one column already").toBe("columns");
+});
+
 test("uses the saved conversation size and a 20 percent default in columns", async () => {
   const h = harness();
   h.view.init({}, h.cx);
   await h.flush();
   h.view.areaWidth = 1600;
   h.view.cellWidth = 10;
-  expect(h.view.chatExtent()).toBe(320);
+  expect(h.view.chatExtent(), "a narrow area: room for the minimum number of cells").toBe(MIN_COLUMN_CELLS * 10 + 24);
+  h.view.areaWidth = 3000;
+  expect(h.view.chatExtent(), "a wide area: 20 percent").toBe(600);
+  h.view.areaWidth = 1600;
   h.view.viewState.preferences.chatWidth = 40;
   expect(h.view.chatExtent()).toBe(416);
 });
@@ -815,11 +1014,11 @@ test("resizing the divider persists the new conversation width", async () => {
   h.view.areaWidth = 1600;
   h.view.cellWidth = 10;
   const bar = h.view.divider({});
-  bar.mouseDown({ position: { x: 320, y: 0 } }, h.cx);
-  bar.windowMove({ position: { x: 420, y: 0 }, pressed_button: "left" }, h.cx);
+  bar.mouseDown({ position: { x: 424, y: 0 } }, h.cx);
+  bar.windowMove({ position: { x: 520, y: 0 }, pressed_button: "left" }, h.cx);
   bar.windowUp({}, h.cx);
   await h.flush();
-  expect(h.calls).toContainEqual({ v: 1, op: "setting", key: "chatWidth", value: 40 });
+  expect(h.calls).toContainEqual({ v: 1, op: "setting", key: "chatWidth", value: 50 });
 });
 
 test("opens a panel search and sends its query through the bridge", async () => {
