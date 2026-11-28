@@ -89,7 +89,7 @@ export function createTreePanels(gpui, deps) {
     const item = model.items[index];
     const height = layout.heights[index] * ctx.lineHeight;
     const box = v_flex().id(`stereo-tree-${entry.name}-${item.id}`).relative().w_full().h(height).flex_none().overflow_hidden().px(ctx.gutter)
-      .on_mouse_move((_event, cx) => { if (entry.hover !== item.id) { entry.hover = item.id; ctx.notify(); } });
+      .on_mouse_move(() => { if (entry.hover !== item.id) { entry.hover = item.id; ctx.notify(); } });
     if (entry.hover === item.id && item.k !== "rows" && ctx.svg) box.child(copyButton(entry, item, ctx));
     const body = model.bodies.get(item.id);
     const t = ctx.theme;
