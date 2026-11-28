@@ -1613,9 +1613,10 @@ export default class StereoView extends View {
         .on_window_mouse_move((event, cx) => {
           if (!state.pressed && this.trees?.active(name)) {
             const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
-            const y = event.local_position ? event.local_position.y / zoom : -1;
+            const x = event.local_position ? event.local_position.x / zoom : -1, y = event.local_position ? event.local_position.y / zoom : -1;
             const viewport = state.handle.viewport_size().height || state.height;
-            this.trees.track(name, state, y >= 0 && y < viewport ? y : null, () => cx.notify());
+            const inside = x >= 0 && x < (state.lastSize?.width ?? 0) / zoom && y >= 0 && y < viewport;
+            this.trees.track(name, state, inside ? y : null, () => cx.notify());
             return;
           }
           if (!state.pressed) { this.trackBlockHover(state, event, cx); this.sendHover(name, state, event, cx); return; }
