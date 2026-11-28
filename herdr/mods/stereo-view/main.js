@@ -11,7 +11,8 @@ import { composerAlive, composerFieldCommand, composerRoute } from "./composer-r
 import { dropStaleRows, pageUsable, paneDimensions, refreshPlan, rowHasText, SETTLE_MS, TICK_MS, UNUSABLE_LIMIT } from "./refresh-plan.js";
 import { createBoundedImageStore, createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
 import * as hostApi from "herdr";
-import { show_fps_monitor } from "gpui-fps"; // TEMPORARY (LPT-1943): the native frame-time HUD, for the live frame check
+// TEMPORARY (LPT-1943): the native frame-time HUD, for the live frame check.
+import { show_fps_monitor } from "gpui-fps";
 import { createTreePanels } from "./tree-panel.js";
 import { replaySpawn } from "./replay-stream.js";
 import { blockAround, buttonRow, columnsFit, footerControls, leadingMarker, MIN_COLUMN_CELLS, padsToEnd } from "./history-blocks.js";
