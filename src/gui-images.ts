@@ -15,7 +15,7 @@ export class GuiImages {
   private readonly known = new Map<string, { id: string; mime: string }>();
   private size = 0;
 
-  page(lines: readonly string[], top: number, height: number): { lines: string[]; images: GuiImagePlacement[] } {
+  page(lines: readonly string[], top: number, height: number, onlyId?: string): { lines: string[]; images: GuiImagePlacement[] } {
     const result: GuiImagePlacement[] = [];
     const end = top + height;
     const sanitized = lines.slice(top, end).map(line => line.replace(kitty, "").replace(iterm, ""));
@@ -39,7 +39,7 @@ export class GuiImages {
           more = numberControl(next[1]!, "m") === 1;
         }
         if (more || row >= end || row + rows <= top) continue;
-        const placement = this.add(payload, row, visibleWidth(line.slice(0, first.index)), rows, columns);
+        const placement = this.add(payload, row, visibleWidth(line.slice(0, first.index)), rows, columns, onlyId);
         if (placement) result.push(placement);
       }
       iterm.lastIndex = 0;
@@ -48,7 +48,7 @@ export class GuiImages {
         const start = row - rows + 1;
         const columns = Number(/(?:^|;)width=(\d+)/.exec(match[2]!)?.[1] ?? 1);
         if (start >= end || row < top) continue;
-        const placement = this.add(match[3]!, start, visibleWidth(line.slice(0, match.index)), rows, columns);
+        const placement = this.add(match[3]!, start, visibleWidth(line.slice(0, match.index)), rows, columns, onlyId);
         if (placement) result.push(placement);
       }
     }
@@ -61,10 +61,10 @@ export class GuiImages {
     return { data: data.slice(offset, offset + length), total: data.length };
   }
 
-  private add(payload: string, row: number, column: number, rows: number, columns: number): GuiImagePlacement | undefined {
+  private add(payload: string, row: number, column: number, rows: number, columns: number, onlyId?: string): GuiImagePlacement | undefined {
     if (payload.length > MAX_IMAGE * 4 / 3 + 4 || rows < 1 || rows > 4096 || columns < 1 || columns > 4096) return;
     const cached = this.known.get(payload);
-    if (cached && this.data.has(cached.id)) return { ...cached, row, column, rows, columns };
+    if (cached && this.data.has(cached.id)) return !onlyId || cached.id === onlyId ? { ...cached, row, column, rows, columns } : undefined;
     const bytes = Buffer.from(payload, "base64");
     const mime = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) ? "image/png"
       : bytes[0] === 0xff && bytes[1] === 0xd8 ? "image/jpeg"
@@ -72,6 +72,7 @@ export class GuiImages {
       : bytes.subarray(0, 3).toString("ascii") === "GIF" ? "image/gif" : undefined;
     if (!mime) return;
     const id = createHash("sha256").update(bytes).digest("hex");
+    if (onlyId && id !== onlyId) return;
     if (!this.data.has(id)) { this.data.set(id, payload); this.known.set(payload, { id, mime }); this.size += payload.length; }
     while (this.size > MAX_STORE && this.data.size > 1) {
       const oldest = this.data.keys().next().value!;

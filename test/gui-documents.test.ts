@@ -6,6 +6,22 @@ import { NativeDocument } from "../src/native.ts";
 import { NativeContentIndex } from "../src/content.ts";
 import type { DocumentTurns } from "../src/native.ts";
 import { TranscriptTimestamps } from "../src/timestamps.ts";
+test("loads every image in a viewport even when their payloads exceed the cache", () => {
+  const lines = Array.from({ length: 5 }, (_, i) => {
+    const bytes = Buffer.alloc(10 * 1024 * 1024, i);
+    Buffer.from("89504e470d0a1a0a", "hex").copy(bytes);
+    return `\x1b_Ga=T,f=100,c=1,r=1;${bytes.toString("base64")}\x1b\\`;
+  });
+  const document = { setViewport() {}, beginFrame() {}, render: () => lines, takeScrollShift: () => 0,
+    handleMouse: () => undefined, dispose() {} };
+  const gui = new GuiDocuments({ chat: document, activity: document });
+  const page = gui.page("chat", { width: 30, top: 0, height: 5, following: false });
+  expect(page.images).toHaveLength(5);
+  for (const placement of page.images) {
+    const payload = lines[placement.row]!.split(";")[1]!;
+    expect(gui.imageChunk(placement.id, 16, 64)?.data).toBe(payload.slice(16, 80));
+  }
+});
 
 class UserMessageComponent extends Text {
   events: TuiMouseEvent[] = [];

@@ -125,7 +125,19 @@ export class GuiDocuments {
   }
 
   imageChunk(id: string, offset: number, length: number): { data: string; total: number } | undefined {
-    return this.images.chunk(id, offset, length);
+    const cached = this.images.chunk(id, offset, length);
+    if (cached || !/^[a-f0-9]{64}$/.test(id) || !Number.isSafeInteger(offset) || offset < 0 ||
+        !Number.isSafeInteger(length) || length < 1 || length > 524288) return cached;
+    // A page can exceed the bounded image cache. Re-extract just the requested
+    // image from its still-current native frame instead of retaining all payloads.
+    for (const pane of ["chat", "activity", "combined"] as const) {
+      const frame = this.frames[pane], document = this.documents[pane];
+      if (!frame || !document || !frame.images.some(image => image.id === id)) continue;
+      this.images.page(document.render(frame.width), frame.top, frame.height, id);
+      const recovered = this.images.chunk(id, offset, length);
+      if (recovered) return recovered;
+    }
+    return undefined;
   }
 
   /** Invalidates a geometry token and cancels any press before a document can change under it. */
