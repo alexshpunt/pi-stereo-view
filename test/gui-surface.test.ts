@@ -1,6 +1,25 @@
 import { Container, Text, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { GuiSurface } from "../src/gui-surface.ts";
+import { showsPiWindow } from "../src/pi-windows.ts";
+
+test("reports Pi window chains and clears the classification when the editor returns", () => {
+  class ModelSelectorComponent extends Text { handleInput(): void {} }
+  class ExtensionSelectorComponent extends Text { handleInput(): void {} }
+  let owner: Component | undefined = new ModelSelectorComponent("model", 0, 0);
+  let previous = false;
+  const classify = (component: Component | undefined) => previous = showsPiWindow(component, previous);
+  const surface = new GuiSurface(() => owner, () => owner ?? null, () => {}, () => {}, false, () => undefined, classify);
+  expect(surface.page(40).piWindow).toBe(true);
+  owner = new ExtensionSelectorComponent("follow-up", 0, 0);
+  expect(surface.page(40).piWindow).toBe(true);
+  owner = undefined;
+  expect(surface.page(40).piWindow).toBe(false);
+  owner = new ExtensionSelectorComponent("extension", 0, 0);
+  expect(surface.page(40).piWindow).toBe(false);
+  const dock = new GuiSurface(() => owner, () => owner ?? null);
+  expect(dock.page(40)).not.toHaveProperty("piWindow");
+});
 
 test("restores terminal mouse geometry after borrowing a different GUI width", () => {
   class Geometry extends Dialog {

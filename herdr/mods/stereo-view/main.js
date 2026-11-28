@@ -205,6 +205,7 @@ export default class StereoView extends View {
     this.surfacePress = null;
     this.actionPending = false;
     this.areaWidth = 800;
+    this.surfaceWidth = 0;
     this.controlWidth = 800;
     this.hoverPane = null;
     this.hoverKey = "";
@@ -226,6 +227,12 @@ export default class StereoView extends View {
     this.focus = cx.focus_handle();
     cx.timer.every(INTERVAL, (/** @type {any} */ cx) => this.refresh(cx));
     this.refresh(cx);
+  }
+
+  dialogPlacement() {
+    const state = this.viewState;
+    return this.surface?.active && this.surface.piWindow && state?.mode === "split" && state.layout === "columns" && !state.zoom
+      ? state.preferences?.piWindows : undefined;
   }
 
   /** @param {any} cx */
@@ -257,7 +264,9 @@ export default class StereoView extends View {
     this.fetchSurface(connection, cx);
     this.fetchOverlays(connection, cx);
     this.fetchDock(connection, cx);
-    if (this.viewState?.mode === "combined") this.fetchPane("combined", this.combined, connection, cx);
+    const placement = this.dialogPlacement();
+    if (this.viewState?.mode === "combined" || placement === "combined") this.fetchPane("combined", this.combined, connection, cx);
+    else if (placement === "maximize") this.fetchPane("activity", this.activity, connection, cx);
     else {
       if (this.viewState?.zoom !== "activity") this.fetchPane("chat", this.chat, connection, cx);
       if (this.viewState?.zoom !== "chat") this.fetchPane("activity", this.activity, connection, cx);
@@ -292,14 +301,14 @@ export default class StereoView extends View {
   fetchSurface(connection, cx) {
     if (this.surfacePending || this.surfacePress || this.actionPending || this.actions.length) return;
     this.surfacePending = true;
-    const width = Math.max(10, Math.min(300, Math.floor((this.areaWidth - 32) / this.cellWidth)));
+    const width = Math.max(10, Math.min(300, Math.floor(((this.surfaceWidth || this.areaWidth) - 16) / this.cellWidth)));
     cx.spawn(async (/** @type {any} */ next) => {
       try {
         const request = JSON.stringify({ v: 1, op: "surface", width });
         const result = await exec("node", ["-e", CLIENT, connection.socket, request], { on: connection.machine, timeout: 5000 });
         if (result.code !== 0) throw new Error("Surface unavailable");
         const surface = JSON.parse(result.stdout);
-        if (surface.v !== 1 || typeof surface.active !== "boolean" || !Number.isSafeInteger(surface.frame) ||
+        if (surface.v !== 1 || typeof surface.active !== "boolean" || (surface.piWindow !== undefined && typeof surface.piWindow !== "boolean") || !Number.isSafeInteger(surface.frame) ||
             !Number.isSafeInteger(surface.mouseFrame) ||
             !Array.isArray(surface.lines) || surface.lines.length > 256 || !surface.lines.every(/** @param {unknown} */ line => typeof line === "string")) throw new Error("Invalid surface");
         if (bridge()?.socket !== connection.socket || !isShown()) return;
@@ -1060,8 +1069,8 @@ export default class StereoView extends View {
       });
   }
 
-  /** @param {string} name @param {string} title @param {ReturnType<typeof paneState>} state @param {any} t */
-  panel(name, title, state, t) {
+  /** @param {string} name @param {string} title @param {ReturnType<typeof paneState>} state @param {any} t @param {boolean} [showSurface] */
+  panel(name, title, state, t, showSurface = false) {
     const id = `stereo-${name}`;
     const rows = v_virtual_list(id, state.total ?? 0, LINE_HEIGHT,
       index => `${name}-${index}`,
@@ -1083,7 +1092,7 @@ export default class StereoView extends View {
     }
     if (name !== "combined" && this.viewState?.showHeaders !== false) panel.child(heading);
     if (state.searchBar) panel.child(state.searchBar.render(state.searchState ?? {}, t));
-    return panel
+    panel
       .child(state.error ? div().px(8).text_color(t.muted).child(state.error) : div().h(0))
       .child(v_flex().id(`${id}-box`).relative().flex_1().min_h(0)
         .on_size_change((size, cx) => this.sizePane(state, size, cx))
@@ -1144,6 +1153,8 @@ export default class StereoView extends View {
           this.sendMouse(name, state, row, "release", event, cx);
         })
         .child(rows).child(Scrollbar.vertical(id).absolute().inset_0()));
+    if (showSurface) panel.child(this.renderSurface(t));
+    return panel;
   }
 
   /** @param {string} type @param {any} event @param {any} cx */
@@ -1254,7 +1265,15 @@ export default class StereoView extends View {
 
   /** @param {any} t */
   renderSurface(t) {
-    const body = v_flex().id("stereo-surface").relative().flex_1().min_h(0).overflow_y_scroll().track_scroll(this.surfaceScroll).px(8).py(4)
+    const rows = this.viewState?.mode === "split" && this.viewState.layout === "rows" && !this.viewState.zoom;
+    const available = rows ? Math.max(0, this.areaHeight - this.chatExtent() - 5) : this.areaHeight;
+    const height = Math.min(Math.max(LINE_HEIGHT * 2, available * 0.6), this.surface.lines.length * LINE_HEIGHT + (this.surfaceInput ? 46 : 8));
+    const body = v_flex().id("stereo-surface").relative().flex_none().h(height).min_h(0).overflow_y_scroll().track_scroll(this.surfaceScroll).px(8).py(4)
+      .on_size_change((size, cx) => {
+        const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
+        const width = size.width / zoom;
+        if (Math.abs(width - this.surfaceWidth) >= 1) { this.surfaceWidth = width; cx.notify(); }
+      })
       .on_mouse_down("left", (event, cx) => { this.surfaceInput?.focus(); this.sendSurfaceMouse("press", event, cx); })
       .on_mouse_down("middle", (event, cx) => this.sendSurfaceMouse("press", event, cx))
       .on_mouse_down("right", (event, cx) => this.sendSurfaceMouse("press", event, cx))
@@ -1290,33 +1309,35 @@ export default class StereoView extends View {
       .child(this.control("swap", "Swap", t))
       .child(this.control("settings", "Settings", t))
       .child(this.control("headers", state?.showHeaders ? "Hide headers" : "Show headers", t));
-    let body;
+    const hasSurface = !!this.surface?.active;
+    const placement = this.dialogPlacement();
+    let content;
     if (!this.available) {
-      body = div().px(8).text_color(t.muted).child("Waiting for the Stereo View bridge. The terminal remains available.");
-    } else if (this.surface?.active) {
-      body = this.renderSurface(t);
-    } else if (state?.mode === "combined") {
-      body = this.panel("combined", "History", this.combined, t);
+      content = div().px(8).text_color(t.muted).child("Waiting for the Stereo View bridge. The terminal remains available.");
+    } else if (state?.mode === "combined" || placement === "combined") {
+      content = this.panel("combined", "History", this.combined, t, hasSurface);
+    } else if (placement === "maximize") {
+      content = this.panel("activity", "Activity", this.activity, t, hasSurface);
     } else {
       const panels = {
-        chat: () => this.panel("chat", "Conversation", this.chat, t),
-        activity: () => this.panel("activity", "Activity", this.activity, t),
+        chat: () => this.panel("chat", "Conversation", this.chat, t, hasSurface && state?.zoom === "chat"),
+        activity: () => this.panel("activity", "Activity", this.activity, t, hasSurface && state?.zoom !== "chat"),
       };
       const container = state?.layout === "rows" ? v_flex() : h_flex();
-      body = container.id("stereo-panels").flex_1().min_w(0).min_h(0)
-        .on_size_change((size, cx) => {
-          const z = settings().zoom;
-          const zoom = typeof z === "number" && z > 0 ? z : 1;
-          const width = size.width / zoom, height = size.height / zoom;
-          if (Math.abs(width - this.areaWidth) < 1 && Math.abs(height - this.areaHeight) < 1) return;
-          this.areaWidth = width; this.areaHeight = height; cx.notify();
-        });
+      content = container.id("stereo-panels").flex_1().min_w(0).min_h(0);
       const order = state?.zoom ? [state.zoom] : state?.side === "right" ? ["activity", "chat"] : ["chat", "activity"];
       for (const [index, name] of order.entries()) {
-        if (index > 0) body.child(this.divider(t));
-        body.child(panels[name]());
+        if (index > 0) content.child(this.divider(t));
+        content.child(panels[name]());
       }
     }
+    const body = v_flex().id("stereo-body").flex_1().min_w(0).min_h(0)
+      .on_size_change((size, cx) => {
+        const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;
+        const width = size.width / zoom, height = size.height / zoom;
+        if (Math.abs(width - this.areaWidth) < 1 && Math.abs(height - this.areaHeight) < 1) return;
+        this.areaWidth = width; this.areaHeight = height; cx.notify();
+      }).child(content);
     const root = v_flex().relative().size_full().min_h(0).bg(t.surface).text_size(12)
       .on_size_change((size, cx) => {
         const z = settings().zoom, zoom = typeof z === "number" && z > 0 ? z : 1;

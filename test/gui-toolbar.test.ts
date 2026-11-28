@@ -16,7 +16,7 @@ function harness() {
   let jump: { serial: number; top: number } | undefined;
   let rows: string[] | undefined;
   let zoom = 1;
-  let surface: { active: boolean; frame: number; mouseFrame?: number; lines: string[] } = { active: false, frame: 1, mouseFrame: 1, lines: [] };
+  let surface: { active: boolean; frame: number; mouseFrame?: number; piWindow?: boolean; lines: string[] } = { active: false, frame: 1, mouseFrame: 1, lines: [] };
   let overlays: any[] = [];
   let pointerHandled = true;
   let stopped = 0;
@@ -97,7 +97,7 @@ function harness() {
   });
   const env = { checking: () => false, exec: async (_cmd: string, args: string[]) => {
     const request = JSON.parse(args[3]); calls.push(request);
-    const data: any = request.op === "overlays" ? { v: 1, revision: 1, columns: 80, rows: 24, overlays } : request.op === "overlay-key" || request.op === "overlay-mouse" || request.op === "overlay-paste" || request.op === "surface-paste" ? { v: 1, ok: true } : request.op === "surface" ? { v: 1, mouseFrame: 1, ...surface } : request.op === "surface-key" || request.op === "surface-mouse" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
+    const data: any = request.op === "overlays" ? { v: 1, revision: 1, columns: 80, rows: 24, overlays } : request.op === "overlay-key" || request.op === "overlay-mouse" || request.op === "overlay-paste" || request.op === "surface-paste" ? { v: 1, ok: true } : request.op === "surface" ? { v: 1, mouseFrame: 1, piWindow: false, ...surface } : request.op === "surface-key" || request.op === "surface-mouse" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
       { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
         images: [], jump: request.pane === "activity" ? jump : undefined, lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
@@ -126,6 +126,46 @@ function harness() {
     setPointerHandled(value: boolean) { pointerHandled = value; }, stopped: () => stopped,
     surfaceFocused: () => inputFocused };
 }
+
+test("keeps split history visible while an extension dialog is open", async () => {
+  const h = harness(); h.setSurface({ active: true, frame: 8, mouseFrame: 12, lines: ["dialog"] });
+  h.view.init({}, h.cx); await h.flush();
+  const root = h.view.render();
+  expect(h.find(root, "stereo-chat-box")).toBeDefined();
+  expect(h.find(root, "stereo-activity-box")).toBeDefined();
+  expect(h.find(root, "stereo-surface")).toBeDefined();
+});
+
+test("uses picker placement temporarily and restores the saved history layout", async () => {
+  const h = harness(); h.setSurface({ active: true, piWindow: true, frame: 8, mouseFrame: 12, lines: ["picker"] });
+  h.view.init({}, h.cx); await h.flush();
+  for (const [placement, visible, hidden] of [
+    ["combined", "stereo-combined-box", "stereo-chat-box"],
+    ["maximize", "stereo-activity-box", "stereo-chat-box"],
+    ["inline", "stereo-chat-box", "stereo-combined-box"],
+  ]) {
+    h.view.viewState.preferences.piWindows = placement;
+    const root = h.view.render();
+    expect(h.find(root, visible)).toBeDefined();
+    expect(h.find(root, hidden)).toBeUndefined();
+    expect(h.find(root, "stereo-surface")).toBeDefined();
+    expect(h.view.viewState.mode).toBe("split");
+  }
+  h.view.viewState.preferences.piWindows = "combined";
+  h.view.viewState.layout = "rows";
+  expect(h.find(h.view.render(), "stereo-chat-box")).toBeDefined();
+  h.view.viewState.layout = "columns";
+  h.view.viewState.zoom = "chat";
+  const zoomed = h.view.render();
+  expect(h.find(zoomed, "stereo-chat-box")).toBeDefined();
+  expect(h.find(zoomed, "stereo-surface")).toBeDefined();
+  h.view.viewState.zoom = null;
+  h.view.surface = { ...h.view.surface, active: false };
+  const restored = h.view.render();
+  expect(h.find(restored, "stereo-chat-box")).toBeDefined();
+  expect(h.find(restored, "stereo-activity-box")).toBeDefined();
+  expect(h.find(restored, "stereo-surface")).toBeUndefined();
+});
 
 test("forwards dialog pointer movement, wheel and right-button gestures", async () => {
   const h = harness(); h.setSurface({ active: true, frame: 8, mouseFrame: 12, lines: ["first", "second"] });

@@ -27,7 +27,8 @@ export class GuiSurface {
     private readonly requestRender: () => void = () => {},
     private readonly setFocus: (component: Component) => void = () => {},
     private readonly passive = false,
-    private readonly terminalWidth: () => number | undefined = () => undefined) {}
+    private readonly terminalWidth: () => number | undefined = () => undefined,
+    private readonly classifyPiWindow?: (component: Component | undefined) => boolean) {}
 
   private restore(owner: Component): void {
     try {
@@ -36,9 +37,11 @@ export class GuiSurface {
     } finally { this.requestRender(); }
   }
 
-  page(width: number): { frame: number; mouseFrame: number; active: boolean; focused: boolean; lines: string[] } {
+  page(width: number): { frame: number; mouseFrame: number; active: boolean; focused: boolean; lines: string[]; piWindow?: boolean } {
     if (this.disposed || !Number.isSafeInteger(width) || width < 1 || width > 4096) throw new RangeError("Invalid surface width");
     const owner = this.dialog();
+    const piWindow = this.classifyPiWindow?.(owner);
+    const classification = piWindow === undefined ? {} : { piWindow };
     const focused = this.focus() ?? undefined;
     if (owner !== this.owner || focused !== this.focused || width !== this.width) {
       this.owner = owner;
@@ -49,7 +52,7 @@ export class GuiSurface {
       this.gestures.clear();
       this.painted = [];
     }
-    if (!owner) return { frame: this.serial, mouseFrame: this.mouseSerial, active: false, focused: false, lines: [] };
+    if (!owner) return { frame: this.serial, mouseFrame: this.mouseSerial, active: false, focused: false, lines: [], ...classification };
     try {
       const lines = owner.render(width);
       const structure = descendants(owner);
@@ -66,7 +69,7 @@ export class GuiSurface {
         this.mouseSerial++;
         this.gestures.clear();
       }
-      return { frame: this.serial, mouseFrame: this.mouseSerial, active: true, focused: !!focused && contains(owner, focused), lines: [...lines] };
+      return { frame: this.serial, mouseFrame: this.mouseSerial, active: true, focused: !!focused && contains(owner, focused), lines: [...lines], ...classification };
     } finally {
       this.restore(owner);
     }

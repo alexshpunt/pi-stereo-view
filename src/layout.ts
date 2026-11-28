@@ -431,14 +431,16 @@ export class TranscriptLayout {
       const editor = this.getEditor();
       return !!editor && !!editorSlot && editorSlot.children.length === 1 && editorSlot.children[0] !== editor;
     };
+    // TUI layout and GUI page requests observe the same chain, including Pi's follow-up dialogs.
+    let piWindowOpen = false;
+    const classifyPiWindow = (component: Component | undefined): boolean =>
+      piWindowOpen = showsPiWindow(component, piWindowOpen);
     this.guiOverlayLayers = new GuiOverlays(host as unknown as ConstructorParameters<typeof GuiOverlays>[0]);
     this.guiDialog = new GuiSurface(() => dialogPresent() ? editorSlot?.children[0] : undefined,
       () => host.getFocusedComponent(), () => host.requestRender(), component => {
         const resolver = host as unknown as { resolveMouseFocusTarget?: (target: Component) => Component };
         host.setFocus(resolver.resolveMouseFocusTarget?.(component) ?? component);
-      }, false, () => projectSurface && projectDialog ? projectedSurfaceWidth : host.terminal.columns);
-    // Updated once per frame, whatever the setting, so a chain of Pi's windows is followed through every swap.
-    let piWindowOpen = false;
+      }, false, () => projectSurface && projectDialog ? projectedSurfaceWidth : host.terminal.columns, classifyPiWindow);
     const projectedDock = supportedDock ? new VStack(entries.filter((_, i) => i !== 2 && i !== 4).map(entry =>
       entry.component === editorSlot ? { ...entry, visible: () => !projectDialog } : entry)) : undefined;
     // The projected dock holds copies of the entries; keep the input slot's minimum in step with Pi's own,
@@ -595,7 +597,7 @@ export class TranscriptLayout {
       height = Math.min(height, Math.max(1, host.terminal.rows));
       const previousHeight = historyHeight;
       followEditorMinimum();
-      piWindowOpen = showsPiWindow(editorSlot?.children.length === 1 ? editorSlot.children[0] : undefined, piWindowOpen);
+      classifyPiWindow(dialogPresent() ? editorSlot?.children[0] : undefined);
       // A Pi window under half-width Activity would cut its wide lists; give it the full width until it closes.
       this.piWindow = this.preferences.mode === "split" && this.preferences.layout === "columns" && !this.preferences.zoom &&
         this.preferences.piWindows !== "inline" && piWindowOpen ? this.preferences.piWindows : undefined;

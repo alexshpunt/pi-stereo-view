@@ -75,7 +75,8 @@ test("the bridge exposes a live dialog and rejects input after it closes", async
   class Dialog extends Text { inputs: string[] = []; handleInput(data: string) { this.inputs.push(data); } }
   const dialog = new Dialog("value", 0, 0);
   let open = true, socketPath = "";
-  const surface = new GuiSurface(() => open ? dialog : undefined, () => open ? dialog : null);
+  const surface = new GuiSurface(() => open ? dialog : undefined, () => open ? dialog : null,
+    () => {}, () => {}, false, () => undefined, component => !!component);
   const state = { v: 1 as const, layout: "columns" as const, side: "left" as const, mode: "split" as const,
     zoom: null, showToolbar: true, showHeaders: true, compactTools: true, preferences: { ...defaults } };
   const stop = await startGuiBridge("terminal", () => undefined, async (_terminal, label) => { socketPath = JSON.parse(label).socket; },
@@ -90,10 +91,12 @@ test("the bridge exposes a live dialog and rejects input after it closes", async
   try {
     const page = await request({ v: 1, op: "surface", width: 40 });
     expect(page.active).toBe(true);
+    expect(page.piWindow).toBe(true);
     expect(page.lines.join("")).toContain("value");
     expect(await request({ v: 1, op: "surface-key", frame: page.frame, data: "a" })).toEqual({ v: 1, ok: true });
     open = false;
     expect(await request({ v: 1, op: "surface-key", frame: page.frame, data: "b" })).toEqual({ v: 1, ok: false });
+    expect((await request({ v: 1, op: "surface", width: 40 })).piWindow).toBe(false);
     expect(dialog.inputs).toEqual(["a"]);
   } finally { await stop(); surface.dispose(); }
 });
