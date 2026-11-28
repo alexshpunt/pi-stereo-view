@@ -58,7 +58,6 @@ export class GuiSurface {
       const structure = descendants(owner);
       if (!sameComponents(structure, this.structure)) {
         this.structure = structure;
-        this.serial++;
         this.mouseSerial++;
         this.gestures.clear();
       }
@@ -80,7 +79,7 @@ export class GuiSurface {
     if (this.disposed || !Number.isSafeInteger(frame) || frame !== this.serial || !this.owner) return false;
     const owner = this.dialog(), focused = this.focus();
     return !!owner && owner === this.owner && !!focused && focused === this.focused &&
-      sameComponents(descendants(owner), this.structure) && contains(owner, focused) && typeof focused.handleInput === "function";
+      contains(owner, focused) && typeof focused.handleInput === "function";
   }
 
   key(frame: number, data: string): boolean {

@@ -162,6 +162,24 @@ test("shows the live dialog and forwards keys only while its owner keeps focus",
   expect(first.inputs).toEqual(["a", "b"]);
 });
 
+test("keeps typing into the same focused dialog while its results change", () => {
+  const root = new Container();
+  class Search extends Dialog {
+    handleInput(data: string): void {
+      super.handleInput(data);
+      root.clear(); root.addChild(this); root.addChild(new Text(data, 0, 0));
+    }
+  }
+  const search = new Search("search", 0, 0);
+  root.addChild(search);
+  const surface = new GuiSurface(() => root, () => search);
+  const frame = surface.page(40).frame;
+  expect(surface.key(frame, "d")).toBe(true);
+  expect(surface.key(frame, "e")).toBe(true);
+  expect(surface.page(40).frame).toBe(frame);
+  expect(surface.key(frame, "e")).toBe(true);
+  expect(search.inputs).toEqual(["d", "e", "e"]);
+});
 test("routes a click only to the unchanged live dialog", () => {
   class Clickable extends Dialog {
     clicks = 0;
