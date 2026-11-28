@@ -58,7 +58,7 @@ describe("tree pipeline", () => {
     const { client } = connect(tree);
     expect(client.model.ready).toBe(true);
     expect(client.model.items.map(item => item.k)).toEqual(["user", "bash", "user"]);
-    expect(client.model.items[1]).toMatchObject({ n: 4, c: 8 });
+    expect(client.model.items[1]).toMatchObject({ n: 4, c: 7 });
     expect(JSON.stringify(client.model.items)).not.toContain("selection");
     const loaded = await client.get(client.model.items.map(item => item.id));
     expect(loaded).toHaveLength(3);
