@@ -8,12 +8,16 @@ export const herdrCommand: HerdrCommand = args => new Promise((resolve, reject) 
   });
 });
 
-/** Do not switch another agent's tab when a background Pi starts. */
+/** Open only with an App-verified, machine-qualified caller address. */
 export async function openGuiForFocusedTerminal(terminal: string, pid: number, run: HerdrCommand = herdrCommand,
   stillRunning: () => boolean = () => true): Promise<boolean> {
+  // HC_TERMINAL_ID is normally a bare, machine-local ID. It cannot identify the
+  // caller in the App's machine namespace, even when its PID also matches.
+  // Fail closed until the App supplies a verified fully qualified address.
+  if (!/^[^/\s]+\/t[a-zA-Z0-9]+$/.test(terminal) || !Number.isSafeInteger(pid) || pid <= 0) return false;
   try {
     const status = JSON.parse(await run(["status"]));
-    if (typeof status.agent !== "string" || (status.agent !== terminal && !status.agent.endsWith(`/${terminal}`))) return false;
+    if (status.agent !== terminal || typeof status.tab !== "string" || !status.tab) return false;
     const list = JSON.parse(await run(["do", "agent.list"]));
     if (!Array.isArray(list.agents) || !list.agents.some((agent: { terminal?: unknown; pid?: unknown }) =>
       agent.terminal === status.agent && agent.pid === pid)) return false;

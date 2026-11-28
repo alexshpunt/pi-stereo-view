@@ -116,6 +116,16 @@ test("routes a complete click to the rendered native component and rejects stale
   gui.dispose();
 });
 
+test("cancelled captured release never synthesizes a click", () => {
+  const { gui, item } = setup();
+  const frame = gui.page("chat", { width: 30, top: 0, height: 5, following: false });
+  const row = frame.lines.findIndex(line => line.includes("hello"));
+  expect(gui.mouse("chat", frame.frame, { type: "press", button: "left", x: 0, y: row })).toBe(true);
+  expect(gui.mouse("chat", frame.frame, { type: "release", button: "left", x: 0, y: row, cancel: true })).toBe(true);
+  expect(item.events.map(event => event.type)).toEqual(["press", "release"]);
+  gui.dispose();
+});
+
 test("pointer leaving the pane clears its hover without a press", () => {
   const hovered: number[] = [];
   const turns: DocumentTurns = { clock: () => false, stripe: () => "off", background: () => false,

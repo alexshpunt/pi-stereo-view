@@ -425,6 +425,8 @@ export class TranscriptLayout {
     const editorSlot = supportedDock && entries[3].component.constructor.name === "Container"
       ? entries[3].component as Container : undefined;
     let projectDialog = false;
+    let projectSurface = false;
+    let projectedSurfaceWidth: number | undefined;
     const dialogPresent = (): boolean => {
       const editor = this.getEditor();
       return !!editor && !!editorSlot && editorSlot.children.length === 1 && editorSlot.children[0] !== editor;
@@ -434,7 +436,7 @@ export class TranscriptLayout {
       () => host.getFocusedComponent(), () => host.requestRender(), component => {
         const resolver = host as unknown as { resolveMouseFocusTarget?: (target: Component) => Component };
         host.setFocus(resolver.resolveMouseFocusTarget?.(component) ?? component);
-      });
+      }, false, () => projectSurface && projectDialog ? projectedSurfaceWidth : host.terminal.columns);
     // Updated once per frame, whatever the setting, so a chain of Pi's windows is followed through every swap.
     let piWindowOpen = false;
     const projectedDock = supportedDock ? new VStack(entries.filter((_, i) => i !== 2 && i !== 4).map(entry =>
@@ -459,7 +461,8 @@ export class TranscriptLayout {
     // The composer owns Pi's editor and footer. Both widget placements share a strip above it.
     const guiDockTree = above && below ? new VStack([above, below]) : undefined;
     this.guiDock = new GuiSurface(() => widgetsPresent() ? guiDockTree : undefined,
-      () => host.getFocusedComponent(), () => host.requestRender(), component => host.setFocus(component), true);
+      () => host.getFocusedComponent(), () => host.requestRender(), component => host.setFocus(component), true,
+      () => projectSurface ? projectedSurfaceWidth : host.terminal.columns);
     const dockUnchanged = (): boolean => supportedDock && nativeDock.entries.length === 6 &&
       nativeDock.entries.every((entry, i) => entry.component === nativeDock.children[i] &&
         Object.keys({ ...entry, ...entries[i] }).every(key =>
@@ -580,7 +583,6 @@ export class TranscriptLayout {
       this.zoom !== null || this.preferences.layout === "columns" ||
       pane === (this.preferences.side === "left" ? "chat" : "activity");
     const toolbarStyle = () => host.terminal.columns < TOOLBAR_TEXT_WIDTH ? "icons" : this.preferences.buttonStyle;
-    let projectSurface = false;
     // Every root entry asks in turn during one visibility pass; evaluate the projection once.
     let pass: { width: number; height: number; shown: boolean } | undefined;
     const shown = (viewport: { width: number; height: number }): boolean => {
@@ -638,6 +640,7 @@ export class TranscriptLayout {
       const fits = !combinedWindow && width >= minimumWidth && historyHeight >= requiredHistory(chatMin, activityMin);
       this.fallback = this.preferences.mode === "split" && !fits;
       projectSurface = candidate && fits;
+      projectedSurfaceWidth = projectSurface ? activityWidth : undefined;
       if (this.search && (this.fallback || this.failed || this.preferences.mode !== "split" ||
         (this.zoom && this.zoom !== this.search.pane))) this.closeSearch(false);
       this.searchShortcut.sync(!this.failed && this.preferences.mode === "split" && fits);

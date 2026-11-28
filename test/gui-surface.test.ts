@@ -2,6 +2,36 @@ import { Container, Text, type Component } from "@earendil-works/pi-tui";
 import { expect, test } from "vitest";
 import { GuiSurface } from "../src/gui-surface.ts";
 
+test("restores terminal mouse geometry after borrowing a different GUI width", () => {
+  class Geometry extends Dialog {
+    width = 0;
+    override render(width: number): string[] { this.width = width; return ["click"]; }
+    handleMouse(): { handled: boolean } { return { handled: true }; }
+  }
+  const dialog = new Geometry("click", 0, 0);
+  dialog.render(100);
+  const surface = new GuiSurface(() => dialog, () => dialog, () => {}, () => {}, false, () => 100);
+  const page = surface.page(40);
+  expect(dialog.width).toBe(100);
+  expect(surface.mouse(page.mouseFrame, { type: "press", button: "left", x: 1, y: 0 })).toBe(true);
+  expect(dialog.width).toBe(100);
+});
+
+test("restores terminal geometry even if GUI rendering fails", () => {
+  class Geometry extends Dialog {
+    width = 0;
+    override render(width: number): string[] {
+      this.width = width;
+      if (width === 40) throw new Error("render failure");
+      return ["ok"];
+    }
+  }
+  const dialog = new Geometry("x", 0, 0);
+  const surface = new GuiSurface(() => dialog, () => dialog, () => {}, () => {}, false, () => 100);
+  expect(() => surface.page(40)).toThrow();
+  expect(dialog.width).toBe(100);
+});
+
 test("routes a widget click while the editor owns keyboard focus", () => {
   class Widget extends Text {
     clicks = 0;
@@ -91,6 +121,17 @@ test("rejects a pointer from an older surface even when dialog focus is unchange
   expect(updated.frame).toBe(old.frame);
   expect(updated.mouseFrame).not.toBe(old.mouseFrame);
   expect(surface.mouse(old.mouseFrame, { type: "press", button: "left", x: 0, y: 0 })).toBe(false);
+});
+
+test("delivers a bounded complete bracketed paste as one input", () => {
+  const dialog = new Dialog("input", 0, 0);
+  const surface = new GuiSurface(() => dialog, () => dialog);
+  const frame = surface.page(40).frame;
+  const value = "😀".repeat(800);
+  expect(surface.key(frame, `\x1b[200~${value}\x1b[201~`)).toBe(true);
+  expect(dialog.inputs).toEqual([`\x1b[200~${value}\x1b[201~`]);
+  expect(surface.key(frame, `\x1b[200~abc\x1b[A\x1b[201~`)).toBe(false);
+  expect(surface.key(frame, `\x1b[200~${"x".repeat(1024 * 1024 + 1)}\x1b[201~`)).toBe(false);
 });
 
 test("rejects old frames after a dialog is replaced and bounds incoming data", () => {

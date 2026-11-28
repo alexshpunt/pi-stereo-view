@@ -38,7 +38,9 @@ export type GuiAction = typeof GUI_ACTIONS[number];
 export type GuiSearchRequest = { v: 1; op: "search"; pane: Pane } & (
   { action: "open"; top: number; height: number; following: boolean } |
   { action: "query"; query: string } | { action: "next" | "previous" | "close" | "state" });
-export type GuiRequest = GuiPageRequest | GuiSearchRequest | { v: 1; op: "state" } | { v: 1; op: "action"; action: GuiAction } |
+export type GuiPasteChunk = { v: 1; transaction: string; index: number; count: number; data: string; frame: number } & (
+  { op: "surface-paste"; target?: "dock" } | { op: "overlay-paste"; revision: number; id: number });
+export type GuiRequest = GuiPageRequest | GuiSearchRequest | GuiPasteChunk | { v: 1; op: "state" } | { v: 1; op: "action"; action: GuiAction } |
   ({ v: 1; op: "setting" } & GuiSetting) |
   { v: 1; op: "image"; id: string; offset: number; length: number } |
   { v: 1; op: "overlays" } |
@@ -64,6 +66,21 @@ export function parseGuiRequest(value: unknown): GuiRequest | undefined {
   }
   const integer = (n: unknown, min: number, max: number): n is number =>
     typeof n === "number" && Number.isSafeInteger(n) && n >= min && n <= max;
+  if (request.v === 1 && (request.op === "surface-paste" || request.op === "overlay-paste") &&
+      typeof request.transaction === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(request.transaction) &&
+      integer(request.index, 0, 4095) && integer(request.count, 1, 4096) && request.index < request.count &&
+      integer(request.frame, 1, Number.MAX_SAFE_INTEGER) && typeof request.data === "string" &&
+      request.data.length > 0 && request.data.length <= 512 && Array.from(request.data).length <= 256 &&
+      !request.data.includes("\0") && !request.data.includes("\x1b")) {
+    const base = { v: 1 as const, transaction: request.transaction, index: request.index, count: request.count,
+      frame: request.frame, data: request.data };
+    if (request.op === "surface-paste" && (request.target === undefined || request.target === "dock"))
+      return { ...base, op: "surface-paste", ...(request.target === "dock" ? { target: "dock" as const } : {}) };
+    if (request.op === "overlay-paste" && integer(request.revision, 1, Number.MAX_SAFE_INTEGER) &&
+        integer(request.id, 1, Number.MAX_SAFE_INTEGER))
+      return { ...base, op: "overlay-paste", revision: request.revision, id: request.id };
+    return undefined;
+  }
   if (request.v === 1 && request.op === "overlays") return { v: 1, op: "overlays" };
   if (request.v === 1 && (request.op === "overlay-key" || request.op === "overlay-mouse") &&
       integer(request.revision, 1, Number.MAX_SAFE_INTEGER) && integer(request.id, 1, Number.MAX_SAFE_INTEGER) &&
@@ -120,11 +137,13 @@ export function parseGuiRequest(value: unknown): GuiRequest | undefined {
         !integer(e.x, -600, 600) || !integer(e.y, -512, 512) ||
         [e.shift, e.alt, e.ctrl].some(value => value !== undefined && typeof value !== "boolean") ||
         (e.wheelDelta !== undefined && (typeof e.wheelDelta !== "number" || !Number.isFinite(e.wheelDelta) || Math.abs(e.wheelDelta) > 10000)) ||
-        (e.clickCount !== undefined && e.clickCount !== 1 && e.clickCount !== 2 && e.clickCount !== 3)) return undefined;
+        (e.clickCount !== undefined && e.clickCount !== 1 && e.clickCount !== 2 && e.clickCount !== 3) ||
+        (e.cancel !== undefined && (e.type !== "release" || typeof e.cancel !== "boolean"))) return undefined;
     const event = { type: e.type, button: e.button, x: e.x, y: e.y,
       ...(e.shift === undefined ? {} : { shift: e.shift }), ...(e.alt === undefined ? {} : { alt: e.alt }),
       ...(e.ctrl === undefined ? {} : { ctrl: e.ctrl }), ...(e.wheelDelta === undefined ? {} : { wheelDelta: e.wheelDelta }),
-      ...(e.clickCount === undefined ? {} : { clickCount: e.clickCount }) } as GuiMouse;
+      ...(e.clickCount === undefined ? {} : { clickCount: e.clickCount }),
+      ...(e.cancel === undefined ? {} : { cancel: e.cancel }) } as GuiMouse;
     return { v: 1, op: "mouse", pane: request.pane, frame: request.frame, event };
   }
   if (request.v === 1 && request.op === "view" && (request.pane === "chat" || request.pane === "activity" || request.pane === "combined") &&

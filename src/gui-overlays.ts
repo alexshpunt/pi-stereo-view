@@ -67,7 +67,8 @@ export class GuiOverlays {
       if (!record) {
         const surface = new GuiSurface(() => this.layouts().some(layout => layout.entry === entry) ? entry.component : undefined,
           () => this.host.getFocusedComponent(), () => this.host.requestRender(), component =>
-            this.host.setFocus(this.host.resolveMouseFocusTarget?.(component) ?? component), true);
+            this.host.setFocus(this.host.resolveMouseFocusTarget?.(component) ?? component), true,
+          () => this.layouts().find(layout => layout.entry === entry)?.width);
         record = { id: this.nextId++, surface };
         this.records.set(entry, record);
       }
@@ -80,8 +81,15 @@ export class GuiOverlays {
     return { revision: this.revision, columns: this.columns, rows: this.rows, overlays };
   }
 
-  key(revision: number, id: number, frame: number, data: string): boolean {
+  /** Validate the visible overlay and its focused component without delivering input. */
+  accepts(revision: number, id: number, frame: number): boolean {
     if (this.disposed || revision !== this.revision || !this.unchanged(this.layouts())) return false;
+    const record = [...this.records.values()].find(value => value.id === id);
+    return record?.surface.accepts(frame) ?? false;
+  }
+
+  key(revision: number, id: number, frame: number, data: string): boolean {
+    if (!this.accepts(revision, id, frame)) return false;
     const record = [...this.records.values()].find(value => value.id === id);
     return record?.surface.key(frame, data) ?? false;
   }

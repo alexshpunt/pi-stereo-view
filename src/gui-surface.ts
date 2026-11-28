@@ -18,7 +18,15 @@ export class GuiSurface {
     private readonly focus: () => Component | null,
     private readonly requestRender: () => void = () => {},
     private readonly setFocus: (component: Component) => void = () => {},
-    private readonly passive = false) {}
+    private readonly passive = false,
+    private readonly terminalWidth: () => number | undefined = () => undefined) {}
+
+  private restore(owner: Component): void {
+    try {
+      const width = this.terminalWidth();
+      if (this.dialog() === owner && Number.isSafeInteger(width) && width! > 0 && width !== this.width) owner.render(width!);
+    } finally { this.requestRender(); }
+  }
 
   page(width: number): { frame: number; mouseFrame: number; active: boolean; focused: boolean; lines: string[] } {
     if (this.disposed || !Number.isSafeInteger(width) || width < 1 || width > 4096) throw new RangeError("Invalid surface width");
@@ -52,18 +60,25 @@ export class GuiSurface {
       }
       return { frame: this.serial, mouseFrame: this.mouseSerial, active: true, focused: !!focused && contains(owner, focused), lines: [...lines] };
     } finally {
-      // The GUI width can differ from the terminal. Repaint Pi's own geometry.
-      this.requestRender();
+      this.restore(owner);
     }
   }
 
-  key(frame: number, data: string): boolean {
-    if (this.disposed || !Number.isSafeInteger(frame) || frame !== this.serial || !this.owner ||
-        typeof data !== "string" || data.length < 1 || data.length > 1024 || data.includes("\0")) return false;
+  /** Check the exact borrowed component and focus without delivering input. */
+  accepts(frame: number): boolean {
+    if (this.disposed || !Number.isSafeInteger(frame) || frame !== this.serial || !this.owner) return false;
     const owner = this.dialog(), focused = this.focus();
-    if (owner !== this.owner || !focused || focused !== this.focused || !sameComponents(descendants(owner), this.structure) || !contains(owner, focused) ||
-        typeof focused.handleInput !== "function") return false;
-    focused.handleInput(data);
+    return !!owner && owner === this.owner && !!focused && focused === this.focused &&
+      sameComponents(descendants(owner), this.structure) && contains(owner, focused) && typeof focused.handleInput === "function";
+  }
+
+  key(frame: number, data: string): boolean {
+    if (typeof data !== "string" || data.length < 1 || data.includes("\0")) return false;
+    const pasted = data.startsWith("\x1b[200~") && data.endsWith("\x1b[201~");
+    if (pasted ? data.slice(6, -6).includes("\x1b") || Buffer.byteLength(data) > 1024 * 1024 + 12 : data.length > 1024) return false;
+    if (!this.accepts(frame)) return false;
+    const focused = this.focus()!;
+    focused.handleInput!(data);
     this.requestRender();
     return true;
   }
@@ -104,7 +119,7 @@ export class GuiSurface {
         if (!gesture.moved && !input.cancel) gesture.target.component.handleMouse?.({ ...local, type: "click", clickCount: 1 });
       }
       return true;
-    } finally { this.requestRender(); }
+    } finally { this.restore(owner); }
   }
 
   dispose(): void { this.disposed = true; this.owner = undefined; this.focused = undefined; }

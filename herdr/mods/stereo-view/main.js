@@ -1,5 +1,5 @@
 import { View, div, image, svg } from "gpui-kit";
-import { mkdir, writeFile, unlink } from "fs/promises";
+import { writeFile, unlink } from "fs/promises";
 import { h_flex, v_flex, v_virtual_list, VirtualListScrollHandle, ScrollHandle, Scrollbar, Input, InputState } from "gpui-base";
 import { appHome, checking, exec, panes, props, run, settings, spaces, terminals, theme, window } from "herdr";
 import { parseAnsi } from "./ansi.js";
@@ -7,7 +7,7 @@ import { createSettingsPanel } from "./settings.js";
 import { createSearchBar } from "./search-bar.js";
 import { createSelection } from "./selection.js";
 import { dialogKey } from "./dialog-keys.js";
-import { createImagePruner } from "./image-pruner.js";
+import { createImageCache, IMAGE_CACHE_INIT } from "./image-pruner.js";
 
 const LABEL = "herdr.stereo.bridge";
 const LINE_HEIGHT = 17;
@@ -38,13 +38,7 @@ const [input,output,id]=process.argv.slice(1),data=Buffer.from(fs.readFileSync(i
 if(crypto.createHash('sha256').update(data).digest('hex')!==id)process.exit(2);
 const temp=output+'.'+process.pid+'.tmp';
 try{fs.writeFileSync(temp,data);fs.renameSync(temp,output);}finally{try{fs.unlinkSync(temp)}catch(e){if(e.code!=='ENOENT')throw e}}`;
-// Keeps the newest 200 decoded images from earlier runs. It runs once per process
-// before this process writes its first image, so it never removes a file in use.
-const IMAGE_PRUNE = `const fs=require('node:fs'),path=require('node:path');const dir=process.argv[1];
-const files=fs.readdirSync(dir).filter(n=>/^[0-9a-f]{64}\\.(png|jpg|gif|webp)$/.test(n))
-.map(n=>({n,t:fs.statSync(path.join(dir,n)).mtimeMs})).sort((a,b)=>b.t-a.t);
-for(const f of files.slice(200))fs.unlinkSync(path.join(dir,f.n));`;
-const pruneImages = createImagePruner(() => exec("node", ["-e", IMAGE_PRUNE, `${appHome()}/data/stereo-view/images`], { timeout: 5000 }));
+const imageCache = createImageCache(() => exec("node", ["-e", IMAGE_CACHE_INIT, `${appHome()}/data/stereo-view/images`], { timeout: 5000 }));
 // Fixed code, not a command or script read from the terminal label. The socket and
 // request are arguments and never interpolated into this source.
 const CLIENT = `const net=require('node:net');
@@ -177,6 +171,7 @@ export default class StereoView extends View {
     this.dockScroll = ScrollHandle.new();
     this.dockPress = null;
     this.actions = [];
+    this.pasteSerial = 0;
     this.surfaceInput = null;
     this.surfaceScroll = ScrollHandle.new();
     this.surfacePress = null;
@@ -358,9 +353,8 @@ export default class StereoView extends View {
         this.controlError = "Could not send this text to the dialog."; cx.notify(); return;
       }
       const characters = Array.from(value);
-      const data = characters.length === 1 ? value : `\x1b[200~${value}\x1b[201~`;
-      const parts = Array.from(data);
-      for (let i = 0; i < parts.length; i += 256) this.sendSurfaceData(parts.slice(i, i + 256).join(""), cx);
+      if (characters.length === 1) this.sendSurfaceData(value, cx);
+      else this.sendSurfacePaste(characters, cx);
     });
     cx.timer.after(50, () => { if (this.surfaceInput === input && isShown()) input.focus(); });
   }
@@ -388,10 +382,51 @@ export default class StereoView extends View {
     return true;
   }
 
+  /** Queue bounded chunks for a single atomic paste to the currently focused Pi surface. */
+  /** @param {string[]} characters @param {any} cx */
+  sendSurfacePaste(characters, cx) {
+    const connection = bridge();
+    const overlay = [...(this.overlays?.overlays ?? [])].reverse().find(layer => layer.focused);
+    const dialog = !overlay && this.surface?.active ? this.surface : null;
+    const dock = !overlay && !dialog && this.dock?.active && this.dock.focused ? this.dock : null;
+    if (!connection || (!overlay && !dialog && !dock)) return;
+    // Four UTF-8 bytes per code point is a conservative 1 MiB bound.
+    if (characters.length > 262144) {
+      this.controlError = "Could not send this text to the dialog."; cx.notify(); return;
+    }
+    const transaction = `${Date.now()}-${Math.random().toString(36).slice(2)}-${++this.pasteSerial}`;
+    const count = Math.ceil(characters.length / 256);
+    const target = overlay ? { op: "overlay-paste", revision: this.overlays.revision, id: overlay.id, frame: overlay.frame }
+      : { op: "surface-paste", frame: (dialog || dock).frame, ...(dock ? { target: "dock" } : {}) };
+    for (let index = 0; index < count; index++) {
+      const data = characters.slice(index * 256, (index + 1) * 256).join("");
+      this.actions.push({ request: { v: 1, ...target, transaction, index, count, data }, connection });
+    }
+    this.drainActions(cx);
+  }
+
   /** @param {any} event @param {any} cx */
   sendSurfaceKey(event, cx) {
     const data = dialogKey(event);
     return data ? this.sendSurfaceData(data, cx) : false;
+  }
+
+  /** End a lost native capture without turning it into a click. */
+  /** @param {"surface"|"dock"|"overlay"} kind @param {any} cx */
+  cancelControlCapture(kind, cx) {
+    const key = kind === "overlay" ? "overlayPress" : kind === "dock" ? "dockPress" : "surfacePress";
+    const press = this[key];
+    if (!press) return;
+    this[key] = null;
+    const connection = bridge();
+    if (connection) {
+      const request = kind === "overlay"
+        ? { v: 1, op: "overlay-mouse", revision: press.revision, id: press.id, frame: press.frame }
+        : { v: 1, op: "surface-mouse", ...(kind === "dock" ? { target: "dock" } : {}), frame: press.frame };
+      this.actions.push({ request: { ...request, event: { type: "release", button: "left", x: press.x, y: press.y, cancel: true } }, connection });
+      this.drainActions(cx);
+    }
+    cx.notify();
   }
 
   /** Forward cell coordinates for the exact dialog frame currently on screen. */
@@ -482,7 +517,7 @@ export default class StereoView extends View {
     const y = row - state.frameTop;
     if (type === "press" && (x < 0 || x >= state.width || y < 0 || y >= state.frameHeight)) return;
     if (x < -state.width || x >= state.width * 2 || y < -state.frameHeight || y >= state.frameHeight * 2) {
-      if (type === "release") state.pressed = false;
+      if (type === "release") this.cancelPaneCapture(pane, state, cx);
       return;
     }
     if (type === "press") {
@@ -509,6 +544,23 @@ export default class StereoView extends View {
     this.actions.push({ request: { v: 1, op: "mouse", pane, frame: state.revision, event: input }, connection });
     if (type === "release") state.pressed = false;
     this.drainActions(cx);
+  }
+
+  /** Cancel a history capture when its mouse-up occurred outside the window. */
+  /** @param {string} pane @param {ReturnType<typeof paneState>} state @param {any} cx */
+  cancelPaneCapture(pane, state, cx) {
+    if (!state.pressed) return;
+    const point = state.pressPoint;
+    const connection = bridge();
+    if (!state.selectionOnly && point && connection) {
+      this.actions.push({ request: { v: 1, op: "mouse", pane, frame: state.revision,
+        event: { type: "release", button: "left", x: point.col, y: point.row - state.frameTop, cancel: true } }, connection });
+      this.drainActions(cx);
+    }
+    state.pressed = false; state.selectionOnly = false; state.selecting = false; state.autoScroll = 0;
+    // The action queue refreshes after the cancel is delivered; do not race it with a new frame.
+    if (connection && !this.actionPending && !this.actions.length) this.fetchPane(pane, state, connection, cx);
+    cx.notify();
   }
 
   /** Send bounded pointer motion without taking keyboard focus or starting a selection. */
@@ -620,6 +672,7 @@ export default class StereoView extends View {
         } else if (reply.ok !== true && !(request.op === "surface-mouse" && reply.ok === false)) throw new Error("Action failed");
         this.controlError = null;
       } catch {
+        if (request.transaction) this.actions = this.actions.filter(item => item.request.transaction !== request.transaction);
         if (bridge()?.socket === connection.socket) this.controlError = "Could not change Stereo View controls.";
       } finally {
         this.actionPending = false;
@@ -782,10 +835,9 @@ export default class StereoView extends View {
           encoded += chunk.data;
         }
         const extension = placement.mime === "image/jpeg" ? "jpg" : placement.mime.slice(6);
-        const relative = `data/stereo-view/images/${id}.${extension}`;
-        const directory = `${appHome()}/data/stereo-view/images`;
-        await mkdir(directory, { recursive: true });
-        await pruneImages();
+        const owner = await imageCache();
+        const relative = `data/stereo-view/images/${owner}/${id}.${extension}`;
+        const directory = `${appHome()}/data/stereo-view/images/${owner}`;
         const temporary = `${directory}/${id}-${Math.random().toString(36).slice(2)}.base64`;
         await writeFile(temporary, encoded);
         try {
@@ -889,6 +941,7 @@ export default class StereoView extends View {
       })
       .on_window_mouse_move((event, cx) => {
         if (!this.drag) return;
+        if (event.pressed_button !== "left") { this.drag = undefined; cx.notify(); return; }
         const z = settings().zoom;
         const zoom = typeof z === "number" && z > 0 ? z : 1;
         const position = (this.drag.rows ? event.position.y : event.position.x) / zoom;
@@ -952,6 +1005,7 @@ export default class StereoView extends View {
         })
         .on_window_mouse_move((event, cx) => {
           if (!state.pressed) { this.sendHover(name, state, event, cx); return; }
+          if (event.pressed_button !== "left") { this.cancelPaneCapture(name, state, cx); return; }
           if (!event.local_position) return;
           const z = settings().zoom;
           const zoom = typeof z === "number" && z > 0 ? z : 1;
@@ -975,7 +1029,8 @@ export default class StereoView extends View {
           cx.notify();
         })
         .on_window_mouse_up("left", (event, cx) => {
-          if (!state.pressed || !event.local_position) return;
+          if (!state.pressed) return;
+          if (!event.local_position) { this.cancelPaneCapture(name, state, cx); return; }
           state.autoScroll = 0;
           if (state.selectionOnly) {
             state.pressed = false; state.selectionOnly = false; state.selecting = false;
@@ -1000,7 +1055,7 @@ export default class StereoView extends View {
     const inside = x >= 0 && x < this.dock.width && y >= 0 && y < this.dock.lines.length;
     if (type === "press") {
       if (!inside || this.dockPending) return;
-      this.dockPress = { frame: this.dock.mouseFrame };
+      this.dockPress = { frame: this.dock.mouseFrame, x, y };
     }
     if (!this.dockPress) return;
     const px = Math.max(0, Math.min(this.dock.width - 1, x));
@@ -1016,8 +1071,8 @@ export default class StereoView extends View {
     const body = v_flex().id("stereo-dock").relative().flex_none().max_h(200).overflow_y_scroll()
       .track_scroll(this.dockScroll).px(8).py(4)
       .on_mouse_down("left", (event, cx) => this.sendDockMouse("press", event, cx))
-      .on_window_mouse_move((event, cx) => { if (this.dockPress) this.sendDockMouse("drag", event, cx); })
-      .on_window_mouse_up("left", (event, cx) => { if (this.dockPress) this.sendDockMouse("release", event, cx); });
+      .on_window_mouse_move((event, cx) => { if (this.dockPress) event.pressed_button === "left" ? this.sendDockMouse("drag", event, cx) : this.cancelControlCapture("dock", cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.dockPress) event.local_position ? this.sendDockMouse("release", event, cx) : this.cancelControlCapture("dock", cx); });
     for (const line of this.dock.lines) body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
       .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
     if (this.dock.focused && this.surfaceInput && !this.overlays?.overlays.some(layer => layer.focused)) body.child(Input.new(this.surfaceInput).w(300).h(30).mt(8).px(6)
@@ -1035,7 +1090,7 @@ export default class StereoView extends View {
     const inside = x >= 0 && x < layer.width && y >= 0 && y < layer.height;
     if (type === "press") {
       if (!inside || this.overlaysPending) return;
-      this.overlayPress = { id: layer.id, frame: layer.mouseFrame, revision: this.overlays.revision };
+      this.overlayPress = { id: layer.id, frame: layer.mouseFrame, revision: this.overlays.revision, x, y };
     }
     const press = this.overlayPress;
     if (!press || press.id !== layer.id) return;
@@ -1056,8 +1111,8 @@ export default class StereoView extends View {
     const body = v_flex().id(`stereo-overlay-${layer.id}`).absolute().left(left).top(top).w(width).h(height)
       .overflow_hidden().bg(t.surface)
       .on_mouse_down("left", (event, cx) => { if (layer.focused) this.surfaceInput?.focus(); this.sendOverlayMouse(layer, "press", event, cx); })
-      .on_window_mouse_move((event, cx) => { if (this.overlayPress?.id === layer.id) this.sendOverlayMouse(layer, "drag", event, cx); })
-      .on_window_mouse_up("left", (event, cx) => { if (this.overlayPress?.id === layer.id) this.sendOverlayMouse(layer, "release", event, cx); });
+      .on_window_mouse_move((event, cx) => { if (this.overlayPress?.id === layer.id) event.pressed_button === "left" ? this.sendOverlayMouse(layer, "drag", event, cx) : this.cancelControlCapture("overlay", cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.overlayPress?.id === layer.id) event.local_position ? this.sendOverlayMouse(layer, "release", event, cx) : this.cancelControlCapture("overlay", cx); });
     for (const line of layer.lines) body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
       .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
     if (layer.focused && this.surfaceInput) body.child(Input.new(this.surfaceInput).w_full().h(30).mt(8).px(6)
@@ -1069,8 +1124,8 @@ export default class StereoView extends View {
   renderSurface(t) {
     const body = v_flex().id("stereo-surface").relative().flex_1().min_h(0).overflow_y_scroll().track_scroll(this.surfaceScroll).px(8).py(4)
       .on_mouse_down("left", (event, cx) => { this.surfaceInput?.focus(); this.sendSurfaceMouse("press", event, cx); })
-      .on_window_mouse_move((event, cx) => { if (this.surfacePress) this.sendSurfaceMouse("drag", event, cx); })
-      .on_window_mouse_up("left", (event, cx) => { if (this.surfacePress) this.sendSurfaceMouse("release", event, cx); });
+      .on_window_mouse_move((event, cx) => { if (this.surfacePress) event.pressed_button === "left" ? this.sendSurfaceMouse("drag", event, cx) : this.cancelControlCapture("surface", cx); })
+      .on_window_mouse_up("left", (event, cx) => { if (this.surfacePress) event.local_position ? this.sendSurfaceMouse("release", event, cx) : this.cancelControlCapture("surface", cx); });
     for (const line of this.surface.lines) {
       body.child(h_flex().h(LINE_HEIGHT).flex_none().whitespace_nowrap()
         .children(parseAnsi(line).map(run => this.ansiRun(t, run))));
@@ -1146,7 +1201,7 @@ export default class StereoView extends View {
         const key = event.key?.toLowerCase();
         // Text belongs to the native input; forward Enter even when the field is empty.
         if (key === "enter" || key === "return") {
-          if (this.sendSurfaceData("\r", cx)) cx.stop_propagation();
+          if (this.sendSurfaceKey(event, cx)) cx.stop_propagation();
           return;
         }
         if ((event.modifiers?.control && event.modifiers?.alt && event.key_char) ||

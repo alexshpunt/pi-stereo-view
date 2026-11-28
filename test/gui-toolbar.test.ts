@@ -85,7 +85,7 @@ function harness() {
   });
   const env = { checking: () => false, exec: async (_cmd: string, args: string[]) => {
     const request = JSON.parse(args[3]); calls.push(request);
-    const data: any = request.op === "overlays" ? { v: 1, revision: 1, columns: 80, rows: 24, overlays } : request.op === "overlay-key" || request.op === "overlay-mouse" ? { v: 1, ok: true } : request.op === "surface" ? { v: 1, mouseFrame: 1, ...surface } : request.op === "surface-key" || request.op === "surface-mouse" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
+    const data: any = request.op === "overlays" ? { v: 1, revision: 1, columns: 80, rows: 24, overlays } : request.op === "overlay-key" || request.op === "overlay-mouse" || request.op === "overlay-paste" || request.op === "surface-paste" ? { v: 1, ok: true } : request.op === "surface" ? { v: 1, mouseFrame: 1, ...surface } : request.op === "surface-key" || request.op === "surface-mouse" ? { v: 1, ok: true } : request.op === "state" ? state : request.op === "search" ? { v: 1, open: true, count: 1, current: 1, pending: false, top: 0 } : request.op === "action" || request.op === "setting" || request.op === "mouse" ? { v: 1, ok: true } :
       { v: 1, frame: 1, total, top: request.following ? Math.max(0, total - request.height) : request.top, width: request.width, height: request.height, scrollShift: 0,
         images: [], jump: request.pane === "activity" ? jump : undefined, lines: request.top === 0 ? ["native rendered row"] : [],
         selection: request.top === 0 ? [{ cells: Array.from("native rendered row", (text, start) => ({ text, start, end: start + 1 })), words: [{ start: 0, end: 6 }] }] : [] };
@@ -134,6 +134,22 @@ test("keeps history visible behind Pi overlays and forwards overlay input", asyn
     event: { type: "release", button: "left", x: 1, y: 0 } });
 });
 
+test("sends a long paste as one ordered overlay transaction", async () => {
+  const h = harness();
+  h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 3, col: 4, width: 20, height: 2, lines: ["overlay"] }]);
+  h.view.init({}, h.cx);
+  await h.flush();
+  const paste = "a".repeat(600) + "🙂";
+  h.typeSurface(paste);
+  await h.flush();
+  const chunks = h.calls.filter(call => call.op === "overlay-paste");
+  expect(chunks.map(chunk => chunk.data).join("")).toBe(paste);
+  expect(chunks.map(chunk => chunk.index)).toEqual([0, 1, 2]);
+  expect(new Set(chunks.map(chunk => chunk.transaction)).size).toBe(1);
+  expect(chunks.every(chunk => chunk.count === 3 && chunk.id === 7 && chunk.frame === 4 && chunk.revision === 1)).toBe(true);
+  expect(h.calls.some(call => call.op === "overlay-key" && call.data.includes("\x1b[200~"))).toBe(false);
+});
+
 test("forwards Enter to a focused Pi overlay even with an empty input", async () => {
   const h = harness();
   h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 3, col: 4, width: 20, height: 2, lines: ["overlay"] }]);
@@ -142,6 +158,15 @@ test("forwards Enter to a focused Pi overlay even with an empty input", async ()
   h.view.render().keyDown!({ key: "enter", modifiers: {} }, h.cx);
   await h.flush();
   expect(h.calls).toContainEqual({ v: 1, op: "overlay-key", revision: 1, id: 7, frame: 4, data: "\r" });
+});
+
+test("preserves Enter modifiers when forwarding an overlay key", async () => {
+  const h = harness();
+  h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 3, col: 4, width: 20, height: 2, lines: ["overlay"] }]);
+  h.view.init({}, h.cx); await h.flush();
+  h.view.render().keyDown!({ key: "enter", modifiers: { shift: true } }, h.cx);
+  await h.flush();
+  expect(h.calls).toContainEqual({ v: 1, op: "overlay-key", revision: 1, id: 7, frame: 4, data: "\x1b[13;2u" });
 });
 
 test("uses icon controls when the saved preference requests icons", async () => {
@@ -250,8 +275,8 @@ test("uses native text input to send typed and pasted dialog text once", async (
   h.typeSurface("é");
   h.typeSurface("pasted text");
   await h.flush();
-  expect(h.calls.filter(call => call.op === "surface-key").map(call => call.data))
-    .toEqual(["é", "\x1b[200~pasted text\x1b[201~"]);
+  expect(h.calls.filter(call => call.op === "surface-key").map(call => call.data)).toEqual(["é"]);
+  expect(h.calls.filter(call => call.op === "surface-paste").map(call => call.data)).toEqual(["pasted text"]);
   h.setSurface({ active: false, frame: 6, lines: [] });
   h.view.refresh(h.cx);
   await h.flush();
@@ -283,6 +308,62 @@ test("sends dialog pointer gestures using the painted frame", async () => {
     { v: 1, op: "surface-mouse", frame: 12, event: { type: "press", button: "left", x: 1, y: 0 } },
     { v: 1, op: "surface-mouse", frame: 12, event: { type: "release", button: "left", x: 1, y: 0 } },
   ]);
+});
+
+test("cancels a lost dialog pointer capture without clicking", async () => {
+  const h = harness(); h.view.init({}, h.cx); await h.flush();
+  h.setSurface({ active: true, frame: 8, mouseFrame: 12, lines: ["first"] });
+  h.view.refresh(h.cx); await h.flush();
+  const dialog = h.find(h.view.render(), "stereo-surface")!;
+  dialog.mouseDown!({ local_position: { x: 20, y: 10 } }, h.cx);
+  dialog.windowMove!({ local_position: { x: 30, y: 10 } }, h.cx);
+  await h.flush();
+  expect(h.view.surfacePress).toBeNull();
+  expect(h.calls.filter(call => call.op === "surface-mouse").at(-1).event).toMatchObject({ type: "release", cancel: true });
+});
+
+test("lost overlay and dock captures release without clicks", async () => {
+  const h = harness();
+  h.setOverlays([{ id: 7, frame: 4, mouseFrame: 5, focused: true, row: 3, col: 4, width: 20, height: 2, lines: ["overlay"] }]);
+  h.view.init({}, h.cx); await h.flush();
+  const layer = h.find(h.view.render(), "stereo-overlay-7")!;
+  layer.mouseDown!({ local_position: { x: 13, y: 1 } }, h.cx);
+  layer.windowMove!({ local_position: { x: 13, y: 1 } }, h.cx);
+  await h.flush();
+  expect(h.view.overlayPress).toBeNull();
+  expect(h.calls.filter(call => call.op === "overlay-mouse").at(-1).event).toMatchObject({ type: "release", cancel: true });
+  h.view.dock = { active: true, width: 20, mouseFrame: 6, lines: ["dock"] };
+  const dock = h.view.renderDock({});
+  dock.mouseDown({ local_position: { x: 20, y: 10 } }, h.cx);
+  dock.windowUp({}, h.cx);
+  await h.flush();
+  expect(h.view.dockPress).toBeNull();
+  expect(h.calls.filter(call => call.op === "surface-mouse" && call.target === "dock").at(-1).event).toMatchObject({ type: "release", cancel: true });
+});
+
+test("lost history capture sends cancel and unblocks paging", async () => {
+  const h = harness(); h.view.init({}, h.cx); await h.flush();
+  const pane = h.view.chat;
+  const box = h.find(h.view.render(), "stereo-chat-box")!;
+  box.mouseDown!({ local_position: { x: 20, y: 3 }, click_count: 1 }, h.cx);
+  await h.flush();
+  expect(pane.pressed).toBe(true);
+  box.windowMove!({ local_position: { x: 25, y: 3 } }, h.cx);
+  await h.flush();
+  expect(pane.pressed).toBe(false);
+  expect(pane.autoScroll).toBe(0);
+  expect(h.calls.filter(call => call.op === "mouse").at(-1).event).toMatchObject({ type: "release", cancel: true });
+});
+
+test("lost divider capture cancels resizing without saving", async () => {
+  const h = harness(); h.view.init({}, h.cx); await h.flush();
+  const bar = h.view.divider({});
+  bar.mouseDown({ position: { x: 320, y: 0 } }, h.cx);
+  bar.windowMove({ position: { x: 420, y: 0 } }, h.cx);
+  bar.windowUp({}, h.cx);
+  await h.flush();
+  expect(h.view.drag).toBeUndefined();
+  expect(h.calls.some(call => call.op === "setting")).toBe(false);
 });
 
 test("clicks the visible row at fractional app zoom after scrolling", async () => {
@@ -395,7 +476,7 @@ test("dragging outside a panel scrolls while retaining the selection", async () 
   const panel = h.find(h.view.render(), "stereo-chat-box")!;
   panel.mouseDown!({ local_position: { x: 15, y: 8 }, click_count: 1 }, h.cx);
   await h.flush();
-  panel.windowMove!({ local_position: { x: 15, y: 36 }, click_count: 1 }, h.cx);
+  panel.windowMove!({ local_position: { x: 15, y: 36 }, pressed_button: "left", click_count: 1 }, h.cx);
   await h.flush();
   expect(timers.length).toBe(1);
   timers.shift()!();
@@ -506,7 +587,7 @@ test("resizing the divider persists the new conversation width", async () => {
   h.view.cellWidth = 10;
   const bar = h.view.divider({});
   bar.mouseDown({ position: { x: 320, y: 0 } }, h.cx);
-  bar.windowMove({ position: { x: 420, y: 0 } }, h.cx);
+  bar.windowMove({ position: { x: 420, y: 0 }, pressed_button: "left" }, h.cx);
   bar.windowUp({}, h.cx);
   await h.flush();
   expect(h.calls).toContainEqual({ v: 1, op: "setting", key: "chatWidth", value: 40 });
@@ -531,7 +612,7 @@ test("selects and copies text from a native rendered row", async () => {
   await h.flush();
   const box = h.find(h.view.render(), "stereo-chat-box")!;
   box.mouseDown!({ local_position: { x: 20, y: 3 }, modifiers: {}, click_count: 1 }, h.cx);
-  box.windowMove!({ local_position: { x: 44, y: 3 }, modifiers: {} }, h.cx);
+  box.windowMove!({ local_position: { x: 44, y: 3 }, pressed_button: "left", modifiers: {} }, h.cx);
   box.windowUp!({ local_position: { x: 44, y: 3 }, modifiers: {}, click_count: 1 }, h.cx);
   await h.flush();
   h.view.render().keyDown({ key: "c", modifiers: { control: true } }, h.cx);

@@ -32,6 +32,7 @@ export interface GuiMouse {
   ctrl?: boolean;
   wheelDelta?: number;
   clickCount?: 1 | 2 | 3;
+  cancel?: boolean;
 }
 
 type Frame = GuiDocumentPage & { viewport: GuiViewport };
@@ -143,7 +144,8 @@ export class GuiDocuments {
         !["press", "release", "move", "drag", "wheel"].includes(input.type) ||
         !["left", "middle", "right", "none"].includes(input.button) ||
         (input.wheelDelta !== undefined && (!Number.isFinite(input.wheelDelta) || Math.abs(input.wheelDelta) > 10000)) ||
-        (input.clickCount !== undefined && ![1, 2, 3].includes(input.clickCount))) return false;
+        (input.clickCount !== undefined && ![1, 2, 3].includes(input.clickCount)) ||
+        (input.cancel !== undefined && (typeof input.cancel !== "boolean" || input.type !== "release"))) return false;
     const outside = input.x < 0 || input.x >= frame.width || input.y < 0 || input.y >= frame.height || frame.top + input.y >= frame.total;
     // A sentinel move clears hover without treating arbitrary outside coordinates as hits.
     const leave = !gesture && input.type === "move" && input.button === "none" && input.x === -1 && input.y === -1;
@@ -165,7 +167,7 @@ export class GuiDocuments {
     if (gesture && (input.type === "drag" || input.type === "move" || input.type === "release")) {
       const result = toTarget(input.type, gesture.target);
       if (input.type === "release") {
-        if (!gesture.moved) toTarget("click", gesture.target);
+        if (!gesture.moved && !input.cancel) toTarget("click", gesture.target);
         // A click may change the document's row layout even when the target does not request a render.
         this.invalidate(pane);
       }

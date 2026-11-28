@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
 import { join } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import { GuiContent, type GuiPage } from "./gui-content.ts";
 import type { NativeContentIndex } from "./content.ts";
 import { parseGuiRequest, type GuiAction, type GuiSetting } from "./gui-protocol.ts";
@@ -44,26 +45,67 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
   const sockets = new Set<Socket>();
   let currentIndex: NativeContentIndex | undefined;
   let content: GuiContent | undefined;
+  type PasteChunk = Extract<import("./gui-protocol.ts").GuiRequest, { op: "surface-paste" | "overlay-paste" }>;
+  type PendingPaste = { key: string; surface: object; frame: number; count: number; next: number; bytes: number; pieces: string[]; expires: number };
+  const pastes = new Map<string, PendingPaste>();
+  const expirePastes = (): void => { for (const [id, paste] of pastes) if (paste.expires <= Date.now()) pastes.delete(id); };
+  const appendPaste = (chunk: PasteChunk, current: GuiControls): boolean => {
+    expirePastes();
+    const overlays = chunk.op === "overlay-paste" ? current.overlays?.() : undefined;
+    const surface = chunk.op === "surface-paste" ? current.surface?.(chunk.target) : undefined;
+    const owner = overlays ?? surface;
+    const key = chunk.op === "overlay-paste" ? `overlay:${chunk.revision}:${chunk.id}` : `surface:${chunk.target ?? "dialog"}`;
+    const valid = chunk.op === "overlay-paste" ? overlays?.accepts(chunk.revision, chunk.id, chunk.frame) : surface?.accepts(chunk.frame);
+    const existing = pastes.get(chunk.transaction);
+    if (!owner || !valid || (existing && (existing.key !== key || existing.surface !== owner || existing.frame !== chunk.frame ||
+        existing.count !== chunk.count || existing.next !== chunk.index)) || (!existing && chunk.index !== 0)) {
+      pastes.delete(chunk.transaction);
+      return false;
+    }
+    if (!existing && pastes.size >= 8) return false;
+    const paste = existing ?? { key, surface: owner, frame: chunk.frame, count: chunk.count, next: 0, bytes: 0, pieces: [], expires: Date.now() + 30_000 };
+    paste.bytes += Buffer.byteLength(chunk.data);
+    if (paste.bytes > 1024 * 1024) { pastes.delete(chunk.transaction); return false; }
+    paste.pieces.push(chunk.data);
+    paste.next++;
+    paste.expires = Date.now() + 30_000;
+    if (paste.next < paste.count) { pastes.set(chunk.transaction, paste); return true; }
+    pastes.delete(chunk.transaction);
+    const data = `\x1b[200~${paste.pieces.join("")}\x1b[201~`;
+    return chunk.op === "overlay-paste" ? overlays!.key(chunk.revision, chunk.id, chunk.frame, data) : surface!.key(chunk.frame, data);
+  };
+  const pasteTimer = setInterval(expirePastes, 10_000);
+  pasteTimer.unref();
   try {
     server = createServer(socket => {
       sockets.add(socket);
       socket.once("close", () => sockets.delete(socket));
       socket.setTimeout(3000, () => socket.destroy());
-      let request = "";
+      let request = "", requestBytes = 0;
+      const decoder = new StringDecoder("utf8");
       socket.on("error", () => socket.destroy());
       socket.on("data", chunk => {
-        request += chunk.toString("utf8");
-        if (Buffer.byteLength(request) > REQUEST_LIMIT) { socket.destroy(); return; }
+        requestBytes += chunk.length;
+        if (requestBytes > REQUEST_LIMIT) { socket.destroy(); return; }
+        request += decoder.write(chunk);
         const end = request.indexOf("\n");
         if (end < 0) return;
         socket.pause();
+        let pasteTransaction: string | undefined;
         try {
-          const parsed = parseGuiRequest(JSON.parse(request.slice(0, end)));
+          const raw: unknown = JSON.parse(request.slice(0, end));
+          if (raw && typeof raw === "object" && "transaction" in raw && typeof raw.transaction === "string") pasteTransaction = raw.transaction;
+          const parsed = parseGuiRequest(raw);
           if (!parsed) throw new Error("Invalid request");
           if (parsed.op !== "page") {
             const current = controls?.();
-            if (!current) throw new Error("Controls are unavailable");
+            if (!current) {
+              if (parsed.op === "surface-paste" || parsed.op === "overlay-paste") pastes.delete(parsed.transaction);
+              throw new Error("Controls are unavailable");
+            }
             if (parsed.op === "state") socket.end(JSON.stringify(current.state()) + "\n");
+            else if (parsed.op === "surface-paste" || parsed.op === "overlay-paste")
+              socket.end(JSON.stringify({ v: 1, ok: appendPaste(parsed, current) }) + "\n");
             else if (parsed.op === "overlays") {
               const overlays = current.overlays?.();
               if (!overlays) throw new Error("Overlays unavailable");
@@ -134,6 +176,7 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
           const output = encodeGuiPage(page);
           socket.end(output + "\n");
         } catch (error) {
+          if (pasteTransaction) pastes.delete(pasteTransaction);
           socket.end(JSON.stringify({ error: error instanceof Error ? error.message : "Request failed" }) + "\n");
         }
       });
@@ -146,6 +189,8 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
     const label = JSON.stringify({ v: 1, pid: process.pid, socket: socketPath });
     await publish(terminal, label);
   } catch (error) {
+    clearInterval(pasteTimer);
+    pastes.clear();
     if (server?.listening) server.close();
     await rm(directory, { recursive: true, force: true });
     throw error;
@@ -154,6 +199,8 @@ export async function startGuiBridge(terminal: string, index: () => NativeConten
   return async () => {
     if (stopped) return;
     stopped = true;
+    clearInterval(pasteTimer);
+    pastes.clear();
     for (const socket of sockets) socket.destroy();
     await new Promise<void>(resolve => server!.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });
