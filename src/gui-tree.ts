@@ -85,7 +85,10 @@ function describe(entry: ContentEntry): Described {
   }
   return { k: "rows", chars: 0, lines: 1 };
 }
-function text(k: ItemKind, value: string): Described {
+/** Colour and link escapes of Pi's own rows (notices render with them) have no place in the GUI's text. */
+const ESCAPES = /\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\))/g;
+function text(k: ItemKind, raw: string): Described {
+  const value = raw.includes("\u001b") ? raw.replace(ESCAPES, "") : raw;
   return { k, body: { t: value }, chars: value.length, lines: lineCount(value) };
 }
 function pair(k: ItemKind, a: string, o: string, meta: TreeItem["m"]): Described {

@@ -67,6 +67,13 @@ describe("tree pipeline", () => {
     expect(client.model.body(1)).toEqual({ a: "ls", o: "a\nb\nc" });
   });
 
+  it("strips colour and link escapes from item text", async () => {
+    const index = fakeIndex([new UserMessageComponent("\u001b[38;2;1;2;3mUpdate\u001b[0m \u001b]8;;https://x.y\u0007link\u001b]8;;\u0007 ok")]);
+    const { client } = connect(new GuiTree(() => index));
+    await client.get(client.model.items.map(item => item.id));
+    expect(client.model.body(0)).toEqual({ t: "Update link ok" });
+  });
+
   it("applies a streaming change as one splice and keeps ids stable", () => {
     const list = sources();
     const index = fakeIndex(list);
