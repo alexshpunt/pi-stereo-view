@@ -36,8 +36,10 @@ export class TreeLayout {
     for (let k = 0; k < ids.length; k++) {
       this.piRows.set(ids[k], rows[k]);
       const i = this.model.indexOf(ids[k]);
-      if (i < 0 || this.measured[i]) continue;
+      if (i < 0) continue;
       const item = this.model.items[i];
+      if (item.k === "rows") { if (!this.fallbackRows.has(item.id)) this.setHeight(i, rows[k]); continue; } // Pi's own rows: rendered count
+      if (this.measured[i]) continue;
       if (item.k === "rows" || !this.model.bodies.has(item.id) || (item.x && this.model.full.has(item.id))) continue; // expanded here: measured locally
       this.setHeight(i, this.chrome(item) + rows[k]);
     }
@@ -66,7 +68,8 @@ export class TreeLayout {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const exact = this.piRows.get(item.id);
-      if (exact !== undefined && item.k !== "rows" && !(item.x && this.model.full.has(item.id))) { this.heights[i] = this.chrome(item) + exact; this.measured[i] = 1; }
+      if (exact !== undefined && item.k === "rows") this.heights[i] = exact;
+      else if (exact !== undefined && !(item.x && this.model.full.has(item.id))) { this.heights[i] = this.chrome(item) + exact; this.measured[i] = 1; }
       else this.heights[i] = this.estimate(item);
     }
     this.countUnmeasured();

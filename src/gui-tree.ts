@@ -270,7 +270,14 @@ export class TreeStream {
       const h: number[] = [];
       for (let i = at; i < Math.min(total, at + chunk); i++) {
         const row = rows[i];
-        if (row.d.k === "rows" || !row.d.body) continue;
+        if (row.d.k === "rows") {
+          // Pi's own rows (notices): their height is the rendered row count, so the GUI never guesses it either.
+          let n = 1;
+          try { n = Math.max(1, row.entry.component.render(cols).length); } catch { /* keep one row */ }
+          ids.push(row.id); h.push(n);
+          continue;
+        }
+        if (!row.d.body) continue;
         const full = i >= total - TAIL;
         let cached = row.d.rows;
         if (!cached || cached.cols !== cols || cached.full !== full) {
