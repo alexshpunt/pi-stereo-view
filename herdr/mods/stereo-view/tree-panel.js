@@ -18,6 +18,18 @@ export function createTreePanels(gpui, deps) {
   /** @type {Map<string, any>} */
   const panes = new Map();
 
+  const RETRIES = 5, RETRY_MS = 1500;
+
+  /** A stream that died (Pi was still starting, a restart) is opened again, a few times with growing pauses. */
+  function revive(name) {
+    const entry = panes.get(name);
+    if (!entry?.dead || (entry.retries ?? 0) >= RETRIES || Date.now() - entry.deadAt < RETRY_MS * ((entry.retries ?? 0) + 1)) return entry;
+    panes.delete(name);
+    const next = ensure(name, entry.notify);
+    if (next) next.retries = (entry.retries ?? 0) + 1;
+    return next ?? entry;
+  }
+
   function ensure(name, notify) {
     let entry = panes.get(name);
     if (entry) return entry;
@@ -28,7 +40,7 @@ export function createTreePanels(gpui, deps) {
       change: change => { entry.view.changed(change); entry.ui.changed(); entry.dirty = true; entry.notify?.(); },
       bodies: () => { entry.ui.changed(); entry.dirty = true; entry.notify?.(); },
       // A stream that ends stays as a dead entry: the old list draws and nothing retries in a loop.
-      exit: (code, why) => { entry.dead = true; entry.error = `exit ${code ?? "?"}${why ? `: ${why}` : ""}`; entry.notify?.(); },
+      exit: (code, why) => { entry.dead = true; entry.deadAt = Date.now(); entry.error = `exit ${code ?? "?"}${why ? `: ${why}` : ""}`; entry.notify?.(); },
       error: text => { entry.error = text; },
     });
     entry.client = client;
@@ -175,7 +187,7 @@ export function createTreePanels(gpui, deps) {
     /** Whether the pane's tree is in use (its stream exists); the old per-page polling stays off then. */
     active(name) { const entry = panes.get(name); return !!entry && !entry.dead; },
     /** Like `active`, but opens the stream first: the old per-page request of a huge history must never run ahead of it. */
-    claim(name) { const entry = panes.get(name) ?? ensure(name, undefined); return !!entry && !entry.dead; },
+    claim(name) { const entry = revive(name) ?? ensure(name, undefined); return !!entry && (!entry.dead || (entry.retries ?? 0) < RETRIES); },
     /** True while a stream delivered something the next frame must draw, or heights/bodies are still settling. */
     wantsRender() {
       for (const entry of panes.values()) {
@@ -245,7 +257,7 @@ export function createTreePanels(gpui, deps) {
      * @param {{ theme: any, lineHeight: number, font: string, fontSize: number, gutter: number, notify: () => void, ansiRow?: (line: string) => any }} ctx
      */
     list(name, state, ctx) {
-      const entry = ensure(name, ctx.notify);
+      const entry = revive(name) ?? ensure(name, ctx.notify);
       if (!entry || entry.dead || !entry.view.model.ready || !state.handle) return null;
       entry.notify = ctx.notify;
       entry.lineHeight = ctx.lineHeight;
